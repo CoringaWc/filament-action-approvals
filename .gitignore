@@ -13,3 +13,4 @@ phpunit.xml
 phpstan.neon
 vendor
 /workbench/storage
+/workbench/database/database.sqlite

@@ -80,7 +80,7 @@
         "fresh:workbench": "@php vendor/bin/testbench migrate:fresh --seed --seeder=Workbench\\\\Database\\\\Seeders\\\\DatabaseSeeder --ansi --no-interaction",
         "serve": [
             "Composer\\Config::disableProcessTimeout",
-            "@build",
+            "@bootstrap:workbench",
             "@php vendor/bin/testbench serve --ansi"
         ]
     },
