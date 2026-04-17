@@ -9,7 +9,7 @@ use CoringaWc\FilamentActionApprovals\Models\Approval;
 
 class ApprovalRejectedNotification
 {
-    public static function send(Approval $approval, int $userId): void
+    public static function send(Approval $approval, int|string $userId): void
     {
         $userModel = FilamentActionApprovalsPlugin::resolveUserModel();
         $recipient = $userModel::find($userId);

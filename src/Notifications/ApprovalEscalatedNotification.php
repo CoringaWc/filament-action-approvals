@@ -9,7 +9,7 @@ use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 
 class ApprovalEscalatedNotification
 {
-    public static function send(ApprovalStepInstance $stepInstance, int $userId): void
+    public static function send(ApprovalStepInstance $stepInstance, int|string $userId): void
     {
         $userModel = FilamentActionApprovalsPlugin::resolveUserModel();
         $recipient = $userModel::find($userId);
