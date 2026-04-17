@@ -1,0 +1,3 @@
+<?php
+
+// workbench console routes

@@ -1,0 +1,15 @@
+**/.DS_Store
+.idea
+.vscode
+.phpunit.result.cache
+.phpunit.cache
+build
+composer.lock
+coverage
+node_modules
+package-lock.json
+test-results
+phpunit.xml
+phpstan.neon
+vendor
+/workbench/storage

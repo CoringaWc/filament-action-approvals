@@ -1,692 +1,493 @@
-# Filament Approval Workflow Engine
+# Filament Action Approvals
 
-A configurable approval workflow package for Filament. Attach approval chains to any Eloquent model with single, sequential, or parallel approvers, SLA timers, escalation rules, delegation, and a full audit trail.
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/coringawc/filament-action-approvals.svg?style=flat-square)](https://packagist.org/packages/coringawc/filament-action-approvals)
+[![License](https://img.shields.io/packagist/l/coringawc/filament-action-approvals.svg?style=flat-square)](https://packagist.org/packages/coringawc/filament-action-approvals)
 
-## Requirements
-- Filament 4+
+Action-based approval workflows for [Filament v5](https://filamentphp.com). Define multi-step approval flows with configurable approver resolvers, SLA enforcement, delegation, and lifecycle callbacks — all integrated into the Filament admin panel.
 
 ## Features
 
-- Polymorphic design -- attach approvals to any model via a trait
-- Single, sequential, and parallel approval chains
-- Configurable approval flows with a Filament resource UI
-- Approve, reject, comment, and delegate actions
-- SLA timers with auto-escalation (notify, auto-approve, reassign, reject)
-- Delegation -- approvers can delegate to another user
-- Full audit trail of every action
-- Pluggable approver resolvers (specific users, roles, custom callbacks)
-- Filament database notifications (requested, approved, rejected, escalated, SLA warning)
-- Dashboard widgets (pending approvals table with clickable rows, analytics stats)
-- Approval status badge column for resource tables
-- Approvals relation manager (full history with slide-over detail view)
-- Infolist section for current approval status at a glance
-- Per-panel plugin configuration (user model, resolvers, navigation group)
-- Scheduled command for SLA processing
-- Publishable config and views
+- **Multi-step approval flows** — sequential steps with configurable approver resolution
+- **Polymorphic** — any Eloquent model can be approvable via the `HasApprovals` trait
+- **Pluggable approver resolvers** — `UserResolver`, `RoleResolver`, `CallbackResolver`, or create your own
+- **Delegation** — approvers can delegate their step to another user
+- **SLA enforcement** — per-step SLA deadlines with warning notifications and configurable escalation (notify, auto-approve, reject, reassign)
+- **Lifecycle callbacks** — hook into `onApprovalSubmitted`, `onApprovalApproved`, `onApprovalRejected`, etc. directly on your model
+- **Resubmission policy** — control whether models can be resubmitted after approval/rejection
+- **Built-in Filament components**:
+  - `ApprovalFlowResource` — CRUD for managing approval flow definitions
+  - `ApprovalsRelationManager` — shows approval history on any approvable model
+  - `ApprovalStatusColumn` — ready-to-use status badge column
+  - `ApprovalStatusSection` — infolist section with approval details and timeline
+  - Header actions: Submit, Approve, Reject, Comment, Delegate
+  - Widgets: Pending Approvals, Approval Analytics
+- **Multi-tenancy support** — scope flows and approvers per tenant
+- **Event-driven** — fires events for submitted, completed, rejected, step-completed, and escalated
+- **Notification system** — notifies approvers, submitters, and escalation targets
+- **ACL integration** — optional integration with [`coringawc/filament-acl`](https://github.com/CoringaWc/filament-acl) for permission-aware resources
+
+## Requirements
+
+- PHP 8.3+
+- Laravel 12+
+- Filament 5.x
+
+### Optional
+
+- [`coringawc/filament-acl`](https://github.com/CoringaWc/filament-acl) ^1.0 — enables `HasResourcePermissions` and `PermissionSubject` integration
+- [`spatie/laravel-permission`](https://github.com/spatie/laravel-permission) ^7.0 — required for `RoleResolver`
 
 ## Installation
 
 ```bash
-composer require wezlo/filament-approval
+composer require coringawc/filament-action-approvals
 ```
 
-Publish and run migrations:
+Publish and run the migrations:
 
 ```bash
-php artisan vendor:publish --tag=filament-approval-migrations
+php artisan vendor:publish --tag="filament-action-approvals-migrations"
 php artisan migrate
 ```
 
-Ensure you have a `notifications` table (required for Filament database notifications):
+Optionally publish the config file:
 
 ```bash
-php artisan make:notifications-table
-php artisan migrate
+php artisan vendor:publish --tag="filament-action-approvals-config"
 ```
-
-Register the plugin in your Panel Provider:
-
-```php
-use Wezlo\FilamentApproval\FilamentApprovalPlugin;
-
-->plugins([
-    FilamentApprovalPlugin::make(),
-])
-```
-
-You can override resolvers, user model, and navigation group per-panel:
-
-```php
-use Wezlo\FilamentApproval\FilamentApprovalPlugin;
-
-// SuperAdmin panel -- uses Admin model and custom resolvers
-->plugins([
-    FilamentApprovalPlugin::make()
-        ->userModel(\App\Models\Admin::class)
-        ->resolvers([
-            \App\ApproverResolvers\AdminResolver::class,
-        ])
-        ->navigationGroup('Admin Approvals'),
-])
-
-// Company panel -- uses defaults from config
-->plugins([
-    FilamentApprovalPlugin::make(),
-])
-```
-
-Resolution order: **plugin override (per-panel)** > **config file (global)** > **default fallback**.
-
-You can also disable the flow resource or widgets per-panel:
-
-```php
-FilamentApprovalPlugin::make()
-    ->flowResource(false)  // hide the Approval Flows resource
-    ->widgets(false)       // hide dashboard widgets
-```
-
-Publish the config (optional):
-
-```bash
-php artisan vendor:publish --tag=filament-approval-config
-```
-
-## Quick Start
-
-### 1. Add the trait to your model
-
-```php
-use Wezlo\FilamentApproval\Concerns\HasApprovals;
-
-class PurchaseOrder extends Model
-{
-    use HasApprovals;
-}
-```
-
-This gives you:
-
-```php
-$order->submitForApproval();       // Submit using auto-detected flow
-$order->submitForApproval($flow);  // Submit using a specific flow
-$order->isPendingApproval();       // Check if pending
-$order->isApproved();              // Check if approved
-$order->isRejected();              // Check if rejected
-$order->approvalStatus();          // Get ApprovalStatus enum
-$order->latestApproval();          // Get latest Approval model
-$order->currentApproval();         // Get current pending Approval
-$order->approvals;                 // All approval instances
-```
-
-### 2. Add approval actions to your resource page
-
-```php
-use Wezlo\FilamentApproval\Concerns\HasApprovalsResource;
-
-class ViewPurchaseOrder extends ViewRecord
-{
-    use HasApprovalsResource;
-
-    protected static string $resource = PurchaseOrderResource::class;
-
-    protected function getHeaderActions(): array
-    {
-        return [
-            ...$this->getApprovalHeaderActions(),
-            // your other actions...
-        ];
-    }
-}
-```
-
-This adds five context-aware actions to the page header:
-- **Submit for Approval** -- visible when no pending approval
-- **Approve** -- visible to assigned/delegated approvers who haven't acted
-- **Reject** -- same visibility, requires a comment
-- **Comment** -- visible to assigned approvers during a pending approval
-- **Delegate** -- visible to assigned approvers, lets them delegate to another user
-
-### 3. Add the status column to your table
-
-```php
-use Wezlo\FilamentApproval\Columns\ApprovalStatusColumn;
-
-public static function table(Table $table): Table
-{
-    return $table->columns([
-        TextColumn::make('title'),
-        ApprovalStatusColumn::make(),
-        // ...
-    ]);
-}
-```
-
-Displays a colored badge: Pending (warning), Approved (success), Rejected (danger), Cancelled (gray).
-
-### 4. Add approval history to your resource
-
-**Relation Manager** -- full approval history tab on View/Edit pages:
-
-```php
-use Wezlo\FilamentApproval\RelationManagers\ApprovalsRelationManager;
-
-public static function getRelations(): array
-{
-    return [
-        ApprovalsRelationManager::class,
-    ];
-}
-```
-
-This adds an "Approvals" tab showing all approval instances. Clicking "View" on any row opens a slide-over with:
-- Approval details (flow, status, submitter, dates)
-- Step progress (each step with status, approvers, received/required count, SLA)
-- Full audit trail (every action with who, what, when, comment)
-
-**Infolist Section** -- current approval at a glance on View pages:
-
-```php
-use Wezlo\FilamentApproval\Infolists\ApprovalStatusSection;
-
-public static function infolist(Schema $schema): Schema
-{
-    return $schema->components([
-        // your other entries...
-        ApprovalStatusSection::make(),
-    ]);
-}
-```
-
-Shows a collapsible section with:
-- Current status badge, flow name, submitter, dates
-- Current step details (name, pending approvers, progress, SLA deadline with overdue highlighting)
-- Recent activity timeline (collapsible)
-
-The section auto-hides when there's no approval on the record.
-
-### 5. Create an approval flow
-
-Navigate to the **Approvals > Approval Flows** resource in your Filament panel. Create a flow with:
-
-- **Name** -- e.g. "Purchase Order Approval"
-- **Applies To** -- dropdown auto-populated with models that use `HasApprovals` and are registered as resources in the current panel. Leave blank to apply to any model.
-- **Steps** -- ordered list with:
-  - Step name
-  - Type: Single / Sequential / Parallel
-  - Approver type: dropdown of resolvers configured on the plugin (e.g. Specific Users, Users by Role, or your custom resolvers)
-  - Approver config: dynamic fields based on the selected resolver (user picker, role selector, etc.)
-  - Required approvals (visible for Parallel type, with "Require N of M" hint)
-  - SLA hours (optional)
-  - Escalation action (visible when SLA is set)
-
-## Approval Flow Types
-
-### Single
-
-One approver, one approval required. The simplest flow.
-
-### Sequential
-
-Multiple steps executed in order. Step 2 doesn't activate until step 1 is approved. A rejection at any step rejects the entire approval and skips remaining steps.
-
-### Parallel
-
-Multiple approvers on a single step. Configure `required_approvals` to set how many must approve (e.g., 2-of-3). The step completes when the threshold is met.
-
-## Approver Resolvers
-
-Resolvers determine who can approve each step. Three are included:
-
-### UserResolver
-
-Assigns specific users by ID:
-
-```
-Approver Type: Specific Users
-Config: Select users from the dropdown
-```
-
-### RoleResolver
-
-Assigns all users with a given Spatie role. When multi-tenancy is enabled, approvers are scoped to the approvable model's tenant:
-
-```
-Approver Type: Users by Role
-Config: Select a role
-```
-
-### CallbackResolver
-
-Register named callbacks in your service provider for custom logic:
-
-```php
-use Wezlo\FilamentApproval\ApproverResolvers\CallbackResolver;
-
-// In AppServiceProvider::boot()
-CallbackResolver::register('project_manager', function ($approvable) {
-    return [$approvable->project->manager_user_id];
-});
-
-CallbackResolver::register('department_head', function ($approvable) {
-    return [$approvable->department->head_user_id];
-});
-```
-
-Then select "Custom Callback" as the approver type in the flow builder.
-
-### Custom Resolvers
-
-Implement the `ApproverResolver` contract:
-
-```php
-use Wezlo\FilamentApproval\Contracts\ApproverResolver;
-use Illuminate\Database\Eloquent\Model;
-
-class TeamLeadResolver implements ApproverResolver
-{
-    public function resolve(array $config, Model $approvable): array
-    {
-        return $approvable->team->leads->pluck('id')->all();
-    }
-
-    public static function label(): string
-    {
-        return 'Team Leads';
-    }
-
-    public static function configSchema(): array
-    {
-        return [
-            // Filament form components for configuring this resolver
-        ];
-    }
-}
-```
-
-Register it in `config/filament-approval.php`:
-
-```php
-'approver_resolvers' => [
-    \Wezlo\FilamentApproval\ApproverResolvers\UserResolver::class,
-    \Wezlo\FilamentApproval\ApproverResolvers\RoleResolver::class,
-    \Wezlo\FilamentApproval\ApproverResolvers\CallbackResolver::class,
-    \App\ApproverResolvers\TeamLeadResolver::class,
-],
-```
-
-## SLA & Escalation
-
-Configure SLA on any step in the flow builder:
-
-- **SLA (hours)** -- deadline after the step is activated
-- **Escalation action** -- what happens when the SLA is breached:
-  - **Send Reminder** -- notifies approvers again
-  - **Auto-Approve** -- automatically approves the step
-  - **Auto-Reject** -- automatically rejects the entire approval
-  - **Reassign** -- reassigns to different approvers (configure via escalation config)
-
-The `approval:process-sla` command runs every minute (configurable) and:
-1. Sends SLA warnings at 75% of the deadline (configurable threshold)
-2. Processes escalations when the deadline is breached
-
-The command is auto-scheduled by the package. To disable:
-
-```php
-// config/filament-approval.php
-'schedule_sla_command' => false,
-```
-
-## Delegation
-
-Any assigned approver can delegate their approval authority to another user. The delegate can then approve or reject on their behalf. Delegations are recorded in the audit trail.
-
-## Submission Policy
-
-By default, any authenticated user can submit any record for approval, and re-submission is allowed after approval or rejection. Override these methods on your model to customize:
-
-### One-time approval (no re-submission)
-
-```php
-class Contract extends Model
-{
-    use HasApprovals;
-
-    /**
-     * Once approved or rejected, the submit button won't appear again.
-     */
-    public function allowsApprovalResubmission(): bool
-    {
-        return false;
-    }
-}
-```
-
-### Restrict who can submit
-
-```php
-class PurchaseOrder extends Model
-{
-    use HasApprovals;
-
-    /**
-     * Only the creator or admins can submit for approval.
-     */
-    public function canSubmitForApproval(?int $userId = null): bool
-    {
-        $userId ??= auth()->id();
-
-        return $this->created_by === $userId
-            || User::find($userId)?->hasRole('admin');
-    }
-}
-```
-
-### Combine both
-
-```php
-class Invoice extends Model
-{
-    use HasApprovals;
-
-    public function allowsApprovalResubmission(): bool
-    {
-        // Allow resubmission only if previously rejected (not if approved)
-        $latest = $this->latestApproval();
-
-        return ! $latest || $latest->status !== ApprovalStatus::Approved;
-    }
-
-    public function canSubmitForApproval(?int $userId = null): bool
-    {
-        return $this->created_by === ($userId ?? auth()->id());
-    }
-}
-```
-
-The `canBeSubmittedForApproval()` method combines all checks (pending status + resubmission policy + user authorization) and is used by the Submit action's visibility logic.
-
-## Audit Trail
-
-Every action is recorded in the `approval_actions` table:
-
-- Submitted
-- Approved (with optional comment)
-- Rejected (with required comment)
-- Commented
-- Delegated (with target user and reason)
-- Escalated (with escalation action taken)
-
-Access the audit trail:
-
-```php
-$approval = $order->latestApproval();
-$actions = $approval->actions; // Collection of ApprovalAction models
-```
-
-## Notifications
-
-The package sends Filament database notifications for:
-
-- **Approval Requested** -- sent to each assigned approver when a step activates
-- **Approval Approved** -- sent to the submitter when the full approval completes
-- **Approval Rejected** -- sent to the submitter when rejected
-- **SLA Warning** -- sent to approvers when approaching the deadline
-- **Escalated** -- sent to approvers when the SLA is breached
-
-## Dashboard Widgets
-
-The plugin registers two widgets:
-
-### PendingApprovalsWidget
-
-A table showing the current user's pending approvals with step name, record reference, time waiting, and SLA status. Overdue items are highlighted in red.
-
-### ApprovalAnalyticsWidget
-
-Stats overview with:
-- Pending approvals count
-- Approved in last 30 days
-- Rejected in last 30 days
-- Overdue steps count
-
-Disable widgets:
-
-```php
-FilamentApprovalPlugin::make()
-    ->widgets(false)
-```
-
-Disable the flow resource:
-
-```php
-FilamentApprovalPlugin::make()
-    ->flowResource(false)
-```
-
-## Blade Components
-
-The package includes Blade components for custom views:
-
-```blade
-{{-- Approval timeline --}}
-<x-filament-approval::components.approval-timeline :actions="$approval->actions" />
-
-{{-- Status badge --}}
-<x-filament-approval::components.approval-status-badge :status="$approval->status" />
-
-{{-- Full approval history (pass the approvable record) --}}
-@include('filament-approval::infolists.approval-history', ['record' => $order])
-```
-
-Publish views:
-
-```bash
-php artisan vendor:publish --tag=filament-approval-views
-```
-
-## Events & Model Callbacks
-
-There are two ways to react to approval lifecycle events: **Laravel events** (for decoupled listeners) and **model callbacks** (for logic that belongs on the model itself).
-
-### Laravel Events
-
-Listen to these events via event listeners or subscribers:
-
-```php
-use Wezlo\FilamentApproval\Events\ApprovalSubmitted;
-use Wezlo\FilamentApproval\Events\ApprovalStepCompleted;
-use Wezlo\FilamentApproval\Events\ApprovalCompleted;
-use Wezlo\FilamentApproval\Events\ApprovalRejected;
-use Wezlo\FilamentApproval\Events\ApprovalEscalated;
-```
-
-Each event carries the relevant `Approval` or `ApprovalStepInstance` model.
-
-### Model Lifecycle Callbacks
-
-Override these methods on any model using `HasApprovals` to react directly on the model:
-
-```php
-use Wezlo\FilamentApproval\Concerns\HasApprovals;
-use Wezlo\FilamentApproval\Models\Approval;
-use Wezlo\FilamentApproval\Models\ApprovalAction;
-use Wezlo\FilamentApproval\Models\ApprovalStepInstance;
-
-class PurchaseOrder extends Model
-{
-    use HasApprovals;
-
-    public function onApprovalSubmitted(Approval $approval): void
-    {
-        $this->update(['status' => 'pending_approval']);
-    }
-
-    public function onApprovalApproved(Approval $approval): void
-    {
-        $this->update(['status' => 'approved']);
-        Mail::to($this->requester)->send(new OrderApprovedMail($this));
-    }
-
-    public function onApprovalRejected(Approval $approval): void
-    {
-        $this->update(['status' => 'rejected']);
-    }
-
-    public function onApprovalCancelled(Approval $approval): void
-    {
-        $this->update(['status' => 'draft']);
-    }
-
-    public function onApprovalCommented(ApprovalAction $action): void
-    {
-        // Notify the team about the comment
-    }
-
-    public function onApprovalDelegated(
-        ApprovalStepInstance $stepInstance,
-        int $fromUserId,
-        int $toUserId,
-    ): void {
-        // Log delegation
-    }
-
-    public function onApprovalStepCompleted(ApprovalStepInstance $stepInstance): void
-    {
-        // Notify when a step passes
-    }
-
-    public function onApprovalEscalated(ApprovalStepInstance $stepInstance): void
-    {
-        // Alert management about SLA breach
-    }
-}
-```
-
-All callbacks are optional -- only override the ones you need. They are called after the action has been persisted to the database.
-
-| Callback | When it fires | Arguments |
-|---|---|---|
-| `onApprovalSubmitted` | Model submitted for approval | `Approval` |
-| `onApprovalApproved` | All steps approved | `Approval` |
-| `onApprovalRejected` | Rejected at any step | `Approval` |
-| `onApprovalCancelled` | Approval cancelled | `Approval` |
-| `onApprovalCommented` | Comment added | `ApprovalAction` |
-| `onApprovalDelegated` | Approver delegates | `ApprovalStepInstance`, `$fromUserId`, `$toUserId` |
-| `onApprovalStepCompleted` | Individual step approved | `ApprovalStepInstance` |
-| `onApprovalEscalated` | SLA breached | `ApprovalStepInstance` |
-
-## Programmatic Usage
-
-Use the `ApprovalEngine` service directly:
-
-```php
-use Wezlo\FilamentApproval\Services\ApprovalEngine;
-
-$engine = app(ApprovalEngine::class);
-
-// Submit
-$approval = $engine->submit($order, $flow, auth()->id());
-
-// Approve a step
-$engine->approve($stepInstance, $userId, 'Looks good');
-
-// Reject
-$engine->reject($stepInstance, $userId, 'Budget exceeded');
-
-// Comment
-$engine->comment($approval, $userId, 'Please review section 3');
-
-// Delegate
-$engine->delegate($stepInstance, $fromUserId, $toUserId, 'On vacation');
-
-// Cancel
-$engine->cancel($approval);
-```
-
-## Multi-Tenancy
-
-Multi-tenancy is **disabled by default**. When enabled, approval flows are scoped per tenant and the tenant column is added to the `approval_flows` migration.
-
-Enable it in `config/filament-approval.php`:
-
-```php
-'multi_tenancy' => [
-    'enabled' => true,
-    'column' => 'company_id', // or 'team_id', 'organization_id', etc.
-    'scope_approvers' => true, // scope role-based resolvers to the tenant
-],
-```
-
-When `scope_approvers` is `true`, the `RoleResolver` will only return users that share the same tenant as the approvable model.
-
-> **Important:** Configure multi-tenancy **before** running migrations. The tenant column is only added to the `approval_flows` table when `multi_tenancy.enabled` is `true`.
 
 ## Configuration
 
+The config file (`config/filament-action-approvals.php`) contains:
+
 ```php
-// config/filament-approval.php
-
 return [
-    'user_model' => \App\Models\User::class,
+    // The user model used for approver relationships
+    'user_model' => App\Models\User::class,
 
+    // Registered resolver classes available in the flow builder
     'approver_resolvers' => [
-        \Wezlo\FilamentApproval\ApproverResolvers\UserResolver::class,
-        \Wezlo\FilamentApproval\ApproverResolvers\RoleResolver::class,
-        \Wezlo\FilamentApproval\ApproverResolvers\CallbackResolver::class,
+        \CoringaWc\FilamentActionApprovals\ApproverResolvers\UserResolver::class,
+        \CoringaWc\FilamentActionApprovals\ApproverResolvers\RoleResolver::class,
+        \CoringaWc\FilamentActionApprovals\ApproverResolvers\CallbackResolver::class,
     ],
 
+    // Multi-tenancy settings
     'multi_tenancy' => [
         'enabled' => false,
         'column' => 'company_id',
         'scope_approvers' => true,
     ],
 
-    'sla_warning_threshold' => 0.75,    // 75% of SLA time
+    // SLA warning threshold (0.75 = 75% of SLA time elapsed)
+    'sla_warning_threshold' => 0.75,
+
+    // Auto-register the SLA processing command to run every minute
     'schedule_sla_command' => true,
+
+    // Navigation group for the ApprovalFlow resource
     'navigation_group' => 'Approvals',
+
+    // Database table prefix (empty = no prefix)
     'table_prefix' => '',
 ];
 ```
 
-## Translations
+## Plugin Registration
 
-The package ships with **English** and **Arabic** translations. All UI strings (labels, messages, notifications, enum values) are fully translated.
+Register the plugin in your Filament panel provider:
 
-Publish translations to customize:
+```php
+use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 
-```bash
-php artisan vendor:publish --tag=filament-approval-translations
+public function panel(Panel $panel): Panel
+{
+    return $panel
+        ->plugins([
+            FilamentActionApprovalsPlugin::make()
+                ->flowResource()      // Enable the ApprovalFlow CRUD resource (default: true)
+                ->widgets()           // Enable dashboard widgets (default: true)
+                ->navigationGroup('Workflow'),  // Override navigation group
+        ]);
+}
 ```
 
-This copies the language files to `lang/vendor/filament-approval/`. The translation file is organized by section:
+### Plugin Methods
 
-- `status.*` -- Approval statuses (Pending, Approved, Rejected, Cancelled)
-- `step_type.*` -- Step types (Single, Sequential, Parallel)
-- `action_type.*` -- Audit trail actions (Submitted, Approved, Delegated, etc.)
-- `escalation.*` -- Escalation actions (Send Reminder, Auto-Approve, etc.)
-- `flow.*` -- Flow builder form labels
-- `actions.*` -- Approval action buttons and modals
-- `notifications.*` -- Database notification titles and bodies
-- `widgets.*` -- Dashboard widget labels
-- `relation_manager.*` -- Relation manager labels
-- `infolist.*` -- Infolist section labels
+| Method                               | Description                                           |
+| ------------------------------------ | ----------------------------------------------------- |
+| `flowResource(bool $enabled = true)` | Enable/disable the built-in ApprovalFlow resource     |
+| `widgets(bool $enabled = true)`      | Enable/disable PendingApprovals and Analytics widgets |
+| `resolvers(array $resolvers)`        | Override approver resolvers for this panel            |
+| `userModel(string $model)`           | Override the user model for this panel                |
+| `navigationGroup(string $group)`     | Override the navigation group label                   |
 
-To add a new language, create `lang/vendor/filament-approval/{locale}/approval.php` with the same structure.
+## Usage
 
-## Custom Theme
+### 1. Make Your Model Approvable
 
-If you have a custom Filament theme, add the package views to your `@source` directive:
+Add the `HasApprovals` trait to any Eloquent model:
 
-```css
-@source '../../../../vendor/wezlo/filament-approval/resources/views/**/*';
+```php
+use CoringaWc\FilamentActionApprovals\Concerns\HasApprovals;
+
+class PurchaseOrder extends Model
+{
+    use HasApprovals;
+
+    // React to approval lifecycle events
+    public function onApprovalApproved(Approval $approval): void
+    {
+        $this->update(['status' => 'approved']);
+    }
+
+    public function onApprovalRejected(Approval $approval): void
+    {
+        $this->update(['status' => 'rejected']);
+    }
+}
+```
+
+### 2. Create an Approval Flow
+
+Approval flows can be created via the admin panel UI (ApprovalFlow resource) or programmatically:
+
+```php
+use CoringaWc\FilamentActionApprovals\ApproverResolvers\UserResolver;
+use CoringaWc\FilamentActionApprovals\ApproverResolvers\RoleResolver;
+use CoringaWc\FilamentActionApprovals\Enums\EscalationAction;
+use CoringaWc\FilamentActionApprovals\Enums\StepType;
+use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
+
+$flow = ApprovalFlow::create([
+    'name' => 'Purchase Order Approval',
+    'approvable_type' => PurchaseOrder::class, // or morph alias
+    'is_active' => true,
+]);
+
+// Step 1: Manager approval
+$flow->steps()->create([
+    'name' => 'Manager Review',
+    'order' => 1,
+    'type' => StepType::Single,
+    'approver_resolver' => UserResolver::class,
+    'approver_config' => ['user_ids' => [1, 2]],
+    'required_approvals' => 1,
+    'sla_hours' => 24,
+    'escalation_action' => EscalationAction::Notify,
+]);
+
+// Step 2: Director approval
+$flow->steps()->create([
+    'name' => 'Director Sign-off',
+    'order' => 2,
+    'type' => StepType::Single,
+    'approver_resolver' => RoleResolver::class,
+    'approver_config' => ['role' => 'director'],
+    'required_approvals' => 1,
+    'sla_hours' => 48,
+    'escalation_action' => EscalationAction::AutoApprove,
+]);
+```
+
+### 3. Add Approval Actions to Your Resource
+
+Use the `HasApprovalsResource` trait on your Edit page and add the `ApprovalsRelationManager`:
+
+```php
+// Resource
+use CoringaWc\FilamentActionApprovals\RelationManagers\ApprovalsRelationManager;
+use CoringaWc\FilamentActionApprovals\Columns\ApprovalStatusColumn;
+
+class PurchaseOrderResource extends Resource
+{
+    public static function table(Table $table): Table
+    {
+        return $table->columns([
+            TextColumn::make('title'),
+            ApprovalStatusColumn::make(), // Shows approval status badge
+        ]);
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            ApprovalsRelationManager::class,
+        ];
+    }
+}
+
+// Edit Page
+use CoringaWc\FilamentActionApprovals\Concerns\HasApprovalsResource;
+
+class EditPurchaseOrder extends EditRecord
+{
+    use HasApprovalsResource;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            ...static::getApprovalHeaderActions(),
+            // Submit, Approve, Reject, Comment, Delegate buttons
+        ];
+    }
+}
+```
+
+### 4. Programmatic Usage
+
+You can also interact with the approval engine directly:
+
+```php
+use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
+
+$engine = app(ApprovalEngine::class);
+
+// Submit for approval
+$approval = $engine->submit($purchaseOrder, $flow, auth()->id());
+
+// Or via the model
+$approval = $purchaseOrder->submitForApproval($flow);
+
+// Approve a step
+$stepInstance = $approval->currentStepInstance();
+$engine->approve($stepInstance, auth()->id(), 'Approved — budget ok');
+
+// Reject
+$engine->reject($stepInstance, auth()->id(), 'Budget exceeded');
+
+// Add a comment
+$engine->comment($approval, auth()->id(), 'Please provide receipts');
+
+// Delegate to another user
+$engine->delegate($stepInstance, auth()->id(), $delegateUserId, 'On vacation');
+
+// Cancel the approval
+$engine->cancel($approval);
+```
+
+## Approver Resolvers
+
+### UserResolver
+
+Resolves specific user IDs as approvers:
+
+```php
+'approver_resolver' => UserResolver::class,
+'approver_config' => ['user_ids' => [1, 2, 3]],
+```
+
+### RoleResolver
+
+Resolves all users with a given role (requires `spatie/laravel-permission`):
+
+```php
+'approver_resolver' => RoleResolver::class,
+'approver_config' => ['role' => 'manager'],
+```
+
+### CallbackResolver
+
+Register custom resolution logic:
+
+```php
+use CoringaWc\FilamentActionApprovals\ApproverResolvers\CallbackResolver;
+
+// Register in a service provider
+CallbackResolver::register('department_head', function (array $config, Model $approvable) {
+    return [$approvable->department->head_id];
+});
+
+// Use in a step
+'approver_resolver' => CallbackResolver::class,
+'approver_config' => ['callback' => 'department_head'],
+```
+
+### Custom Resolver
+
+Implement the `ApproverResolver` contract:
+
+```php
+use CoringaWc\FilamentActionApprovals\Contracts\ApproverResolver;
+
+class HierarchyResolver implements ApproverResolver
+{
+    public function resolve(array $config, Model $approvable): array
+    {
+        return [$approvable->user->manager_id];
+    }
+
+    public function label(): string
+    {
+        return 'Direct Manager';
+    }
+
+    public function configSchema(): array
+    {
+        return []; // Filament form components for the flow builder
+    }
+}
+```
+
+Register it in the config or plugin:
+
+```php
+// config
+'approver_resolvers' => [
+    UserResolver::class,
+    RoleResolver::class,
+    HierarchyResolver::class,
+],
+
+// or per-panel
+FilamentActionApprovalsPlugin::make()
+    ->resolvers([UserResolver::class, HierarchyResolver::class])
+```
+
+## Lifecycle Callbacks
+
+Override these methods on your model to react to approval events:
+
+| Method                                                      | Called When                            |
+| ----------------------------------------------------------- | -------------------------------------- |
+| `onApprovalSubmitted(Approval $approval)`                   | Model is submitted for approval        |
+| `onApprovalApproved(Approval $approval)`                    | All steps approved (approval complete) |
+| `onApprovalRejected(Approval $approval)`                    | Approval rejected at any step          |
+| `onApprovalCancelled(Approval $approval)`                   | Approval is cancelled                  |
+| `onApprovalCommented(ApprovalAction $action)`               | Comment added                          |
+| `onApprovalDelegated(ApprovalStepInstance $si, $from, $to)` | Step delegated                         |
+| `onApprovalStepCompleted(ApprovalStepInstance $si)`         | Individual step approved               |
+| `onApprovalEscalated(ApprovalStepInstance $si)`             | SLA breach triggers escalation         |
+
+## Resubmission Policy
+
+Control whether a model can be resubmitted after approval or rejection:
+
+```php
+class Expense extends Model
+{
+    use HasApprovals;
+
+    // Block resubmission after the expense is approved
+    public function allowsApprovalResubmission(): bool
+    {
+        $latest = $this->latestApproval();
+        return !$latest || $latest->status !== ApprovalStatus::Approved;
+    }
+
+    // Restrict who can submit
+    public function canSubmitForApproval(int|string|null $userId = null): bool
+    {
+        return $this->user_id === ($userId ?? auth()->id());
+    }
+}
+```
+
+## SLA Enforcement
+
+Configure per-step SLA deadlines:
+
+```php
+$flow->steps()->create([
+    'name' => 'Urgent Review',
+    'sla_hours' => 4,
+    'escalation_action' => EscalationAction::AutoApprove,
+    // ...
+]);
+```
+
+### Escalation Actions
+
+| Action        | Behavior                                             |
+| ------------- | ---------------------------------------------------- |
+| `Notify`      | Sends an `ApprovalEscalatedNotification`             |
+| `AutoApprove` | Automatically approves the overdue step              |
+| `Reject`      | Automatically rejects the approval                   |
+| `Reassign`    | Reassigns to new approvers using the step's resolver |
+
+The SLA processor runs via the `approval:process-sla` command, automatically scheduled every minute when `schedule_sla_command` is `true`.
+
+## Events
+
+| Event                   | Payload                              |
+| ----------------------- | ------------------------------------ |
+| `ApprovalSubmitted`     | `Approval $approval`                 |
+| `ApprovalCompleted`     | `Approval $approval`                 |
+| `ApprovalRejected`      | `Approval $approval`                 |
+| `ApprovalStepCompleted` | `ApprovalStepInstance $stepInstance` |
+| `ApprovalEscalated`     | `ApprovalStepInstance $stepInstance` |
+
+## Multi-Tenancy
+
+Enable tenant-scoped approval flows:
+
+```php
+// config/filament-action-approvals.php
+'multi_tenancy' => [
+    'enabled' => true,
+    'column' => 'company_id',      // Your tenant foreign key
+    'scope_approvers' => true,     // Also scope role-based resolvers
+],
+```
+
+When enabled, `ApprovalFlow::forModel()` automatically scopes queries by the model's tenant column.
+
+## Database Schema
+
+The package creates the following tables:
+
+| Table                     | Purpose                                                                           |
+| ------------------------- | --------------------------------------------------------------------------------- |
+| `approval_flows`          | Flow definitions (name, approvable_type, active status)                           |
+| `approval_steps`          | Step definitions within a flow (order, resolver, SLA, escalation)                 |
+| `approvals`               | Runtime approval instances (polymorphic to approvable model)                      |
+| `approval_step_instances` | Runtime step instances (status, assigned approvers, SLA tracking)                 |
+| `approval_actions`        | Audit trail of all actions (submit, approve, reject, comment, delegate, escalate) |
+| `approval_delegations`    | Delegation records (from_user to_user per step instance)                          |
+
+## Integration with filament-acl (Optional)
+
+If you use [`coringawc/filament-acl`](https://github.com/CoringaWc/filament-acl), you can extend the built-in `ApprovalFlowResource` to add permission-aware access control:
+
+```bash
+composer require coringawc/filament-acl
+```
+
+Create a custom resource that extends the package resource:
+
+```php
+namespace App\Filament\Admin\Resources;
+
+use CoringaWc\FilamentAcl\Attributes\PermissionSubject;
+use CoringaWc\FilamentAcl\Resources\Concerns\HasResourcePermissions;
+use CoringaWc\FilamentActionApprovals\Resources\ApprovalFlowResource as BaseResource;
+
+#[PermissionSubject('ApprovalFlow')]
+class ApprovalFlowResource extends BaseResource
+{
+    use HasResourcePermissions;
+}
+```
+
+Then disable the built-in resource on the plugin and register your own:
+
+```php
+FilamentActionApprovalsPlugin::make()
+    ->flowResource(false) // Disable built-in resource
 ```
 
 ## Testing
 
+The package includes a workbench environment for development and testing:
+
 ```bash
-php artisan test --filter=ApprovalEngine
+composer test
 ```
+
+## Changelog
+
+Please see [CHANGELOG](CHANGELOG.md) for more information on what has changed recently.
 
 ## License
 
-MIT
+The MIT License (MIT). Please see [License File](LICENSE.md) for more information.

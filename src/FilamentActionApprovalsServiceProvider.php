@@ -2,11 +2,11 @@
 
 namespace CoringaWc\FilamentActionApprovals;
 
+use CoringaWc\FilamentActionApprovals\Commands\ProcessApprovalSlaCommand;
+use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use Illuminate\Console\Scheduling\Schedule;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
-use CoringaWc\FilamentActionApprovals\Commands\ProcessApprovalSlaCommand;
-use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 
 class FilamentActionApprovalsServiceProvider extends PackageServiceProvider
 {
@@ -25,6 +25,7 @@ class FilamentActionApprovalsServiceProvider extends PackageServiceProvider
                 'create_approval_actions_table',
                 'create_approval_delegations_table',
             ])
+            ->runsMigrations()
             ->hasTranslations()
             ->hasCommand(ProcessApprovalSlaCommand::class);
     }

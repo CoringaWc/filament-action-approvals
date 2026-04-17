@@ -2,6 +2,14 @@
 
 namespace CoringaWc\FilamentActionApprovals\Resources;
 
+use CoringaWc\FilamentActionApprovals\Concerns\HasApprovals;
+use CoringaWc\FilamentActionApprovals\Enums\EscalationAction;
+use CoringaWc\FilamentActionApprovals\Enums\StepType;
+use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
+use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
+use CoringaWc\FilamentActionApprovals\Resources\ApprovalFlowResource\Pages\CreateApprovalFlow;
+use CoringaWc\FilamentActionApprovals\Resources\ApprovalFlowResource\Pages\EditApprovalFlow;
+use CoringaWc\FilamentActionApprovals\Resources\ApprovalFlowResource\Pages\ListApprovalFlows;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -17,21 +25,9 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use CoringaWc\FilamentAcl\Attributes\PermissionSubject;
-use CoringaWc\FilamentAcl\Resources\Concerns\HasResourcePermissions;
-use CoringaWc\FilamentActionApprovals\Concerns\HasApprovals;
-use CoringaWc\FilamentActionApprovals\Enums\EscalationAction;
-use CoringaWc\FilamentActionApprovals\Enums\StepType;
-use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
-use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
-use CoringaWc\FilamentActionApprovals\Resources\ApprovalFlowResource\Pages\CreateApprovalFlow;
-use CoringaWc\FilamentActionApprovals\Resources\ApprovalFlowResource\Pages\EditApprovalFlow;
-use CoringaWc\FilamentActionApprovals\Resources\ApprovalFlowResource\Pages\ListApprovalFlows;
 
-#[PermissionSubject('ApprovalFlow')]
 class ApprovalFlowResource extends Resource
 {
-    use HasResourcePermissions;
     protected static ?string $model = ApprovalFlow::class;
 
     protected static string|\BackedEnum|null $navigationIcon = Heroicon::OutlinedArrowPath;
