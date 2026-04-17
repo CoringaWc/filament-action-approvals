@@ -1,0 +1,102 @@
+{
+    "name": "coringawc/filament-action-approvals",
+    "description": "Action-based approval flows for Filament with spatie/laravel-model-states integration.",
+    "keywords": [
+        "coringawc",
+        "laravel",
+        "filament",
+        "filament-plugin",
+        "approvals",
+        "workflow"
+    ],
+    "homepage": "https://github.com/CoringaWc/filament-action-approvals",
+    "support": {
+        "issues": "https://github.com/CoringaWc/filament-action-approvals/issues",
+        "source": "https://github.com/CoringaWc/filament-action-approvals"
+    },
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Argemiro Dias",
+            "email": "argemirodiaseng@gmail.com",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": "^8.3",
+        "coringawc/filament-acl": "^1.0",
+        "filament/filament": "^5.0",
+        "spatie/laravel-package-tools": "^1.15"
+    },
+    "suggest": {
+        "spatie/laravel-permission": "Required for RoleResolver (^7.0)"
+    },
+    "require-dev": {
+        "coringawc/filament-plugin-workbench": "^1.0",
+        "larastan/larastan": "^3.0",
+        "laravel/boost": "^2.4",
+        "laravel/pint": "^1.0",
+        "nunomaduro/collision": "^8.0",
+        "phpunit/phpunit": "^12.0",
+        "rector/rector": "^2.0",
+        "spatie/laravel-permission": "^7.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "CoringaWc\\FilamentActionApprovals\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "CoringaWc\\FilamentActionApprovals\\Tests\\": "tests/",
+            "Workbench\\App\\": "workbench/app/",
+            "Workbench\\Database\\Factories\\": "workbench/database/factories/",
+            "Workbench\\Database\\Seeders\\": "workbench/database/seeders/"
+        }
+    },
+    "scripts": {
+        "post-autoload-dump": [
+            "@clear",
+            "@prepare"
+        ],
+        "analyse": "phpstan analyse --memory-limit=1G",
+        "lint": "pint",
+        "refactor": "rector",
+        "test": "phpunit",
+        "test:types": "phpstan analyse --memory-limit=1G",
+        "test:refactor": "rector --dry-run",
+        "clear": "@php vendor/bin/testbench package:purge-skeleton --ansi",
+        "prepare": "@php vendor/bin/testbench package:discover --ansi",
+        "build": [
+            "@php vendor/bin/testbench workbench:build --ansi",
+            "@php vendor/bin/testbench filament:assets --ansi"
+        ],
+        "bootstrap:workbench": [
+            "@build",
+            "@fresh:workbench"
+        ],
+        "seed:workbench": "@php vendor/bin/testbench db:seed --class=Workbench\\\\Database\\\\Seeders\\\\DatabaseSeeder --ansi --no-interaction",
+        "fresh:workbench": "@php vendor/bin/testbench migrate:fresh --seed --seeder=Workbench\\\\Database\\\\Seeders\\\\DatabaseSeeder --ansi --no-interaction",
+        "serve": [
+            "Composer\\Config::disableProcessTimeout",
+            "@build",
+            "@php vendor/bin/testbench serve --ansi"
+        ]
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "CoringaWc\\FilamentActionApprovals\\FilamentActionApprovalsServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "composer/package-versions-deprecated": true,
+            "phpstan/extension-installer": true
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
