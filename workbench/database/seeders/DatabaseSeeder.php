@@ -12,8 +12,11 @@ use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Artisan;
 use Spatie\Permission\Models\Role;
+use Workbench\App\Models\Invoice;
 use Workbench\App\Models\PurchaseOrder;
 use Workbench\App\Models\User;
+use Workbench\App\States\Invoice\Issuing;
+use Workbench\App\States\Invoice\Sent;
 
 class DatabaseSeeder extends Seeder
 {
@@ -82,9 +85,52 @@ class DatabaseSeeder extends Seeder
             'escalation_action' => EscalationAction::AutoApprove,
         ]);
 
+        $invoiceFlow = ApprovalFlow::create([
+            'name' => __('workbench::workbench.seeds.flows.invoice_send.name'),
+            'description' => __('workbench::workbench.seeds.flows.invoice_send.description'),
+            'approvable_type' => (new Invoice)->getMorphClass(),
+            'action_key' => Invoice::stateApprovalActionKey(Issuing::class, Sent::class),
+            'is_active' => true,
+        ]);
+
+        $invoiceFlow->steps()->create([
+            'name' => __('workbench::workbench.seeds.flows.invoice_send.manager_step'),
+            'order' => 1,
+            'type' => StepType::Single,
+            'approver_resolver' => RoleResolver::class,
+            'approver_config' => ['role' => $managerRole->name],
+            'required_approvals' => 1,
+            'sla_hours' => 24,
+            'escalation_action' => EscalationAction::Notify,
+        ]);
+
         PurchaseOrder::factory()
             ->count(5)
             ->for($requester)
             ->create();
+
+        Invoice::factory()
+            ->for($requester)
+            ->issuing()
+            ->create([
+                'number' => 'INV-0001',
+                'title' => __('workbench::workbench.seeds.invoices.issuing.title'),
+            ]);
+
+        Invoice::factory()
+            ->for($requester)
+            ->sent()
+            ->create([
+                'number' => 'INV-0002',
+                'title' => __('workbench::workbench.seeds.invoices.sent.title'),
+            ]);
+
+        Invoice::factory()
+            ->for($requester)
+            ->awaitingPayment()
+            ->create([
+                'number' => 'INV-0003',
+                'title' => __('workbench::workbench.seeds.invoices.awaiting_payment.title'),
+            ]);
     }
 }

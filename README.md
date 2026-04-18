@@ -217,17 +217,13 @@ class PurchaseOrderResource extends Resource
     }
 }
 
-// Edit Page
-use CoringaWc\FilamentActionApprovals\Concerns\HasApprovalsResource;
-
+// Edit Page — trait goes on the Resource, not the Page
 class EditPurchaseOrder extends EditRecord
 {
-    use HasApprovalsResource;
-
     protected function getHeaderActions(): array
     {
         return [
-            ...static::getApprovalHeaderActions(),
+            ...static::getResource()::getApprovalHeaderActions(),
             // Submit, Approve, Reject, Comment, Delegate buttons
         ];
     }

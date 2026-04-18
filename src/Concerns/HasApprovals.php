@@ -45,6 +45,13 @@ trait HasApprovals
      */
     public static function approvableActions(): array
     {
+        if (method_exists(static::class, 'resolveApprovableActions')) {
+            /** @var array<string, string> $actions */
+            $actions = static::resolveApprovableActions();
+
+            return $actions;
+        }
+
         return [];
     }
 
@@ -134,7 +141,12 @@ trait HasApprovals
     /**
      * Called when the full approval is completed (all steps approved).
      */
-    public function onApprovalApproved(Approval $approval): void {}
+    public function onApprovalApproved(Approval $approval): void
+    {
+        if (method_exists($this, 'afterApprovalApproved')) {
+            $this->afterApprovalApproved($approval);
+        }
+    }
 
     /**
      * Called when the approval is rejected at any step.

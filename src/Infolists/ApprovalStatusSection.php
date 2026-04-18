@@ -3,6 +3,7 @@
 namespace CoringaWc\FilamentActionApprovals\Infolists;
 
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
+use CoringaWc\FilamentActionApprovals\Models\ApprovalAction;
 use CoringaWc\FilamentActionApprovals\Support\DateDisplay;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
@@ -14,39 +15,46 @@ class ApprovalStatusSection
     {
         return Section::make(__('filament-action-approvals::approval.infolist.approval_status'))
             ->schema([
-                TextEntry::make('latestApproval.status')
+                TextEntry::make('latestApprovalStatus')
                     ->label(__('filament-action-approvals::approval.infolist.status'))
+                    ->state(fn ($record) => $record->latestApproval()?->status)
                     ->badge()
                     ->placeholder(__('filament-action-approvals::approval.infolist.not_submitted'))
                     ->columnSpan(1),
-                TextEntry::make('latestApproval.flow.name')
+                TextEntry::make('latestApprovalFlowName')
                     ->label(__('filament-action-approvals::approval.infolist.flow'))
+                    ->state(fn ($record) => $record->latestApproval()?->flow?->name)
                     ->placeholder(__('filament-action-approvals::approval.infolist.not_available'))
                     ->columnSpan(1),
-                TextEntry::make('latestApproval.submitter.name')
+                TextEntry::make('latestApprovalSubmittedBy')
                     ->label(__('filament-action-approvals::approval.infolist.submitted_by'))
+                    ->state(fn ($record) => $record->latestApproval()?->submitter?->name)
                     ->placeholder(__('filament-action-approvals::approval.infolist.not_available'))
                     ->columnSpan(1),
                 DateDisplay::entry(
-                    TextEntry::make('latestApproval.submitted_at')
-                        ->label(__('filament-action-approvals::approval.infolist.submitted')),
+                    TextEntry::make('latestApprovalSubmittedAt')
+                        ->label(__('filament-action-approvals::approval.infolist.submitted'))
+                        ->state(fn ($record) => $record->latestApproval()?->submitted_at),
                 )
                     ->placeholder(__('filament-action-approvals::approval.infolist.not_submitted'))
                     ->columnSpan(1),
                 DateDisplay::entry(
-                    TextEntry::make('latestApproval.completed_at')
-                        ->label(__('filament-action-approvals::approval.infolist.completed')),
+                    TextEntry::make('latestApprovalCompletedAt')
+                        ->label(__('filament-action-approvals::approval.infolist.completed'))
+                        ->state(fn ($record) => $record->latestApproval()?->completed_at),
                 )
                     ->placeholder(__('filament-action-approvals::approval.infolist.in_progress'))
                     ->columnSpan(1),
 
                 Section::make(__('filament-action-approvals::approval.infolist.current_step'))
                     ->schema([
-                        TextEntry::make('currentApproval.currentStepInstance.step.name')
+                        TextEntry::make('currentStepName')
                             ->label(__('filament-action-approvals::approval.infolist.step'))
+                            ->state(fn ($record) => $record->currentApproval()?->currentStepInstance()?->step?->name)
                             ->placeholder(__('filament-action-approvals::approval.infolist.not_available')),
-                        TextEntry::make('currentApproval.currentStepInstance.status')
+                        TextEntry::make('currentStepStatus')
                             ->label(__('filament-action-approvals::approval.infolist.status'))
+                            ->state(fn ($record) => $record->currentApproval()?->currentStepInstance()?->status)
                             ->badge()
                             ->placeholder(__('filament-action-approvals::approval.infolist.not_available')),
                         TextEntry::make('pending_approvers_display')
@@ -64,8 +72,9 @@ class ApprovalStatusSection
                                     ->pluck('name')
                                     ->join(', ') ?: __('filament-action-approvals::approval.infolist.not_available');
                             }),
-                        TextEntry::make('currentApproval.currentStepInstance.received_approvals')
+                        TextEntry::make('currentStepProgress')
                             ->label(__('filament-action-approvals::approval.infolist.progress'))
+                            ->state(fn ($record) => $record->currentApproval()?->currentStepInstance()?->received_approvals)
                             ->formatStateUsing(function ($state, $record): string {
                                 $stepInstance = $record->currentApproval()?->currentStepInstance();
 
@@ -80,8 +89,9 @@ class ApprovalStatusSection
                             })
                             ->placeholder(__('filament-action-approvals::approval.infolist.not_available')),
                         DateDisplay::entry(
-                            TextEntry::make('currentApproval.currentStepInstance.sla_deadline')
-                                ->label(__('filament-action-approvals::approval.infolist.sla_deadline')),
+                            TextEntry::make('currentStepSlaDeadline')
+                                ->label(__('filament-action-approvals::approval.infolist.sla_deadline'))
+                                ->state(fn ($record) => $record->currentApproval()?->currentStepInstance()?->sla_deadline),
                         )
                             ->placeholder(__('filament-action-approvals::approval.infolist.no_sla'))
                             ->color(function ($state) {
@@ -97,14 +107,16 @@ class ApprovalStatusSection
 
                 Section::make(__('filament-action-approvals::approval.infolist.recent_activity'))
                     ->schema([
-                        RepeatableEntry::make('latestApproval.actions')
+                        RepeatableEntry::make('recentActivity')
                             ->hiddenLabel()
+                            ->state(fn ($record) => $record->latestApproval()?->actions()->with('user')->get() ?? collect())
                             ->schema([
                                 TextEntry::make('type')
                                     ->label(__('filament-action-approvals::approval.fields.type'))
                                     ->badge(),
-                                TextEntry::make('user.name')
+                                TextEntry::make('actor_name')
                                     ->label(__('filament-action-approvals::approval.infolist.by'))
+                                    ->state(fn (ApprovalAction $record): ?string => $record->user?->name)
                                     ->placeholder(__('filament-action-approvals::approval.infolist.system')),
                                 TextEntry::make('comment')
                                     ->label(__('filament-action-approvals::approval.fields.comment'))

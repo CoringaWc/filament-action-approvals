@@ -9,9 +9,10 @@ use CoringaWc\FilamentActionApprovals\Resources\ApprovalFlowResource;
 use CoringaWc\FilamentActionApprovals\Tests\TestCase;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
-use Workbench\App\Filament\Resources\PurchaseOrderResource;
-use Workbench\App\Filament\Resources\UserResource;
-use Workbench\App\Filament\Resources\UserResource\Pages\CreateUser;
+use Workbench\App\Filament\Resources\Invoices\InvoiceResource;
+use Workbench\App\Filament\Resources\PurchaseOrders\PurchaseOrderResource;
+use Workbench\App\Filament\Resources\Users\Pages\CreateUser;
+use Workbench\App\Filament\Resources\Users\UserResource;
 use Workbench\App\Models\User;
 use Workbench\Database\Seeders\DatabaseSeeder;
 
@@ -87,11 +88,18 @@ class FilamentWorkbenchSmokeTest extends TestCase
         $this->get(ApprovalFlowResource::getUrl('index'))
             ->assertOk()
             ->assertSeeText('Aprovação de Pedido de Compra', false)
-            ->assertSeeText('Pedido de Compra', false);
+            ->assertSeeText('Pedido de Compra', false)
+            ->assertSeeText('Aprovação para envio de fatura', false)
+            ->assertSeeText('Fatura', false);
 
         $this->get(UserResource::getUrl('index'))
             ->assertOk()
             ->assertSeeText('Usuários', false)
             ->assertSeeText('Funções e Permissões', false);
+
+        $this->get(InvoiceResource::getUrl('index'))
+            ->assertOk()
+            ->assertSeeText('Faturas', false)
+            ->assertSeeText('Em emissão', false);
     }
 }

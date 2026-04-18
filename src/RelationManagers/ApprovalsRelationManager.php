@@ -4,6 +4,7 @@ namespace CoringaWc\FilamentActionApprovals\RelationManagers;
 
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
+use CoringaWc\FilamentActionApprovals\Models\ApprovalAction;
 use CoringaWc\FilamentActionApprovals\Support\DateDisplay;
 use Filament\Actions\ViewAction;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -13,10 +14,17 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Livewire\Attributes\On;
 
 class ApprovalsRelationManager extends RelationManager
 {
     protected static string $relationship = 'approvals';
+
+    #[On('filament-action-approvals::approval-updated')]
+    public function refreshApprovals(): void
+    {
+        $this->resetTable();
+    }
 
     public static function getTitle($ownerRecord = null, ?string $pageClass = null): string
     {
@@ -113,14 +121,16 @@ class ApprovalsRelationManager extends RelationManager
 
                         Section::make(__('filament-action-approvals::approval.relation_manager.audit_trail'))
                             ->schema([
-                                RepeatableEntry::make('actions')
+                                RepeatableEntry::make('auditTrail')
                                     ->hiddenLabel()
+                                    ->state(fn (Approval $record) => $record->actions()->with('user')->get())
                                     ->schema([
                                         TextEntry::make('type')
                                             ->label(__('filament-action-approvals::approval.fields.type'))
                                             ->badge(),
                                         TextEntry::make('user.name')
                                             ->label(__('filament-action-approvals::approval.relation_manager.by'))
+                                            ->state(fn (ApprovalAction $record): ?string => $record->user?->name)
                                             ->placeholder(__('filament-action-approvals::approval.relation_manager.system')),
                                         TextEntry::make('comment')
                                             ->label(__('filament-action-approvals::approval.fields.comment'))

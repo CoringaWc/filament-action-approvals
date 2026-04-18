@@ -2,11 +2,11 @@
 
 namespace CoringaWc\FilamentActionApprovals\Actions;
 
+use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Support\Icons\Heroicon;
-use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 
 class RejectAction extends Action
 {
@@ -60,6 +60,9 @@ class RejectAction extends Action
                     ->title(__('filament-action-approvals::approval.actions.rejected_success'))
                     ->danger()
                     ->send();
+            })
+            ->after(function (): void {
+                $this->getLivewire()->dispatch('filament-action-approvals::approval-updated');
             })
             ->requiresConfirmation()
             ->modalHeading(__('filament-action-approvals::approval.actions.reject_heading'));

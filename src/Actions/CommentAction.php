@@ -2,11 +2,11 @@
 
 namespace CoringaWc\FilamentActionApprovals\Actions;
 
+use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Support\Icons\Heroicon;
-use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 
 class CommentAction extends Action
 {
@@ -62,6 +62,9 @@ class CommentAction extends Action
                     ->title(__('filament-action-approvals::approval.actions.comment_success'))
                     ->success()
                     ->send();
+            })
+            ->after(function (): void {
+                $this->getLivewire()->dispatch('filament-action-approvals::approval-updated');
             });
     }
 }

@@ -2,11 +2,11 @@
 
 namespace CoringaWc\FilamentActionApprovals\Actions;
 
+use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Support\Icons\Heroicon;
-use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 
 class ApproveAction extends Action
 {
@@ -59,6 +59,9 @@ class ApproveAction extends Action
                     ->title(__('filament-action-approvals::approval.actions.approved_success'))
                     ->success()
                     ->send();
+            })
+            ->after(function (): void {
+                $this->getLivewire()->dispatch('filament-action-approvals::approval-updated');
             })
             ->requiresConfirmation()
             ->modalHeading(__('filament-action-approvals::approval.actions.approve_heading'));

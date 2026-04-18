@@ -72,6 +72,9 @@ class DelegateAction extends Action
                     ->success()
                     ->send();
             })
+            ->after(function (): void {
+                $this->getLivewire()->dispatch('filament-action-approvals::approval-updated');
+            })
             ->requiresConfirmation();
     }
 }
