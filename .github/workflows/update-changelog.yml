@@ -10,6 +10,7 @@ permissions:
 jobs:
   update:
     runs-on: ubuntu-latest
+    if: ${{ hashFiles('CHANGELOG.md') != '' }}
 
     steps:
       - name: Checkout code
