@@ -7,6 +7,7 @@ namespace CoringaWc\FilamentActionApprovals\Tests\Feature;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use CoringaWc\FilamentActionApprovals\Tests\TestCase;
+use ReflectionMethod;
 use Workbench\App\Models\Invoice;
 use Workbench\App\States\Invoice\Issuing;
 use Workbench\App\States\Invoice\Sent;
@@ -20,6 +21,18 @@ class StateApprovalsTest extends TestCase
 
         $this->assertArrayHasKey($sendActionKey, $actions);
         $this->assertSame('Em emissão -> Enviada', $actions[$sendActionKey]);
+    }
+
+    public function test_legacy_state_action_keys_are_parsed_for_backward_compatibility(): void
+    {
+        $parseStateApprovalActionKey = new ReflectionMethod(Invoice::class, 'parseStateApprovalActionKey');
+        $parseStateApprovalActionKey->setAccessible(true);
+
+        /** @var array{0: class-string, 1: class-string} $parsedStates */
+        $parsedStates = $parseStateApprovalActionKey->invoke(null, 'Issuing-Sent');
+
+        $this->assertSame(Issuing::class, $parsedStates[0]);
+        $this->assertSame(Sent::class, $parsedStates[1]);
     }
 
     public function test_transition_executes_immediately_when_no_action_specific_flow_exists(): void

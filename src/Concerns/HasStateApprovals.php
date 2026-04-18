@@ -35,8 +35,9 @@ trait HasStateApprovals
 
         foreach (array_keys($stateConfig->allowedTransitions) as $transitionKey) {
             [$fromStateClass, $toStateClass] = static::parseStateApprovalActionKey($transitionKey);
+            $normalizedActionKey = static::stateApprovalActionKey($fromStateClass, $toStateClass);
 
-            $actions[$transitionKey] = __(':from -> :to', [
+            $actions[$normalizedActionKey] = __(':from -> :to', [
                 'from' => static::resolveStateApprovalLabel($fromStateClass),
                 'to' => static::resolveStateApprovalLabel($toStateClass),
             ]);
@@ -104,7 +105,7 @@ trait HasStateApprovals
      */
     protected static function parseStateApprovalActionKey(string $actionKey, ?string $stateAttribute = null): array
     {
-        [$fromState, $toState] = explode('->', $actionKey, 2) + [null, null];
+        [$fromState, $toState] = static::splitStateApprovalActionKey($actionKey);
 
         if (! is_string($fromState) || ! is_string($toState)) {
             throw new InvalidArgumentException(sprintf('Invalid state approval action key [%s].', $actionKey));
@@ -122,6 +123,22 @@ trait HasStateApprovals
         /** @var class-string<State<Model>> $fromStateClass */
         /** @var class-string<State<Model>> $toStateClass */
         return [$fromStateClass, $toStateClass];
+    }
+
+    /**
+     * @return array{0: string|null, 1: string|null}
+     */
+    protected static function splitStateApprovalActionKey(string $actionKey): array
+    {
+        if (str_contains($actionKey, '->')) {
+            return explode('->', $actionKey, 2) + [null, null];
+        }
+
+        if (str_contains($actionKey, '-')) {
+            return explode('-', $actionKey, 2) + [null, null];
+        }
+
+        return [null, null];
     }
 
     /**

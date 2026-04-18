@@ -10,7 +10,6 @@ permissions:
 jobs:
   update:
     runs-on: ubuntu-latest
-    if: ${{ hashFiles('CHANGELOG.md') != '' }}
 
     steps:
       - name: Checkout code
@@ -18,13 +17,24 @@ jobs:
         with:
           ref: main
 
+      - name: Detect CHANGELOG
+        id: changelog
+        run: |
+          if [ -f CHANGELOG.md ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Update Changelog
+        if: steps.changelog.outputs.present == 'true'
         uses: stefanzweifel/changelog-updater-action@v1
         with:
           latest-version: ${{ github.event.release.name }}
           release-notes: ${{ github.event.release.body }}
 
       - name: Commit updated CHANGELOG
+        if: steps.changelog.outputs.present == 'true'
         uses: stefanzweifel/git-auto-commit-action@v7
         with:
           branch: main
