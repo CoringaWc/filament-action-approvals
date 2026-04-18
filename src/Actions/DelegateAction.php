@@ -5,6 +5,7 @@ namespace CoringaWc\FilamentActionApprovals\Actions;
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use CoringaWc\FilamentActionApprovals\Support\TranslatableSelect;
+use CoringaWc\FilamentActionApprovals\Support\UserDisplayName;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -49,7 +50,12 @@ class DelegateAction extends Action
                     Select::make('to_user_id')
                         ->label(__('filament-action-approvals::approval.actions.delegate_to'))
                         ->searchable()
-                        ->options(fn () => $userModel::where('id', '!=', auth()->id())->pluck('name', 'id'))
+                        ->options(function () use ($userModel): array {
+                            return $userModel::where('id', '!=', auth()->id())
+                                ->get()
+                                ->mapWithKeys(fn ($user) => [$user->getKey() => UserDisplayName::resolve($user)])
+                                ->all();
+                        })
                         ->required(),
                 ),
                 Textarea::make('reason')

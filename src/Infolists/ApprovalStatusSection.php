@@ -2,9 +2,9 @@
 
 namespace CoringaWc\FilamentActionApprovals\Infolists;
 
-use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalAction;
 use CoringaWc\FilamentActionApprovals\Support\DateDisplay;
+use CoringaWc\FilamentActionApprovals\Support\UserDisplayName;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
@@ -28,7 +28,7 @@ class ApprovalStatusSection
                     ->columnSpan(1),
                 TextEntry::make('latestApprovalSubmittedBy')
                     ->label(__('filament-action-approvals::approval.infolist.submitted_by'))
-                    ->state(fn ($record) => $record->latestApproval()?->submitter?->name)
+                    ->state(fn ($record) => UserDisplayName::resolve($record->latestApproval()?->submitter))
                     ->placeholder(__('filament-action-approvals::approval.infolist.not_available'))
                     ->columnSpan(1),
                 DateDisplay::entry(
@@ -66,11 +66,10 @@ class ApprovalStatusSection
                                     return __('filament-action-approvals::approval.infolist.not_available');
                                 }
 
-                                $userModel = FilamentActionApprovalsPlugin::resolveUserModel();
-
-                                return $userModel::whereIn('id', $ids)
-                                    ->pluck('name')
-                                    ->join(', ') ?: __('filament-action-approvals::approval.infolist.not_available');
+                                return UserDisplayName::resolveMany(
+                                    $ids,
+                                    __('filament-action-approvals::approval.infolist.not_available'),
+                                );
                             }),
                         TextEntry::make('currentStepProgress')
                             ->label(__('filament-action-approvals::approval.infolist.progress'))
@@ -116,7 +115,7 @@ class ApprovalStatusSection
                                     ->badge(),
                                 TextEntry::make('actor_name')
                                     ->label(__('filament-action-approvals::approval.infolist.by'))
-                                    ->state(fn (ApprovalAction $record): ?string => $record->user?->name)
+                                    ->state(fn (ApprovalAction $record): ?string => UserDisplayName::resolve($record->user))
                                     ->placeholder(__('filament-action-approvals::approval.infolist.system')),
                                 TextEntry::make('comment')
                                     ->label(__('filament-action-approvals::approval.fields.comment'))

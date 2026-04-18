@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Workbench\App\Filament\Resources\Invoices\Schemas;
 
-use CoringaWc\FilamentActionApprovals\Infolists\ApprovalStatusSection;
 use CoringaWc\FilamentActionApprovals\Support\DateDisplay;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
@@ -18,7 +17,8 @@ class InvoiceInfolist
     {
         return $schema->components([
             Section::make(__('workbench::workbench.resources.invoices.sections.overview'))
-                ->columns(2)
+                ->columns(3)
+                ->columnSpanFull()
                 ->schema([
                     TextEntry::make('number')
                         ->label(__('workbench::workbench.resources.invoices.fields.number')),
@@ -58,7 +58,6 @@ class InvoiceInfolist
                             ->placeholder('-'),
                     ),
                 ]),
-            ApprovalStatusSection::make(),
         ]);
     }
 }

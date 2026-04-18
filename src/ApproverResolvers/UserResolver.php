@@ -6,6 +6,7 @@ use CoringaWc\FilamentActionApprovals\Contracts\ApproverResolver;
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Support\FormFieldHint;
 use CoringaWc\FilamentActionApprovals\Support\TranslatableSelect;
+use CoringaWc\FilamentActionApprovals\Support\UserDisplayName;
 use Filament\Forms\Components\Select;
 use Illuminate\Database\Eloquent\Model;
 
@@ -32,7 +33,11 @@ class UserResolver implements ApproverResolver
                         ->label(__('filament-action-approvals::approval.resolver_config.users'))
                         ->multiple()
                         ->searchable()
-                        ->options(fn () => $userModel::pluck('name', 'id'))
+                        ->options(function () use ($userModel): array {
+                            return $userModel::all()
+                                ->mapWithKeys(fn ($user) => [$user->getKey() => UserDisplayName::resolve($user)])
+                                ->all();
+                        })
                         ->required(),
                     __('filament-action-approvals::approval.flow_hints.resolver_users'),
                 ),

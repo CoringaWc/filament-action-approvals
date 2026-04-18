@@ -2,10 +2,10 @@
 
 namespace CoringaWc\FilamentActionApprovals\RelationManagers;
 
-use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalAction;
 use CoringaWc\FilamentActionApprovals\Support\DateDisplay;
+use CoringaWc\FilamentActionApprovals\Support\UserDisplayName;
 use Filament\Actions\ViewAction;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
@@ -40,8 +40,9 @@ class ApprovalsRelationManager extends RelationManager
                 TextColumn::make('status')
                     ->label(__('filament-action-approvals::approval.fields.status'))
                     ->badge(),
-                TextColumn::make('submitter.name')
-                    ->label(__('filament-action-approvals::approval.relation_manager.submitted_by')),
+                TextColumn::make('submitted_by_name')
+                    ->label(__('filament-action-approvals::approval.relation_manager.submitted_by'))
+                    ->state(fn (Approval $record): ?string => UserDisplayName::resolve($record->submitter)),
                 DateDisplay::column(
                     TextColumn::make('submitted_at')
                         ->label(__('filament-action-approvals::approval.fields.submitted_at')),
@@ -65,8 +66,9 @@ class ApprovalsRelationManager extends RelationManager
                                 TextEntry::make('status')
                                     ->label(__('filament-action-approvals::approval.fields.status'))
                                     ->badge(),
-                                TextEntry::make('submitter.name')
-                                    ->label(__('filament-action-approvals::approval.relation_manager.submitted_by')),
+                                TextEntry::make('submitted_by_display')
+                                    ->label(__('filament-action-approvals::approval.relation_manager.submitted_by'))
+                                    ->state(fn (Approval $record): ?string => UserDisplayName::resolve($record->submitter)),
                                 DateDisplay::entry(
                                     TextEntry::make('submitted_at')
                                         ->label(__('filament-action-approvals::approval.fields.submitted_at')),
@@ -94,19 +96,10 @@ class ApprovalsRelationManager extends RelationManager
                                             ->badge(),
                                         TextEntry::make('approvers_display')
                                             ->label(__('filament-action-approvals::approval.relation_manager.approvers'))
-                                            ->state(function ($record): string {
-                                                $ids = $record->assigned_approver_ids;
-
-                                                if (empty($ids)) {
-                                                    return __('filament-action-approvals::approval.relation_manager.not_available');
-                                                }
-
-                                                $userModel = FilamentActionApprovalsPlugin::resolveUserModel();
-
-                                                return $userModel::whereIn('id', $ids)
-                                                    ->pluck('name')
-                                                    ->join(', ') ?: __('filament-action-approvals::approval.relation_manager.not_available');
-                                            }),
+                                            ->state(fn ($record): string => UserDisplayName::resolveMany(
+                                                $record->assigned_approver_ids,
+                                                __('filament-action-approvals::approval.relation_manager.not_available'),
+                                            )),
                                         TextEntry::make('received_approvals')
                                             ->label(__('filament-action-approvals::approval.relation_manager.received_required'))
                                             ->formatStateUsing(fn ($record): string => "{$record->received_approvals} / {$record->required_approvals}"),
@@ -128,9 +121,9 @@ class ApprovalsRelationManager extends RelationManager
                                         TextEntry::make('type')
                                             ->label(__('filament-action-approvals::approval.fields.type'))
                                             ->badge(),
-                                        TextEntry::make('user.name')
+                                        TextEntry::make('actor_name')
                                             ->label(__('filament-action-approvals::approval.relation_manager.by'))
-                                            ->state(fn (ApprovalAction $record): ?string => $record->user?->name)
+                                            ->state(fn (ApprovalAction $record): ?string => UserDisplayName::resolve($record->user))
                                             ->placeholder(__('filament-action-approvals::approval.relation_manager.system')),
                                         TextEntry::make('comment')
                                             ->label(__('filament-action-approvals::approval.fields.comment'))
@@ -144,7 +137,7 @@ class ApprovalsRelationManager extends RelationManager
                             ]),
                     ]))
                     ->slideOver()
-                    ->modalHeading(fn (Approval $record): string => __('filament-action-approvals::approval.relation_manager.approval_heading', ['flow' => $record->flow->name]))
+                    ->modalHeading(fn (Approval $record): string => __('filament-action-approvals::approval.relation_manager.approval_heading', ['flow' => $record->flow?->name ?? __('filament-action-approvals::approval.relation_manager.not_available')]))
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel(__('filament-action-approvals::approval.relation_manager.close')),
             ]);

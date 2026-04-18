@@ -10,16 +10,19 @@ Action-based approval workflows for [Filament v5](https://filamentphp.com). Defi
 - **Multi-step approval flows** — sequential steps with configurable approver resolution
 - **Polymorphic** — any Eloquent model can be approvable via the `HasApprovals` trait
 - **Pluggable approver resolvers** — `UserResolver`, `RoleResolver`, `CallbackResolver`, or create your own
+- **Approvable actions** — define domain-specific actions (submit, cancel, etc.) on your model, each with its own approval flow
+- **Per-action submit buttons** — create dedicated `SubmitForApprovalAction` instances locked to a specific `actionKey`
 - **Delegation** — approvers can delegate their step to another user
 - **SLA enforcement** — per-step SLA deadlines with warning notifications and configurable escalation (notify, auto-approve, reject, reassign)
 - **Lifecycle callbacks** — hook into `onApprovalSubmitted`, `onApprovalApproved`, `onApprovalRejected`, etc. directly on your model
 - **Resubmission policy** — control whether models can be resubmitted after approval/rejection
+- **User display name** — uses Filament's `getFilamentName()` when available, falls back to `name` attribute
 - **Built-in Filament components**:
   - `ApprovalFlowResource` — CRUD for managing approval flow definitions
-  - `ApprovalsRelationManager` — shows approval history on any approvable model
+  - `ApprovalsRelationManager` — shows approval history with slide-over details
   - `ApprovalStatusColumn` — ready-to-use status badge column
   - `ApprovalStatusSection` — infolist section with approval details and timeline
-  - Header actions: Submit, Approve, Reject, Comment, Delegate
+  - Header actions: Submit, Approve, Reject, Comment, Delegate (usable individually or as a group)
   - Widgets: Pending Approvals, Approval Analytics
 - **Multi-tenancy support** — scope flows and approvers per tenant
 - **Event-driven** — fires events for submitted, completed, rejected, step-completed, and escalated
@@ -82,11 +85,17 @@ return [
     // SLA warning threshold (0.75 = 75% of SLA time elapsed)
     'sla_warning_threshold' => 0.75,
 
+    // Date display settings
+    'date' => [
+        'display_format' => 'd/m/Y H:i',
+        'use_since' => true,
+    ],
+
     // Auto-register the SLA processing command to run every minute
     'schedule_sla_command' => true,
 
     // Navigation group for the ApprovalFlow resource
-    'navigation_group' => 'Approvals',
+    'navigation_group' => null,
 
     // Database table prefix (empty = no prefix)
     'table_prefix' => '',
@@ -130,6 +139,7 @@ Add the `HasApprovals` trait to any Eloquent model:
 
 ```php
 use CoringaWc\FilamentActionApprovals\Concerns\HasApprovals;
+use CoringaWc\FilamentActionApprovals\Models\Approval;
 
 class PurchaseOrder extends Model
 {
@@ -148,7 +158,34 @@ class PurchaseOrder extends Model
 }
 ```
 
-### 2. Create an Approval Flow
+### 2. Define Approvable Actions (Optional)
+
+If your model has multiple domain actions that require approval (e.g., submit, cancel, reimburse), define them via `approvableActions()`:
+
+```php
+class PurchaseOrder extends Model
+{
+    use HasApprovals;
+
+    /**
+     * Define domain-specific actions that can be submitted for approval.
+     * Each key is an action identifier, each value is a human-readable label.
+     *
+     * @return array<string, string>
+     */
+    public static function approvableActions(): array
+    {
+        return [
+            'submit' => __('Submit for Processing'),
+            'cancel' => __('Request Cancellation'),
+        ];
+    }
+}
+```
+
+When `approvableActions()` is defined, the `SubmitForApprovalAction` will show a selector for the user to pick which action they are requesting. You can also create dedicated buttons per action — see [Per-Action Submit Buttons](#per-action-submit-buttons).
+
+### 3. Create an Approval Flow
 
 Approval flows can be created via the admin panel UI (ApprovalFlow resource) or programmatically:
 
@@ -161,7 +198,8 @@ use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
 
 $flow = ApprovalFlow::create([
     'name' => 'Purchase Order Approval',
-    'approvable_type' => PurchaseOrder::class, // or morph alias
+    'approvable_type' => PurchaseOrder::class,
+    'action_key' => 'submit',  // Optional: tie this flow to a specific action
     'is_active' => true,
 ]);
 
@@ -190,13 +228,149 @@ $flow->steps()->create([
 ]);
 ```
 
-### 3. Add Approval Actions to Your Resource
+### 4. Add Approval Actions to Your Resource
 
-Use the `HasApprovalsResource` trait on your Edit page and add the `ApprovalsRelationManager`:
+#### Option A: All actions at once (quickstart)
+
+Use the `HasApprovalsResource` trait to add all 5 approval actions as header actions:
 
 ```php
-// Resource
+use CoringaWc\FilamentActionApprovals\Concerns\HasApprovalsResource;
+
+class PurchaseOrderResource extends Resource
+{
+    use HasApprovalsResource;
+    // ...
+}
+
+// Edit or View Page
+class EditPurchaseOrder extends EditRecord
+{
+    protected function getHeaderActions(): array
+    {
+        return [
+            ...static::getResource()::getApprovalHeaderActions(),
+            // Returns: SubmitForApprovalAction, ApproveAction, RejectAction,
+            //          CommentAction, DelegateAction
+        ];
+    }
+}
+```
+
+#### Option B: Individual actions (fine-grained control)
+
+Use each action individually when you need to customize visibility, labels, or only show specific actions:
+
+```php
+use CoringaWc\FilamentActionApprovals\Actions\ApproveAction;
+use CoringaWc\FilamentActionApprovals\Actions\CommentAction;
+use CoringaWc\FilamentActionApprovals\Actions\DelegateAction;
+use CoringaWc\FilamentActionApprovals\Actions\RejectAction;
+use CoringaWc\FilamentActionApprovals\Actions\SubmitForApprovalAction;
+
+class ViewInvoice extends ViewRecord
+{
+    protected function getHeaderActions(): array
+    {
+        return [
+            // Custom domain actions first
+            AdvanceStatusAction::make(),
+            CancelAction::make(),
+
+            // Only the approval response actions — submitter uses a different flow
+            ApproveAction::make(),
+            RejectAction::make(),
+            CommentAction::make(),
+            DelegateAction::make(),
+        ];
+    }
+}
+```
+
+Each action manages its own visibility automatically:
+
+| Action                    | Visible When                                               |
+| ------------------------- | ---------------------------------------------------------- |
+| `SubmitForApprovalAction` | Record can be submitted (no pending approval, flows exist) |
+| `ApproveAction`           | User is an assigned approver and hasn't acted yet          |
+| `RejectAction`            | User is an assigned approver and hasn't acted yet          |
+| `CommentAction`           | A pending approval exists and user can act on it           |
+| `DelegateAction`          | User is an assigned approver (original, not delegate)      |
+
+#### Per-Action Submit Buttons
+
+When your model defines `approvableActions()`, you can create dedicated submit buttons for each action using `actionKey()`:
+
+```php
+use CoringaWc\FilamentActionApprovals\Actions\SubmitForApprovalAction;
+use Filament\Support\Icons\Heroicon;
+
+class EditPurchaseOrder extends EditRecord
+{
+    protected function getHeaderActions(): array
+    {
+        return [
+            // Dedicated button for "submit" action — skips the action selector modal
+            SubmitForApprovalAction::make('submitPO')
+                ->actionKey('submit')
+                ->label(__('Submit for Approval'))
+                ->icon(Heroicon::OutlinedPaperAirplane),
+
+            // Dedicated button for "cancel" action
+            SubmitForApprovalAction::make('cancelPO')
+                ->actionKey('cancel')
+                ->label(__('Request Cancellation'))
+                ->icon(Heroicon::OutlinedXMark)
+                ->color('danger'),
+
+            // Approval response actions
+            ApproveAction::make(),
+            RejectAction::make(),
+            CommentAction::make(),
+            DelegateAction::make(),
+        ];
+    }
+}
+```
+
+When `actionKey()` is set:
+
+- The action key selector modal is **skipped** entirely
+- The action is only visible when there are matching flows for that specific `actionKey`
+- If there's exactly one matching flow, submission happens with just a confirmation dialog (no form)
+- If there are multiple matching flows, only the flow selector is shown (without the action selector)
+
+This gives you full control to place specific approval submission buttons anywhere in your UI — in the header, in a custom action group, or even as table row actions.
+
+### 5. Add the Relation Manager
+
+Add the `ApprovalsRelationManager` to show approval history on any resource:
+
+```php
 use CoringaWc\FilamentActionApprovals\RelationManagers\ApprovalsRelationManager;
+
+class PurchaseOrderResource extends Resource
+{
+    public static function getRelations(): array
+    {
+        return [
+            ApprovalsRelationManager::class,
+        ];
+    }
+}
+```
+
+The relation manager shows a table of all approvals for the record. Each row has a "View" action that opens a **slide-over** with:
+
+- Approval details (flow, status, submitter, dates)
+- Step-by-step progress with approver names and received/required counts
+- Full audit trail (submitted, approved, rejected, commented, delegated, escalated)
+
+### 6. Add the Status Column
+
+Show the latest approval status in any table:
+
+```php
 use CoringaWc\FilamentActionApprovals\Columns\ApprovalStatusColumn;
 
 class PurchaseOrderResource extends Resource
@@ -205,34 +379,36 @@ class PurchaseOrderResource extends Resource
     {
         return $table->columns([
             TextColumn::make('title'),
-            ApprovalStatusColumn::make(), // Shows approval status badge
+            ApprovalStatusColumn::make(), // Badge: Pending, Approved, Rejected, Cancelled
         ]);
-    }
-
-    public static function getRelations(): array
-    {
-        return [
-            ApprovalsRelationManager::class,
-        ];
-    }
-}
-
-// Edit Page — trait goes on the Resource, not the Page
-class EditPurchaseOrder extends EditRecord
-{
-    protected function getHeaderActions(): array
-    {
-        return [
-            ...static::getResource()::getApprovalHeaderActions(),
-            // Submit, Approve, Reject, Comment, Delegate buttons
-        ];
     }
 }
 ```
 
-### 4. Programmatic Usage
+### 7. Add the Status Section to Infolists (Optional)
 
-You can also interact with the approval engine directly:
+Use `ApprovalStatusSection` to display approval details inline on a View or Edit page. This is an alternative to the relation manager — useful when you want the approval details embedded directly in the page's infolist rather than in a separate tab or slide-over.
+
+```php
+use CoringaWc\FilamentActionApprovals\Infolists\ApprovalStatusSection;
+
+class ViewPurchaseOrder extends ViewRecord
+{
+    public function infolist(Infolist $infolist): Infolist
+    {
+        return $infolist->schema([
+            // ... your other infolist sections ...
+            ApprovalStatusSection::make(),
+        ]);
+    }
+}
+```
+
+> **Note:** When using `ApprovalsRelationManager`, the `ApprovalStatusSection` may be redundant since the RM's slide-over already shows full approval details.
+
+### 8. Programmatic Usage
+
+Interact with the approval engine directly:
 
 ```php
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
@@ -260,6 +436,28 @@ $engine->delegate($stepInstance, auth()->id(), $delegateUserId, 'On vacation');
 
 // Cancel the approval
 $engine->cancel($approval);
+```
+
+## User Display Names
+
+The package uses `UserDisplayName::resolve()` to display user names throughout the UI (infolists, columns, selects, audit trail). The resolution order is:
+
+1. If the user model implements `Filament\Models\Contracts\HasName`, calls `getFilamentName()`
+2. Falls back to the `name` attribute
+
+This means if your User model uses Filament's `HasName` interface (which provides `getFilamentName()`), the package will automatically use the display name defined there (e.g., full name, username, or any custom format).
+
+```php
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Models\Contracts\HasName;
+
+class User extends Authenticatable implements FilamentUser, HasName
+{
+    public function getFilamentName(): string
+    {
+        return "{$this->first_name} {$this->last_name}";
+    }
+}
 ```
 
 ## Approver Resolvers
@@ -313,12 +511,12 @@ class HierarchyResolver implements ApproverResolver
         return [$approvable->user->manager_id];
     }
 
-    public function label(): string
+    public static function label(): string
     {
         return 'Direct Manager';
     }
 
-    public function configSchema(): array
+    public static function configSchema(): array
     {
         return []; // Filament form components for the flow builder
     }
@@ -410,8 +608,8 @@ The SLA processor runs via the `approval:process-sla` command, automatically sch
 | `ApprovalSubmitted`     | `Approval $approval`                 |
 | `ApprovalCompleted`     | `Approval $approval`                 |
 | `ApprovalRejected`      | `Approval $approval`                 |
-| `ApprovalStepCompleted` | `ApprovalStepInstance $stepInstance` |
-| `ApprovalEscalated`     | `ApprovalStepInstance $stepInstance` |
+| `ApprovalStepCompleted` | `ApprovalStepInstance $stepInstance`  |
+| `ApprovalEscalated`     | `ApprovalStepInstance $stepInstance`  |
 
 ## Multi-Tenancy
 
@@ -434,7 +632,7 @@ The package creates the following tables:
 
 | Table                     | Purpose                                                                           |
 | ------------------------- | --------------------------------------------------------------------------------- |
-| `approval_flows`          | Flow definitions (name, approvable_type, active status)                           |
+| `approval_flows`          | Flow definitions (name, approvable_type, action_key, active status)               |
 | `approval_steps`          | Step definitions within a flow (order, resolver, SLA, escalation)                 |
 | `approvals`               | Runtime approval instances (polymorphic to approvable model)                      |
 | `approval_step_instances` | Runtime step instances (status, assigned approvers, SLA tracking)                 |
@@ -470,6 +668,27 @@ Then disable the built-in resource on the plugin and register your own:
 ```php
 FilamentActionApprovalsPlugin::make()
     ->flowResource(false) // Disable built-in resource
+```
+
+## Translations
+
+The package uses `filament-action-approvals::approval.*` keys for all user-facing strings. Translation files are in `resources/lang/{locale}/approval.php`.
+
+Key groups:
+
+| Group          | Description                                          |
+| -------------- | ---------------------------------------------------- |
+| `status.*`     | Approval status labels (pending, approved, etc.)     |
+| `action_type.*`| Action type labels (submitted, approved, etc.)       |
+| `step_type.*`  | Step type labels (single, sequential, parallel)      |
+| `step_status.*`| Step instance status labels                          |
+| `escalation.*` | Escalation action labels                             |
+| `actions.*`    | UI action button labels and messages                 |
+
+To publish translations for customization:
+
+```bash
+php artisan vendor:publish --tag="filament-action-approvals-translations"
 ```
 
 ## Testing

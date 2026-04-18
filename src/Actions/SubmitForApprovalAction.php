@@ -13,9 +13,34 @@ use Filament\Support\Icons\Heroicon;
 
 class SubmitForApprovalAction extends Action
 {
+    protected ?string $lockedActionKey = null;
+
     public static function getDefaultName(): ?string
     {
         return 'submitForApproval';
+    }
+
+    /**
+     * Pre-configure this action with a specific action key.
+     *
+     * When set, the action key selector is hidden and the submission
+     * is locked to this specific approvable action. This allows you
+     * to create dedicated buttons for each approvable action:
+     *
+     *     SubmitForApprovalAction::make('submitPO')
+     *         ->actionKey('submit')
+     *         ->label('Submit for Approval')
+     */
+    public function actionKey(string $actionKey): static
+    {
+        $this->lockedActionKey = $actionKey;
+
+        return $this;
+    }
+
+    public function getLockedActionKey(): ?string
+    {
+        return $this->lockedActionKey;
     }
 
     protected function setUp(): void
@@ -33,18 +58,47 @@ class SubmitForApprovalAction extends Action
                     return false;
                 }
 
+                if (! $record->canBeSubmittedForApproval()) {
+                    return false;
+                }
+
                 $flows = ApprovalFlow::forModel($record)->get();
+
+                if ($flows->isEmpty()) {
+                    return false;
+                }
+
+                // When locked to a specific action key, only show if there are matching flows
+                if ($this->lockedActionKey !== null) {
+                    return ApprovalFlow::filterSubmissionFlows($flows, $this->lockedActionKey)->isNotEmpty();
+                }
+
                 $hasGenericFlows = $flows->whereNull('action_key')->isNotEmpty();
                 $hasSpecificFlows = $flows->whereNotNull('action_key')->isNotEmpty();
                 $canResolveSpecificActions = ApprovableActionLabel::hasOptionsFor($record);
 
-                return $record->canBeSubmittedForApproval()
-                    && $flows->isNotEmpty()
-                    && ($hasGenericFlows || (! $hasSpecificFlows) || $canResolveSpecificActions);
+                return $hasGenericFlows || (! $hasSpecificFlows) || $canResolveSpecificActions;
             })
             ->schema(function (): array {
                 $record = $this->getRecord();
                 $flows = ApprovalFlow::forModel($record)->get();
+
+                // When locked to a specific action key, skip the action selector entirely
+                if ($this->lockedActionKey !== null) {
+                    $matchingFlows = ApprovalFlow::filterSubmissionFlows($flows, $this->lockedActionKey);
+
+                    if ($matchingFlows->count() <= 1) {
+                        return [];
+                    }
+
+                    return [
+                        Select::make('approval_flow_id')
+                            ->label(__('filament-action-approvals::approval.actions.approval_flow'))
+                            ->options($matchingFlows->pluck('name', 'id')->all())
+                            ->required(),
+                    ];
+                }
+
                 $actionOptions = ApprovableActionLabel::optionsFor($record);
                 $hasGenericFlows = $flows->whereNull('action_key')->isNotEmpty();
                 $hasSpecificFlows = $flows->whereNotNull('action_key')->isNotEmpty();
@@ -80,11 +134,13 @@ class SubmitForApprovalAction extends Action
             })
             ->action(function (array $data): void {
                 $record = $this->getRecord();
+                $actionKey = $this->lockedActionKey ?? ($data['action_key'] ?? null);
+
                 $flow = isset($data['approval_flow_id'])
                     ? ApprovalFlow::find($data['approval_flow_id'])
                     : null;
 
-                app(ApprovalEngine::class)->submit($record, $flow, actionKey: $data['action_key'] ?? null);
+                app(ApprovalEngine::class)->submit($record, $flow, actionKey: $actionKey);
 
                 Notification::make()
                     ->title(__('filament-action-approvals::approval.actions.submitted_success'))

@@ -23,7 +23,7 @@ class ApprovalRequestedNotification
         $modelLabel = ApprovableModelLabel::resolve($approvable);
 
         Notification::make()
-            ->title(__('filament-action-approvals::approval.notifications.requested_title', ['step' => $stepInstance->step->name]))
+            ->title(__('filament-action-approvals::approval.notifications.requested_title', ['step' => $stepInstance->step?->name ?? 'Unknown']))
             ->body(__('filament-action-approvals::approval.notifications.requested_body', ['model' => $modelLabel, 'id' => $approvable->getKey()]))
             ->icon(Heroicon::OutlinedClipboardDocumentCheck)
             ->warning()
