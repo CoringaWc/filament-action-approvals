@@ -2,9 +2,9 @@
 
 namespace CoringaWc\FilamentActionApprovals\Resources\ApprovalFlowResource\Pages;
 
+use CoringaWc\FilamentActionApprovals\Resources\ApprovalFlowResource;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
-use CoringaWc\FilamentActionApprovals\Resources\ApprovalFlowResource;
 
 class ListApprovalFlows extends ListRecords
 {

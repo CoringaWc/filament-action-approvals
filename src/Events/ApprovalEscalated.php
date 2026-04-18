@@ -2,8 +2,8 @@
 
 namespace CoringaWc\FilamentActionApprovals\Events;
 
-use Illuminate\Foundation\Events\Dispatchable;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
+use Illuminate\Foundation\Events\Dispatchable;
 
 class ApprovalEscalated
 {

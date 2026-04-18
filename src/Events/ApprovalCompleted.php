@@ -2,8 +2,8 @@
 
 namespace CoringaWc\FilamentActionApprovals\Events;
 
-use Illuminate\Foundation\Events\Dispatchable;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
+use Illuminate\Foundation\Events\Dispatchable;
 
 class ApprovalCompleted
 {

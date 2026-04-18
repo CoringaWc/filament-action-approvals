@@ -2,13 +2,13 @@
 
 namespace CoringaWc\FilamentActionApprovals\Widgets;
 
-use Filament\Support\Icons\Heroicon;
-use Filament\Widgets\StatsOverviewWidget;
-use Filament\Widgets\StatsOverviewWidget\Stat;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\Enums\StepInstanceStatus;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
+use Filament\Support\Icons\Heroicon;
+use Filament\Widgets\StatsOverviewWidget;
+use Filament\Widgets\StatsOverviewWidget\Stat;
 
 class ApprovalAnalyticsWidget extends StatsOverviewWidget
 {

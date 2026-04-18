@@ -2,9 +2,9 @@
 
 namespace CoringaWc\FilamentActionApprovals\Resources\ApprovalFlowResource\Pages;
 
+use CoringaWc\FilamentActionApprovals\Resources\ApprovalFlowResource;
 use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
-use CoringaWc\FilamentActionApprovals\Resources\ApprovalFlowResource;
 
 class EditApprovalFlow extends EditRecord
 {
