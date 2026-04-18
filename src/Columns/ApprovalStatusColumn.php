@@ -3,6 +3,7 @@
 namespace CoringaWc\FilamentActionApprovals\Columns;
 
 use Filament\Tables\Columns\TextColumn;
+use Illuminate\Database\Eloquent\Model;
 
 class ApprovalStatusColumn extends TextColumn
 {
@@ -10,8 +11,8 @@ class ApprovalStatusColumn extends TextColumn
     {
         return parent::make($name ?? 'approval_status')
             ->label(__('filament-action-approvals::approval.column.label'))
-            ->getStateUsing(function ($record): ?string {
-                if (! method_exists($record, 'approvals')) {
+            ->getStateUsing(function (mixed $record): ?string {
+                if (! $record instanceof Model || ! method_exists($record, 'latestApproval')) {
                     return null;
                 }
 

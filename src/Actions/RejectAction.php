@@ -2,11 +2,14 @@
 
 namespace CoringaWc\FilamentActionApprovals\Actions;
 
+use CoringaWc\FilamentActionApprovals\Models\Approval;
+use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Database\Eloquent\Model;
 
 class RejectAction extends Action
 {
@@ -24,8 +27,13 @@ class RejectAction extends Action
             ->icon(Heroicon::OutlinedXCircle)
             ->color('danger')
             ->visible(function (): bool {
-                $record = $this->getRecord();
-                $approval = $record->currentApproval();
+                $userId = auth()->id();
+
+                if (! is_int($userId)) {
+                    return false;
+                }
+
+                $approval = $this->resolveCurrentApproval();
 
                 if (! $approval) {
                     return false;
@@ -37,8 +45,8 @@ class RejectAction extends Action
                     return false;
                 }
 
-                return $stepInstance->canUserAct(auth()->id())
-                    && ! $stepInstance->hasUserActed(auth()->id());
+                return $stepInstance->canUserAct($userId)
+                    && ! $stepInstance->hasUserActed($userId);
             })
             ->schema([
                 Textarea::make('comment')
@@ -47,12 +55,16 @@ class RejectAction extends Action
                     ->rows(3),
             ])
             ->action(function (array $data): void {
-                $record = $this->getRecord();
-                $stepInstance = $record->currentApproval()->currentStepInstance();
+                $stepInstance = $this->resolveCurrentStepInstance();
+                $userId = auth()->id();
+
+                if (! $stepInstance || ! is_int($userId)) {
+                    return;
+                }
 
                 app(ApprovalEngine::class)->reject(
                     $stepInstance,
-                    auth()->id(),
+                    $userId,
                     $data['comment'],
                 );
 
@@ -62,9 +74,37 @@ class RejectAction extends Action
                     ->send();
             })
             ->after(function (): void {
-                $this->getLivewire()->dispatch('filament-action-approvals::approval-updated');
+                $this->dispatchApprovalUpdated();
             })
             ->requiresConfirmation()
             ->modalHeading(__('filament-action-approvals::approval.actions.reject_heading'));
+    }
+
+    protected function resolveCurrentApproval(): ?Approval
+    {
+        $record = $this->getRecord();
+
+        if (! $record instanceof Model || ! method_exists($record, 'currentApproval')) {
+            return null;
+        }
+
+        /** @var ?Approval $approval */
+        $approval = $record->currentApproval();
+
+        return $approval;
+    }
+
+    protected function resolveCurrentStepInstance(): ?ApprovalStepInstance
+    {
+        return $this->resolveCurrentApproval()?->currentStepInstance();
+    }
+
+    protected function dispatchApprovalUpdated(): void
+    {
+        $livewire = $this->getLivewire();
+
+        if (is_object($livewire) && method_exists($livewire, 'dispatch')) {
+            $livewire->dispatch('filament-action-approvals::approval-updated');
+        }
     }
 }

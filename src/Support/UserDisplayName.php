@@ -31,6 +31,8 @@ class UserDisplayName
      * Resolve display names for a collection of user IDs.
      *
      * Returns a comma-separated string of display names.
+     *
+     * @param  list<int>  $userIds
      */
     public static function resolveMany(array $userIds, ?string $fallback = null): string
     {
@@ -39,8 +41,11 @@ class UserDisplayName
         }
 
         $userModel = FilamentActionApprovalsPlugin::resolveUserModel();
+        $userKeyName = app($userModel)->getKeyName();
 
-        $users = $userModel::whereIn('id', $userIds)->get();
+        $users = $userModel::query()
+            ->whereIn($userKeyName, $userIds)
+            ->get();
 
         $names = $users->map(fn (Model $user): string => static::resolve($user) ?? '')->filter()->join(', ');
 

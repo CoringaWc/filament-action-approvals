@@ -10,7 +10,7 @@ use Filament\Support\Icons\Heroicon;
 
 class ApprovalEscalatedNotification
 {
-    public static function send(ApprovalStepInstance $stepInstance, int|string $userId): void
+    public static function send(ApprovalStepInstance $stepInstance, int $userId): void
     {
         $userModel = FilamentActionApprovalsPlugin::resolveUserModel();
         $recipient = $userModel::find($userId);
@@ -21,10 +21,11 @@ class ApprovalEscalatedNotification
 
         $approvable = $stepInstance->approval->approvable;
         $modelLabel = ApprovableModelLabel::resolve($approvable);
+        $approvableKey = $approvable?->getKey() ?? __('filament-action-approvals::approval.relation_manager.not_available');
 
         Notification::make()
             ->title(__('filament-action-approvals::approval.notifications.escalated_title'))
-            ->body(__('filament-action-approvals::approval.notifications.escalated_body', ['model' => $modelLabel, 'id' => $approvable->getKey()]))
+            ->body(__('filament-action-approvals::approval.notifications.escalated_body', ['model' => $modelLabel, 'id' => $approvableKey]))
             ->icon(Heroicon::OutlinedExclamationTriangle)
             ->danger()
             ->sendToDatabase($recipient);

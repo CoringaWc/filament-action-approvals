@@ -4,6 +4,7 @@ namespace CoringaWc\FilamentActionApprovals\RelationManagers;
 
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalAction;
+use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
 use CoringaWc\FilamentActionApprovals\Support\DateDisplay;
 use CoringaWc\FilamentActionApprovals\Support\UserDisplayName;
 use Filament\Actions\ViewAction;
@@ -14,6 +15,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use Livewire\Attributes\On;
 
 class ApprovalsRelationManager extends RelationManager
@@ -26,7 +28,7 @@ class ApprovalsRelationManager extends RelationManager
         $this->resetTable();
     }
 
-    public static function getTitle($ownerRecord = null, ?string $pageClass = null): string
+    public static function getTitle(Model $ownerRecord, string $pageClass): string
     {
         return __('filament-action-approvals::approval.relation_manager.title');
     }
@@ -137,7 +139,15 @@ class ApprovalsRelationManager extends RelationManager
                             ]),
                     ]))
                     ->slideOver()
-                    ->modalHeading(fn (Approval $record): string => __('filament-action-approvals::approval.relation_manager.approval_heading', ['flow' => $record->flow?->name ?? __('filament-action-approvals::approval.relation_manager.not_available')]))
+                    ->modalHeading(function (Approval $record): string {
+                        $flow = $record->getRelationValue('flow');
+
+                        return __('filament-action-approvals::approval.relation_manager.approval_heading', [
+                            'flow' => $flow instanceof ApprovalFlow
+                                ? $flow->name
+                                : __('filament-action-approvals::approval.relation_manager.not_available'),
+                        ]);
+                    })
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel(__('filament-action-approvals::approval.relation_manager.close')),
             ]);

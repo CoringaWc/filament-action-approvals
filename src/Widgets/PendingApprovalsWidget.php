@@ -3,6 +3,7 @@
 namespace CoringaWc\FilamentActionApprovals\Widgets;
 
 use CoringaWc\FilamentActionApprovals\Enums\StepInstanceStatus;
+use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Support\ApprovableModelLabel;
 use CoringaWc\FilamentActionApprovals\Support\DateDisplay;
@@ -54,7 +55,9 @@ class PendingApprovalsWidget extends TableWidget
                     }),
             ])
             ->recordUrl(function (ApprovalStepInstance $record): ?string {
-                $approvable = $record->approval->approvable;
+                /** @var Approval $approval */
+                $approval = $record->approval;
+                $approvable = $approval->approvable;
 
                 if (! $approvable) {
                     return null;
@@ -81,7 +84,13 @@ class PendingApprovalsWidget extends TableWidget
 
     protected static function getResourceForModel(string $modelClass): ?string
     {
-        foreach (Filament::getCurrentOrDefaultPanel()->getResources() as $resource) {
+        $panel = Filament::getCurrentOrDefaultPanel();
+
+        if (! $panel) {
+            return null;
+        }
+
+        foreach ($panel->getResources() as $resource) {
             if ($resource::getModel() === $modelClass) {
                 return $resource;
             }

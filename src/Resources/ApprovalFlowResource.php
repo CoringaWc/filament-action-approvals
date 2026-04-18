@@ -72,8 +72,8 @@ class ApprovalFlowResource extends Resource
                         ->rows(2),
                     __('filament-action-approvals::approval.flow_hints.description'),
                 ),
-                TranslatableSelect::apply(
-                    FormFieldHint::apply(
+                FormFieldHint::apply(
+                    TranslatableSelect::apply(
                         Select::make('approvable_type')
                             ->label(__('filament-action-approvals::approval.flow.applies_to'))
                             ->options(fn () => static::getApprovableModels())
@@ -82,25 +82,13 @@ class ApprovalFlowResource extends Resource
                             ->live()
                             ->afterStateUpdated(fn (Set $set) => $set('action_key', null))
                             ->helperText(__('filament-action-approvals::approval.flow.applies_to_helper')),
-                        __('filament-action-approvals::approval.flow_hints.applies_to'),
                     ),
+                    __('filament-action-approvals::approval.flow_hints.applies_to'),
                 ),
-                TranslatableSelect::apply(
-                    FormFieldHint::apply(
-                        Select::make('action_key')
-                            ->label(__('filament-action-approvals::approval.flow.action_key'))
-                            ->options(fn (Get $get): array => ApprovableActionLabel::optionsFor($get('approvable_type')))
-                            ->placeholder(__('filament-action-approvals::approval.flow.any_action'))
-                            ->searchable()
-                            ->nullable()
-                            ->visible(fn (Get $get): bool => ApprovableActionLabel::hasOptionsFor($get('approvable_type')))
-                            ->helperText(__('filament-action-approvals::approval.flow.action_key_helper')),
-                        __('filament-action-approvals::approval.flow_hints.action_key'),
-                    ),
-                )
-                    ->noOptionsMessage(fn (Get $get): string => blank($get('approvable_type'))
-                        ? __('filament-action-approvals::approval.flow.select_model_first')
-                        : __('filament-action-approvals::approval.select.no_options')),
+                FormFieldHint::apply(
+                    static::makeActionKeySelect(),
+                    __('filament-action-approvals::approval.flow_hints.action_key'),
+                ),
                 FormFieldHint::apply(
                     Toggle::make('is_active')
                         ->label(__('filament-action-approvals::approval.flow.is_active'))
@@ -135,9 +123,7 @@ class ApprovalFlowResource extends Resource
                             FormFieldHint::apply(
                                 Select::make('approver_resolver')
                                     ->label(__('filament-action-approvals::approval.flow.approver_type'))
-                                    ->options(collect($resolvers)->mapWithKeys(
-                                        fn (string $class) => [$class => $class::label()]
-                                    ))
+                                    ->options(static::getResolverOptions($resolvers))
                                     ->required()
                                     ->live(),
                                 __('filament-action-approvals::approval.flow_hints.approver_type'),
@@ -153,7 +139,7 @@ class ApprovalFlowResource extends Resource
                                     ->default(1)
                                     ->minValue(1)
                                     ->visible(fn (Get $get): bool => $get('type') === 'parallel')
-                                    ->helperText(function (Get $get): ?string {
+                                    ->helperText(function (Get $get): string {
                                         $config = [];
 
                                         foreach (['user_ids', 'admin_ids', 'role', 'callback'] as $key) {
@@ -247,8 +233,43 @@ class ApprovalFlowResource extends Resource
     }
 
     /**
+     * @param  array<class-string>  $resolvers
+     * @return array<string, string>
+     */
+    protected static function getResolverOptions(array $resolvers): array
+    {
+        $options = [];
+
+        foreach ($resolvers as $resolverClass) {
+            $options[$resolverClass] = $resolverClass::label();
+        }
+
+        return $options;
+    }
+
+    protected static function makeActionKeySelect(): Select
+    {
+        return TranslatableSelect::apply(
+            Select::make('action_key')
+                ->label(__('filament-action-approvals::approval.flow.action_key'))
+                ->options(fn (Get $get): array => ApprovableActionLabel::optionsFor($get('approvable_type')))
+                ->placeholder(__('filament-action-approvals::approval.flow.any_action'))
+                ->searchable()
+                ->nullable()
+                ->visible(fn (Get $get): bool => ApprovableActionLabel::hasOptionsFor($get('approvable_type')))
+                ->helperText(__('filament-action-approvals::approval.flow.action_key_helper'))
+                ->noOptionsMessage(fn (Get $get): string => blank($get('approvable_type'))
+                    ? __('filament-action-approvals::approval.flow.select_model_first')
+                    : __('filament-action-approvals::approval.select.no_options')),
+        );
+    }
+
+    /**
      * Ensure approver_config is properly structured as an array.
      * Handles both dot-notation expansion and missing values.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
      */
     protected static function normalizeStepData(array $data): array
     {
@@ -280,9 +301,14 @@ class ApprovalFlowResource extends Resource
      */
     protected static function getApprovableModels(): array
     {
+        $panel = Filament::getCurrentOrDefaultPanel();
         $models = [];
 
-        foreach (Filament::getCurrentOrDefaultPanel()->getResources() as $resource) {
+        if (! $panel) {
+            return $models;
+        }
+
+        foreach ($panel->getResources() as $resource) {
             $modelClass = $resource::getModel();
 
             if (in_array(HasApprovals::class, class_uses_recursive($modelClass))) {

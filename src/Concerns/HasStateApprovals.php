@@ -49,7 +49,7 @@ trait HasStateApprovals
         string $stateAttribute,
         string $toStateClass,
         ?Closure $onExecute = null,
-        int|string|null $submittedBy = null,
+        ?int $submittedBy = null,
     ): ApprovalActionResult {
         $currentState = $this->resolveCurrentState($stateAttribute);
         $actionKey = static::stateApprovalActionKey($currentState::class, $toStateClass, $stateAttribute);
@@ -80,16 +80,27 @@ trait HasStateApprovals
         ?string $stateAttribute = null,
     ): string {
         $baseStateClass = static::resolveStateApprovalBaseStateClass($stateAttribute);
+        $resolvedFromStateClass = $baseStateClass::resolveStateClass($fromStateClass);
+        $resolvedToStateClass = $baseStateClass::resolveStateClass($toStateClass);
+
+        if (! is_string($resolvedFromStateClass) || ! is_string($resolvedToStateClass)) {
+            throw new InvalidArgumentException(sprintf(
+                'Unable to resolve transition [%s -> %s] for [%s].',
+                $fromStateClass,
+                $toStateClass,
+                static::class,
+            ));
+        }
 
         return sprintf(
             '%s->%s',
-            $baseStateClass::resolveStateClass($fromStateClass)::getMorphClass(),
-            $baseStateClass::resolveStateClass($toStateClass)::getMorphClass(),
+            $resolvedFromStateClass::getMorphClass(),
+            $resolvedToStateClass::getMorphClass(),
         );
     }
 
     /**
-     * @return array{0: class-string<State>, 1: class-string<State>}
+     * @return array{0: class-string<State<Model>>, 1: class-string<State<Model>>}
      */
     protected static function parseStateApprovalActionKey(string $actionKey, ?string $stateAttribute = null): array
     {
@@ -108,11 +119,13 @@ trait HasStateApprovals
             throw new InvalidArgumentException(sprintf('Unable to resolve states for action key [%s].', $actionKey));
         }
 
+        /** @var class-string<State<Model>> $fromStateClass */
+        /** @var class-string<State<Model>> $toStateClass */
         return [$fromStateClass, $toStateClass];
     }
 
     /**
-     * @return class-string<State>
+     * @return class-string<State<Model>>
      */
     protected static function resolveStateApprovalBaseStateClass(?string $stateAttribute = null): string
     {
@@ -137,7 +150,7 @@ trait HasStateApprovals
         /** @var Model $model */
         $model = app(static::class);
 
-        /** @var State&object $state */
+        /** @var State<Model>&object $state */
         $state = new $stateClass($model);
 
         if (method_exists($state, 'getLabel')) {
@@ -163,6 +176,9 @@ trait HasStateApprovals
         return Str::headline(class_basename($stateClass));
     }
 
+    /**
+     * @return State<Model>
+     */
     protected function resolveCurrentState(string $stateAttribute): State
     {
         $state = $this->{$stateAttribute};

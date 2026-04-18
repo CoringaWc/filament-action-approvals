@@ -19,10 +19,10 @@ trait ResolvesPreviousState
             return null;
         }
 
-        /** @var class-string<State> $baseStateClass */
+        /** @var class-string<State<Model>> $baseStateClass */
         $baseStateClass = $this->getCasts()['status'];
 
-        /** @var class-string<State>|null $stateClass */
+        /** @var class-string<State<Model>>|null $stateClass */
         $stateClass = $baseStateClass::resolveStateClass($this->previous_status);
 
         if ($stateClass === null) {

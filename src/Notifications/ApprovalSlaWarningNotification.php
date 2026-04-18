@@ -10,7 +10,7 @@ use Filament\Support\Icons\Heroicon;
 
 class ApprovalSlaWarningNotification
 {
-    public static function send(ApprovalStepInstance $stepInstance, int|string $userId): void
+    public static function send(ApprovalStepInstance $stepInstance, int $userId): void
     {
         $userModel = FilamentActionApprovalsPlugin::resolveUserModel();
         $recipient = $userModel::find($userId);
@@ -21,11 +21,16 @@ class ApprovalSlaWarningNotification
 
         $approvable = $stepInstance->approval->approvable;
         $modelLabel = ApprovableModelLabel::resolve($approvable);
-        $deadline = $stepInstance->sla_deadline->diffForHumans();
+        $approvableKey = $approvable?->getKey() ?? __('filament-action-approvals::approval.relation_manager.not_available');
+        $deadline = $stepInstance->sla_deadline?->diffForHumans();
+
+        if ($deadline === null) {
+            return;
+        }
 
         Notification::make()
             ->title(__('filament-action-approvals::approval.notifications.sla_warning_title'))
-            ->body(__('filament-action-approvals::approval.notifications.sla_warning_body', ['model' => $modelLabel, 'id' => $approvable->getKey(), 'deadline' => $deadline]))
+            ->body(__('filament-action-approvals::approval.notifications.sla_warning_body', ['model' => $modelLabel, 'id' => $approvableKey, 'deadline' => $deadline]))
             ->icon(Heroicon::OutlinedClock)
             ->warning()
             ->sendToDatabase($recipient);

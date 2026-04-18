@@ -12,6 +12,9 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 trait HasApprovals
 {
+    /**
+     * @return MorphMany<Approval, $this>
+     */
     public function approvals(): MorphMany
     {
         return $this->morphMany(Approval::class, 'approvable');
@@ -19,15 +22,21 @@ trait HasApprovals
 
     public function latestApproval(): ?Approval
     {
-        return $this->approvals()->latest()->first();
+        /** @var ?Approval $approval */
+        $approval = $this->approvals()->latest()->first();
+
+        return $approval;
     }
 
     public function currentApproval(): ?Approval
     {
-        return $this->approvals()
+        /** @var ?Approval $approval */
+        $approval = $this->approvals()
             ->where('status', ApprovalStatus::Pending)
             ->latest()
             ->first();
+
+        return $approval;
     }
 
     public function approvalStatus(): ?ApprovalStatus
@@ -35,7 +44,7 @@ trait HasApprovals
         return $this->latestApproval()?->status;
     }
 
-    public function submitForApproval(?ApprovalFlow $flow = null, int|string|null $submittedBy = null, ?string $actionKey = null): Approval
+    public function submitForApproval(?ApprovalFlow $flow = null, ?int $submittedBy = null, ?string $actionKey = null): Approval
     {
         return app(ApprovalEngine::class)->submit($this, $flow, $submittedBy, $actionKey);
     }
@@ -45,7 +54,7 @@ trait HasApprovals
      */
     public static function approvableActions(): array
     {
-        if (method_exists(static::class, 'resolveApprovableActions')) {
+        if (is_callable([static::class, 'resolveApprovableActions'])) {
             /** @var array<string, string> $actions */
             $actions = static::resolveApprovableActions();
 
@@ -95,7 +104,7 @@ trait HasApprovals
      * only users with a specific role, etc.).
      * Default: any authenticated user can submit.
      */
-    public function canSubmitForApproval(int|string|null $userId = null): bool
+    public function canSubmitForApproval(?int $userId = null): bool
     {
         return true;
     }
@@ -104,8 +113,14 @@ trait HasApprovals
      * Check if the submit action should be available for this record.
      * Combines pending check, resubmission policy, and authorization.
      */
-    public function canBeSubmittedForApproval(int|string|null $userId = null): bool
+    public function canBeSubmittedForApproval(?int $userId = null): bool
     {
+        $resolvedUserId = $userId ?? auth()->id();
+
+        if (is_string($resolvedUserId) && ctype_digit($resolvedUserId)) {
+            $resolvedUserId = (int) $resolvedUserId;
+        }
+
         // Already pending — can't submit again
         if ($this->isPendingApproval()) {
             return false;
@@ -122,7 +137,7 @@ trait HasApprovals
         }
 
         // Check user authorization
-        return $this->canSubmitForApproval($userId ?? auth()->id());
+        return $this->canSubmitForApproval(is_int($resolvedUserId) ? $resolvedUserId : null);
     }
 
     // ──────────────────────────────────────────────────────────────
@@ -143,7 +158,7 @@ trait HasApprovals
      */
     public function onApprovalApproved(Approval $approval): void
     {
-        if (method_exists($this, 'afterApprovalApproved')) {
+        if (is_callable([$this, 'afterApprovalApproved'])) {
             $this->afterApprovalApproved($approval);
         }
     }
@@ -166,7 +181,7 @@ trait HasApprovals
     /**
      * Called when an approver delegates to another user.
      */
-    public function onApprovalDelegated(ApprovalStepInstance $stepInstance, int|string $fromUserId, int|string $toUserId): void {}
+    public function onApprovalDelegated(ApprovalStepInstance $stepInstance, int $fromUserId, int $toUserId): void {}
 
     /**
      * Called when an individual step is completed (approved).

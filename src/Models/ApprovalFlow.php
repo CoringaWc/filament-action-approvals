@@ -8,6 +8,16 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
 
+/**
+ * @property string $name
+ * @property string|null $description
+ * @property class-string<Model>|null $approvable_type
+ * @property string|null $action_key
+ * @property bool $is_active
+ * @property array<string, mixed>|null $metadata
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, ApprovalStep> $steps
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, Approval> $approvals
+ */
 class ApprovalFlow extends Model
 {
     use SoftDeletes;
@@ -29,16 +39,26 @@ class ApprovalFlow extends Model
         ];
     }
 
+    /**
+     * @return HasMany<ApprovalStep, $this>
+     */
     public function steps(): HasMany
     {
         return $this->hasMany(ApprovalStep::class)->orderBy('order');
     }
 
+    /**
+     * @return HasMany<Approval, $this>
+     */
     public function approvals(): HasMany
     {
         return $this->hasMany(Approval::class);
     }
 
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
     public function scopeForModel(Builder $query, Model $model): Builder
     {
         $query
@@ -57,6 +77,9 @@ class ApprovalFlow extends Model
     }
 
     /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     *
      * Scope to find an active flow for a specific model + action_key.
      */
     public function scopeForAction(Builder $query, Model $model, string $actionKey): Builder

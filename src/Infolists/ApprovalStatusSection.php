@@ -8,6 +8,7 @@ use CoringaWc\FilamentActionApprovals\Support\UserDisplayName;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
+use Illuminate\Database\Eloquent\Model;
 
 class ApprovalStatusSection
 {
@@ -132,6 +133,6 @@ class ApprovalStatusSection
             ])
             ->columns(3)
             ->collapsible()
-            ->visible(fn ($record): bool => method_exists($record, 'approvals') && $record->latestApproval() !== null);
+            ->visible(fn (mixed $record): bool => $record instanceof Model && method_exists($record, 'latestApproval') && $record->latestApproval() !== null);
     }
 }

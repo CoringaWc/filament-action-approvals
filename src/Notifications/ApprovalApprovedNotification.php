@@ -10,7 +10,7 @@ use Filament\Support\Icons\Heroicon;
 
 class ApprovalApprovedNotification
 {
-    public static function send(Approval $approval, int|string $userId): void
+    public static function send(Approval $approval, int $userId): void
     {
         $userModel = FilamentActionApprovalsPlugin::resolveUserModel();
         $recipient = $userModel::find($userId);
@@ -21,10 +21,11 @@ class ApprovalApprovedNotification
 
         $approvable = $approval->approvable;
         $modelLabel = ApprovableModelLabel::resolve($approvable);
+        $approvableKey = $approvable?->getKey() ?? __('filament-action-approvals::approval.relation_manager.not_available');
 
         Notification::make()
             ->title(__('filament-action-approvals::approval.notifications.approved_title'))
-            ->body(__('filament-action-approvals::approval.notifications.approved_body', ['model' => $modelLabel, 'id' => $approvable->getKey()]))
+            ->body(__('filament-action-approvals::approval.notifications.approved_body', ['model' => $modelLabel, 'id' => $approvableKey]))
             ->icon(Heroicon::OutlinedCheckCircle)
             ->success()
             ->sendToDatabase($recipient);

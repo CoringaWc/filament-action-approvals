@@ -2,7 +2,7 @@
 
 namespace CoringaWc\FilamentActionApprovals\Contracts;
 
-use Filament\Forms\Components\Component;
+use Filament\Schemas\Components\Component;
 use Illuminate\Database\Eloquent\Model;
 
 interface ApproverResolver
@@ -11,7 +11,7 @@ interface ApproverResolver
      * Resolve the user IDs who should approve this step.
      *
      * @param  array<string, mixed>  $config
-     * @return array<int>
+     * @return list<int>
      */
     public function resolve(array $config, Model $approvable): array;
 
@@ -23,7 +23,7 @@ interface ApproverResolver
     /**
      * Filament form schema for configuring this resolver in the flow builder.
      *
-     * @return array<Component>
+     * @return array<int, Component>
      */
     public static function configSchema(): array;
 }

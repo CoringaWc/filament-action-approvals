@@ -2,11 +2,14 @@
 
 namespace CoringaWc\FilamentActionApprovals\Actions;
 
+use CoringaWc\FilamentActionApprovals\Models\Approval;
+use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Database\Eloquent\Model;
 
 class CommentAction extends Action
 {
@@ -24,13 +27,13 @@ class CommentAction extends Action
             ->icon(Heroicon::OutlinedChatBubbleLeftEllipsis)
             ->color('gray')
             ->visible(function (): bool {
-                $record = $this->getRecord();
+                $userId = auth()->id();
 
-                if (! method_exists($record, 'currentApproval')) {
+                if (! is_int($userId)) {
                     return false;
                 }
 
-                $approval = $record->currentApproval();
+                $approval = $this->resolveCurrentApproval();
 
                 if (! $approval) {
                     return false;
@@ -38,7 +41,7 @@ class CommentAction extends Action
 
                 $stepInstance = $approval->currentStepInstance();
 
-                return $stepInstance && $stepInstance->canUserAct(auth()->id());
+                return $stepInstance?->canUserAct($userId) ?? false;
             })
             ->schema([
                 Textarea::make('comment')
@@ -47,13 +50,17 @@ class CommentAction extends Action
                     ->rows(3),
             ])
             ->action(function (array $data): void {
-                $record = $this->getRecord();
-                $approval = $record->currentApproval();
-                $stepInstance = $approval->currentStepInstance();
+                $approval = $this->resolveCurrentApproval();
+                $stepInstance = $approval?->currentStepInstance();
+                $userId = auth()->id();
+
+                if (! $approval || ! is_int($userId)) {
+                    return;
+                }
 
                 app(ApprovalEngine::class)->comment(
                     $approval,
-                    auth()->id(),
+                    $userId,
                     $data['comment'],
                     $stepInstance,
                 );
@@ -64,7 +71,35 @@ class CommentAction extends Action
                     ->send();
             })
             ->after(function (): void {
-                $this->getLivewire()->dispatch('filament-action-approvals::approval-updated');
+                $this->dispatchApprovalUpdated();
             });
+    }
+
+    protected function resolveCurrentApproval(): ?Approval
+    {
+        $record = $this->getRecord();
+
+        if (! $record instanceof Model || ! method_exists($record, 'currentApproval')) {
+            return null;
+        }
+
+        /** @var ?Approval $approval */
+        $approval = $record->currentApproval();
+
+        return $approval;
+    }
+
+    protected function resolveCurrentStepInstance(): ?ApprovalStepInstance
+    {
+        return $this->resolveCurrentApproval()?->currentStepInstance();
+    }
+
+    protected function dispatchApprovalUpdated(): void
+    {
+        $livewire = $this->getLivewire();
+
+        if (is_object($livewire) && method_exists($livewire, 'dispatch')) {
+            $livewire->dispatch('filament-action-approvals::approval-updated');
+        }
     }
 }

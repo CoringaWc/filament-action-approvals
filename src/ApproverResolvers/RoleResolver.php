@@ -7,11 +7,16 @@ use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Support\FormFieldHint;
 use CoringaWc\FilamentActionApprovals\Support\TranslatableSelect;
 use Filament\Forms\Components\Select;
+use Filament\Schemas\Components\Component;
 use Illuminate\Database\Eloquent\Model;
 use Spatie\Permission\Models\Role;
 
 class RoleResolver implements ApproverResolver
 {
+    /**
+     * @param  array{role?: string}  $config
+     * @return list<int>
+     */
     public function resolve(array $config, Model $approvable): array
     {
         $userModel = FilamentActionApprovalsPlugin::resolveUserModel();
@@ -31,7 +36,13 @@ class RoleResolver implements ApproverResolver
             }
         }
 
-        return $query->pluck('id')->all();
+        /** @var list<int> $userIds */
+        $userIds = $query
+            ->pluck($query->getModel()->getKeyName())
+            ->map(fn (mixed $userId): int => (int) $userId)
+            ->all();
+
+        return $userIds;
     }
 
     public static function label(): string
@@ -39,18 +50,21 @@ class RoleResolver implements ApproverResolver
         return __('filament-action-approvals::approval.resolvers.role');
     }
 
+    /**
+     * @return array<int, Component>
+     */
     public static function configSchema(): array
     {
         return [
-            TranslatableSelect::apply(
-                FormFieldHint::apply(
+            FormFieldHint::apply(
+                TranslatableSelect::apply(
                     Select::make('approver_config.role')
                         ->label(__('filament-action-approvals::approval.resolver_config.role'))
                         ->searchable()
-                        ->options(fn () => Role::pluck('name', 'name'))
+                        ->options(fn (): array => Role::query()->pluck('name', 'name')->all())
                         ->required(),
-                    __('filament-action-approvals::approval.flow_hints.resolver_role'),
                 ),
+                __('filament-action-approvals::approval.flow_hints.resolver_role'),
             ),
         ];
     }

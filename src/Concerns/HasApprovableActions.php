@@ -22,7 +22,7 @@ trait HasApprovableActions
     public function executeWithApproval(
         string $actionKey,
         ?Closure $onExecute = null,
-        int|string|null $submittedBy = null,
+        ?int $submittedBy = null,
     ): ApprovalActionResult {
         $flow = $this->resolveApprovalFlow($actionKey);
 
@@ -37,7 +37,7 @@ trait HasApprovableActions
         $approval = app(ApprovalEngine::class)->submit(
             approvable: $this,
             flow: $flow,
-            submittedBy: $submittedBy ?? auth()->id(),
+            submittedBy: $submittedBy,
             actionKey: $actionKey,
         );
 

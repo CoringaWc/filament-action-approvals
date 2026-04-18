@@ -3,6 +3,8 @@
 namespace CoringaWc\FilamentActionApprovals\Actions;
 
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
+use CoringaWc\FilamentActionApprovals\Models\Approval;
+use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use CoringaWc\FilamentActionApprovals\Support\TranslatableSelect;
 use CoringaWc\FilamentActionApprovals\Support\UserDisplayName;
@@ -11,6 +13,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Database\Eloquent\Model;
 
 class DelegateAction extends Action
 {
@@ -24,14 +27,22 @@ class DelegateAction extends Action
         parent::setUp();
 
         $userModel = FilamentActionApprovalsPlugin::resolveUserModel();
+        /** @var Model $userPrototype */
+        $userPrototype = app($userModel);
+        $userKeyName = $userPrototype->getKeyName();
 
         $this
             ->label(__('filament-action-approvals::approval.actions.delegate'))
             ->icon(Heroicon::OutlinedArrowPath)
             ->color('warning')
             ->visible(function (): bool {
-                $record = $this->getRecord();
-                $approval = $record->currentApproval();
+                $userId = auth()->id();
+
+                if (! is_int($userId)) {
+                    return false;
+                }
+
+                $approval = $this->resolveCurrentApproval();
 
                 if (! $approval) {
                     return false;
@@ -43,15 +54,22 @@ class DelegateAction extends Action
                     return false;
                 }
 
-                return in_array(auth()->id(), $stepInstance->assigned_approver_ids);
+                return in_array($userId, $stepInstance->assigned_approver_ids, true);
             })
             ->schema([
                 TranslatableSelect::apply(
                     Select::make('to_user_id')
                         ->label(__('filament-action-approvals::approval.actions.delegate_to'))
                         ->searchable()
-                        ->options(function () use ($userModel): array {
-                            return $userModel::where('id', '!=', auth()->id())
+                        ->options(function () use ($userKeyName, $userModel): array {
+                            $users = $userModel::query();
+                            $currentUserId = auth()->id();
+
+                            if (is_int($currentUserId) || is_string($currentUserId)) {
+                                $users->where($userKeyName, '!=', $currentUserId);
+                            }
+
+                            return $users
                                 ->get()
                                 ->mapWithKeys(fn ($user) => [$user->getKey() => UserDisplayName::resolve($user)])
                                 ->all();
@@ -63,13 +81,22 @@ class DelegateAction extends Action
                     ->rows(2),
             ])
             ->action(function (array $data): void {
-                $record = $this->getRecord();
-                $stepInstance = $record->currentApproval()->currentStepInstance();
+                $stepInstance = $this->resolveCurrentStepInstance();
+                $userId = auth()->id();
+                $delegateToUserId = $data['to_user_id'] ?? null;
+
+                if (is_string($delegateToUserId) && ctype_digit($delegateToUserId)) {
+                    $delegateToUserId = (int) $delegateToUserId;
+                }
+
+                if (! $stepInstance || ! is_int($userId) || ! is_int($delegateToUserId)) {
+                    return;
+                }
 
                 app(ApprovalEngine::class)->delegate(
                     $stepInstance,
-                    auth()->id(),
-                    (int) $data['to_user_id'],
+                    $userId,
+                    $delegateToUserId,
                     $data['reason'] ?? null,
                 );
 
@@ -79,8 +106,36 @@ class DelegateAction extends Action
                     ->send();
             })
             ->after(function (): void {
-                $this->getLivewire()->dispatch('filament-action-approvals::approval-updated');
+                $this->dispatchApprovalUpdated();
             })
             ->requiresConfirmation();
+    }
+
+    protected function resolveCurrentApproval(): ?Approval
+    {
+        $record = $this->getRecord();
+
+        if (! $record instanceof Model || ! method_exists($record, 'currentApproval')) {
+            return null;
+        }
+
+        /** @var ?Approval $approval */
+        $approval = $record->currentApproval();
+
+        return $approval;
+    }
+
+    protected function resolveCurrentStepInstance(): ?ApprovalStepInstance
+    {
+        return $this->resolveCurrentApproval()?->currentStepInstance();
+    }
+
+    protected function dispatchApprovalUpdated(): void
+    {
+        $livewire = $this->getLivewire();
+
+        if (is_object($livewire) && method_exists($livewire, 'dispatch')) {
+            $livewire->dispatch('filament-action-approvals::approval-updated');
+        }
     }
 }

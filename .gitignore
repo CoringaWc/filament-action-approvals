@@ -10,7 +10,6 @@ node_modules
 package-lock.json
 test-results
 phpunit.xml
-phpstan.neon
 vendor
 /workbench/storage
 /workbench/database/database.sqlite

@@ -2,7 +2,6 @@
 
 namespace CoringaWc\FilamentActionApprovals\Commands;
 
-use Illuminate\Console\Command;
 use CoringaWc\FilamentActionApprovals\Enums\ActionType;
 use CoringaWc\FilamentActionApprovals\Enums\EscalationAction;
 use CoringaWc\FilamentActionApprovals\Enums\StepInstanceStatus;
@@ -12,6 +11,7 @@ use CoringaWc\FilamentActionApprovals\Notifications\ApprovalEscalatedNotificatio
 use CoringaWc\FilamentActionApprovals\Notifications\ApprovalRequestedNotification;
 use CoringaWc\FilamentActionApprovals\Notifications\ApprovalSlaWarningNotification;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
+use Illuminate\Console\Command;
 
 class ProcessApprovalSlaCommand extends Command
 {
@@ -39,6 +39,10 @@ class ProcessApprovalSlaCommand extends Command
             ->get();
 
         foreach ($candidates as $instance) {
+            if (! $instance->activated_at || ! $instance->sla_deadline) {
+                continue;
+            }
+
             $totalDuration = $instance->activated_at->diffInSeconds($instance->sla_deadline);
             $elapsed = $instance->activated_at->diffInSeconds(now());
 
@@ -71,9 +75,14 @@ class ProcessApprovalSlaCommand extends Command
     protected function handleEscalation(ApprovalStepInstance $instance, ApprovalEngine $engine): void
     {
         $step = $instance->step;
+
+        if (! $step) {
+            return;
+        }
+
         $action = $step->escalation_action;
 
-        if (! $action) {
+        if ($action === null) {
             return;
         }
 
@@ -94,14 +103,21 @@ class ProcessApprovalSlaCommand extends Command
 
         $approvable = $instance->approval->approvable;
 
-        if ($approvable && method_exists($approvable, 'onApprovalEscalated')) {
+        if (is_object($approvable) && method_exists($approvable, 'onApprovalEscalated')) {
             $approvable->onApprovalEscalated($instance);
         }
     }
 
     protected function reassign(ApprovalStepInstance $instance): void
     {
-        $config = $instance->step->escalation_config ?? [];
+        $step = $instance->step;
+        $approvable = $instance->approval->approvable;
+
+        if (! $step || ! $approvable) {
+            return;
+        }
+
+        $config = $step->escalation_config ?? [];
         $resolverClass = $config['reassign_to_resolver'] ?? null;
         $resolverConfig = $config['reassign_config'] ?? [];
 
@@ -110,14 +126,14 @@ class ProcessApprovalSlaCommand extends Command
         }
 
         $resolver = app($resolverClass);
-        $newApproverIds = $resolver->resolve($resolverConfig, $instance->approval->approvable);
+        $newApproverIds = $resolver->resolve($resolverConfig, $approvable);
 
         $instance->update([
             'assigned_approver_ids' => $newApproverIds,
             'sla_breached' => false,
             'sla_warning_sent' => false,
-            'sla_deadline' => $instance->step->sla_hours
-                ? now()->addHours($instance->step->sla_hours)
+            'sla_deadline' => $step->sla_hours
+                ? now()->addHours($step->sla_hours)
                 : null,
         ]);
 

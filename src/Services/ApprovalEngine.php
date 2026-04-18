@@ -21,10 +21,18 @@ use Illuminate\Support\Facades\DB;
 
 class ApprovalEngine
 {
-    public function submit(Model $approvable, ?ApprovalFlow $flow = null, int|string|null $submittedBy = null, ?string $actionKey = null): Approval
+    public function submit(Model $approvable, ?ApprovalFlow $flow = null, ?int $submittedBy = null, ?string $actionKey = null): Approval
     {
         $flow ??= ApprovalFlow::findSubmissionFlowForModel($approvable, $actionKey);
         $submittedBy ??= auth()->id();
+
+        if (is_string($submittedBy) && ctype_digit($submittedBy)) {
+            $submittedBy = (int) $submittedBy;
+        }
+
+        if (! is_int($submittedBy)) {
+            $submittedBy = null;
+        }
 
         if (! $flow) {
             throw (new ModelNotFoundException)->setModel(ApprovalFlow::class);
@@ -68,7 +76,7 @@ class ApprovalEngine
         });
     }
 
-    public function approve(ApprovalStepInstance $stepInstance, int|string $userId, ?string $comment = null): void
+    public function approve(ApprovalStepInstance $stepInstance, int $userId, ?string $comment = null): void
     {
         DB::transaction(function () use ($stepInstance, $userId, $comment) {
             $approval = $stepInstance->approval;
@@ -97,7 +105,7 @@ class ApprovalEngine
         });
     }
 
-    public function reject(ApprovalStepInstance $stepInstance, int|string $userId, ?string $comment = null): void
+    public function reject(ApprovalStepInstance $stepInstance, int $userId, ?string $comment = null): void
     {
         DB::transaction(function () use ($stepInstance, $userId, $comment) {
             $approval = $stepInstance->approval;
@@ -130,7 +138,7 @@ class ApprovalEngine
         });
     }
 
-    public function comment(Approval $approval, int|string $userId, string $comment, ?ApprovalStepInstance $stepInstance = null): void
+    public function comment(Approval $approval, int $userId, string $comment, ?ApprovalStepInstance $stepInstance = null): void
     {
         $action = $approval->actions()->create([
             'approval_step_instance_id' => $stepInstance?->id,
@@ -142,7 +150,7 @@ class ApprovalEngine
         $this->fireModelCallback($approval->approvable, 'onApprovalCommented', $action);
     }
 
-    public function delegate(ApprovalStepInstance $stepInstance, int|string $fromUserId, int|string $toUserId, ?string $reason = null): void
+    public function delegate(ApprovalStepInstance $stepInstance, int $fromUserId, int $toUserId, ?string $reason = null): void
     {
         DB::transaction(function () use ($stepInstance, $fromUserId, $toUserId, $reason) {
             $stepInstance->delegations()->create([
@@ -204,6 +212,10 @@ class ApprovalEngine
 
         $slaDeadline = null;
         $step = $nextStep->step;
+
+        if (! $step) {
+            return;
+        }
 
         if ($step->sla_hours) {
             $slaDeadline = now()->addHours($step->sla_hours);

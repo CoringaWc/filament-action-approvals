@@ -10,6 +10,7 @@ use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Database\Eloquent\Model;
 
 class SubmitForApprovalAction extends Action
 {
@@ -52,9 +53,9 @@ class SubmitForApprovalAction extends Action
             ->icon(Heroicon::OutlinedPaperAirplane)
             ->color('info')
             ->visible(function (): bool {
-                $record = $this->getRecord();
+                $record = $this->resolveRecord();
 
-                if (! method_exists($record, 'canBeSubmittedForApproval')) {
+                if (! $record || ! method_exists($record, 'canBeSubmittedForApproval')) {
                     return false;
                 }
 
@@ -80,7 +81,12 @@ class SubmitForApprovalAction extends Action
                 return $hasGenericFlows || (! $hasSpecificFlows) || $canResolveSpecificActions;
             })
             ->schema(function (): array {
-                $record = $this->getRecord();
+                $record = $this->resolveRecord();
+
+                if (! $record) {
+                    return [];
+                }
+
                 $flows = ApprovalFlow::forModel($record)->get();
 
                 // When locked to a specific action key, skip the action selector entirely
@@ -133,11 +139,17 @@ class SubmitForApprovalAction extends Action
                 ]));
             })
             ->action(function (array $data): void {
-                $record = $this->getRecord();
-                $actionKey = $this->lockedActionKey ?? ($data['action_key'] ?? null);
+                $record = $this->resolveRecord();
 
-                $flow = isset($data['approval_flow_id'])
-                    ? ApprovalFlow::find($data['approval_flow_id'])
+                if (! $record) {
+                    return;
+                }
+
+                $actionKey = $this->lockedActionKey ?? ($data['action_key'] ?? null);
+                $flowId = $data['approval_flow_id'] ?? null;
+
+                $flow = (is_int($flowId) || is_string($flowId))
+                    ? ApprovalFlow::query()->find($flowId)
                     : null;
 
                 app(ApprovalEngine::class)->submit($record, $flow, actionKey: $actionKey);
@@ -148,8 +160,24 @@ class SubmitForApprovalAction extends Action
                     ->send();
             })
             ->after(function (): void {
-                $this->getLivewire()->dispatch('filament-action-approvals::approval-updated');
+                $this->dispatchApprovalUpdated();
             })
             ->requiresConfirmation();
+    }
+
+    protected function resolveRecord(): ?Model
+    {
+        $record = $this->getRecord();
+
+        return $record instanceof Model ? $record : null;
+    }
+
+    protected function dispatchApprovalUpdated(): void
+    {
+        $livewire = $this->getLivewire();
+
+        if (is_object($livewire) && method_exists($livewire, 'dispatch')) {
+            $livewire->dispatch('filament-action-approvals::approval-updated');
+        }
     }
 }

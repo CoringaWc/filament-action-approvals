@@ -81,9 +81,15 @@ class FilamentActionApprovalsPlugin implements Plugin
         return $this;
     }
 
+    /**
+     * @return array<class-string<ApproverResolver>>
+     */
     public function getApproverResolvers(): array
     {
-        return $this->approverResolvers ?? config('filament-action-approvals.approver_resolvers', []);
+        /** @var array<class-string<ApproverResolver>> $resolvers */
+        $resolvers = $this->approverResolvers ?? config('filament-action-approvals.approver_resolvers', []);
+
+        return $resolvers;
     }
 
     public function getUserModel(): string
@@ -127,7 +133,15 @@ class FilamentActionApprovalsPlugin implements Plugin
     public static function current(): ?static
     {
         try {
-            return filament()->getCurrentOrDefaultPanel()->getPlugin('filament-action-approvals');
+            $panel = filament()->getCurrentOrDefaultPanel();
+
+            if (! $panel) {
+                return null;
+            }
+
+            $plugin = $panel->getPlugin('filament-action-approvals');
+
+            return $plugin instanceof static ? $plugin : null;
         } catch (\Throwable) {
             return null;
         }
@@ -149,10 +163,16 @@ class FilamentActionApprovalsPlugin implements Plugin
     /**
      * Resolve the approver resolvers, preferring plugin override then config.
      */
+    /**
+     * @return array<class-string<ApproverResolver>>
+     */
     public static function resolveApproverResolvers(): array
     {
-        return static::current()?->getApproverResolvers()
+        /** @var array<class-string<ApproverResolver>> $resolvers */
+        $resolvers = static::current()?->getApproverResolvers()
             ?? config('filament-action-approvals.approver_resolvers', []);
+
+        return $resolvers;
     }
 
     /**
