@@ -12,6 +12,7 @@ use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Artisan;
 use Spatie\Permission\Models\Role;
+use Workbench\App\Models\Expense;
 use Workbench\App\Models\Invoice;
 use Workbench\App\Models\PurchaseOrder;
 use Workbench\App\Models\User;
@@ -104,8 +105,51 @@ class DatabaseSeeder extends Seeder
             'escalation_action' => EscalationAction::Notify,
         ]);
 
+        $expenseSubmitFlow = ApprovalFlow::create([
+            'name' => __('workbench::workbench.seeds.flows.expense_submit.name'),
+            'description' => __('workbench::workbench.seeds.flows.expense_submit.description'),
+            'approvable_type' => (new Expense)->getMorphClass(),
+            'action_key' => 'submit',
+            'is_active' => true,
+        ]);
+
+        $expenseSubmitFlow->steps()->create([
+            'name' => __('workbench::workbench.seeds.flows.expense_submit.manager_step'),
+            'order' => 1,
+            'type' => StepType::Single,
+            'approver_resolver' => RoleResolver::class,
+            'approver_config' => ['role' => $managerRole->name],
+            'required_approvals' => 1,
+            'sla_hours' => 24,
+            'escalation_action' => EscalationAction::Notify,
+        ]);
+
+        $expenseReimburseFlow = ApprovalFlow::create([
+            'name' => __('workbench::workbench.seeds.flows.expense_reimburse.name'),
+            'description' => __('workbench::workbench.seeds.flows.expense_reimburse.description'),
+            'approvable_type' => (new Expense)->getMorphClass(),
+            'action_key' => 'reimburse',
+            'is_active' => true,
+        ]);
+
+        $expenseReimburseFlow->steps()->create([
+            'name' => __('workbench::workbench.seeds.flows.expense_reimburse.director_step'),
+            'order' => 1,
+            'type' => StepType::Single,
+            'approver_resolver' => RoleResolver::class,
+            'approver_config' => ['role' => $directorRole->name],
+            'required_approvals' => 1,
+            'sla_hours' => 48,
+            'escalation_action' => EscalationAction::Notify,
+        ]);
+
         PurchaseOrder::factory()
             ->count(5)
+            ->for($requester)
+            ->create();
+
+        Expense::factory()
+            ->count(3)
             ->for($requester)
             ->create();
 

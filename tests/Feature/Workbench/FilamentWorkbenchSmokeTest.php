@@ -9,6 +9,7 @@ use CoringaWc\FilamentActionApprovals\Resources\ApprovalFlowResource;
 use CoringaWc\FilamentActionApprovals\Tests\TestCase;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
+use Workbench\App\Filament\Resources\Expenses\ExpenseResource;
 use Workbench\App\Filament\Resources\Invoices\InvoiceResource;
 use Workbench\App\Filament\Resources\PurchaseOrders\PurchaseOrderResource;
 use Workbench\App\Filament\Resources\Users\Pages\CreateUser;
@@ -47,6 +48,17 @@ class FilamentWorkbenchSmokeTest extends TestCase
             ->assertOk()
             ->assertSee(__('workbench::workbench.resources.purchase_orders.fields.requester'))
             ->assertSee(__('workbench::workbench.resources.purchase_orders.fields.amount'));
+    }
+
+    public function test_it_can_render_the_expense_create_page_with_pt_br_labels(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+        $this->actingAs(User::query()->where('email', 'admin@filament-action-approvals.test')->firstOrFail());
+
+        $this->get(ExpenseResource::getUrl('create'))
+            ->assertOk()
+            ->assertSee(__('workbench::workbench.resources.expenses.fields.requester'))
+            ->assertSee(__('workbench::workbench.resources.expenses.fields.category'));
     }
 
     public function test_it_can_create_a_user_and_assign_a_role_from_the_workbench(): void
@@ -90,7 +102,9 @@ class FilamentWorkbenchSmokeTest extends TestCase
             ->assertSeeText('Aprovação de Pedido de Compra', false)
             ->assertSeeText('Pedido de Compra', false)
             ->assertSeeText('Aprovação para envio de fatura', false)
-            ->assertSeeText('Fatura', false);
+            ->assertSeeText('Fatura', false)
+            ->assertSeeText('Aprovação para envio de despesa', false)
+            ->assertSeeText('Despesa', false);
 
         $this->get(UserResource::getUrl('index'))
             ->assertOk()
@@ -101,5 +115,10 @@ class FilamentWorkbenchSmokeTest extends TestCase
             ->assertOk()
             ->assertSeeText('Faturas', false)
             ->assertSeeText('Em emissão', false);
+
+        $this->get(ExpenseResource::getUrl('index'))
+            ->assertOk()
+            ->assertSeeText('Despesas', false)
+            ->assertSeeText('Rascunho', false);
     }
 }

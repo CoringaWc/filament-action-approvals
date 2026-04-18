@@ -1,7 +1,9 @@
 # Filament Action Approvals
 
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/coringawc/filament-action-approvals.svg?style=flat-square)](https://packagist.org/packages/coringawc/filament-action-approvals)
-[![License](https://img.shields.io/packagist/l/coringawc/filament-action-approvals.svg?style=flat-square)](https://packagist.org/packages/coringawc/filament-action-approvals)
+[![GitHub Tests Action Status](https://img.shields.io/github/actions/workflow/status/coringawc/filament-action-approvals/run-tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/coringawc/filament-action-approvals/actions?query=workflow%3Arun-tests+branch%3Amain)
+[![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/coringawc/filament-action-approvals/fix-php-code-style-issues.yml?branch=main&label=code%20style&style=flat-square)](https://github.com/coringawc/filament-action-approvals/actions?query=workflow%3A%22Fix+PHP+code+styling%22+branch%3Amain)
+[![Total Downloads](https://img.shields.io/packagist/dt/coringawc/filament-action-approvals.svg?style=flat-square)](https://packagist.org/packages/coringawc/filament-action-approvals)
 
 Action-based approval workflows for [Filament v5](https://filamentphp.com). Define multi-step approval flows with configurable approver resolvers, SLA enforcement, delegation, and lifecycle callbacks — all integrated into the Filament admin panel.
 

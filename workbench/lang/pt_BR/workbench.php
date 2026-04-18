@@ -20,6 +20,38 @@ return [
                 'created_at' => 'Criado em',
             ],
         ],
+        'expenses' => [
+            'model_label' => 'Despesa',
+            'plural_model_label' => 'Despesas',
+            'navigation_label' => 'Despesas',
+            'navigation_group' => 'Financeiro',
+            'fields' => [
+                'requester' => 'Solicitante',
+                'title' => 'Título',
+                'description' => 'Descrição',
+                'category' => 'Categoria',
+                'amount' => 'Valor',
+            ],
+            'columns' => [
+                'title' => 'Título',
+                'requester' => 'Solicitante',
+                'category' => 'Categoria',
+                'amount' => 'Valor',
+                'status' => 'Status',
+                'created_at' => 'Criada em',
+            ],
+            'categories' => [
+                'travel' => 'Viagem',
+                'supplies' => 'Suprimentos',
+                'equipment' => 'Equipamentos',
+                'training' => 'Treinamento',
+            ],
+            'statuses' => [
+                'draft' => 'Rascunho',
+                'approved' => 'Aprovada',
+                'rejected' => 'Rejeitada',
+            ],
+        ],
         'invoices' => [
             'model_label' => 'Fatura',
             'plural_model_label' => 'Faturas',
@@ -134,6 +166,16 @@ return [
                 'name' => 'Aprovação para envio de fatura',
                 'description' => 'Fluxo de uma etapa para aprovar o envio da fatura.',
                 'manager_step' => 'Aprovação do Gerente',
+            ],
+            'expense_submit' => [
+                'name' => 'Aprovação para envio de despesa',
+                'description' => 'Fluxo de uma etapa para aprovar o envio de uma despesa para análise.',
+                'manager_step' => 'Aprovação do Gerente',
+            ],
+            'expense_reimburse' => [
+                'name' => 'Aprovação para reembolso de despesa',
+                'description' => 'Fluxo de uma etapa para aprovar o reembolso de uma despesa.',
+                'director_step' => 'Aprovação do Diretor',
             ],
         ],
         'invoices' => [

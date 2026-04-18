@@ -20,6 +20,38 @@ return [
                 'created_at' => 'Created At',
             ],
         ],
+        'expenses' => [
+            'model_label' => 'Expense',
+            'plural_model_label' => 'Expenses',
+            'navigation_label' => 'Expenses',
+            'navigation_group' => 'Finance',
+            'fields' => [
+                'requester' => 'Requester',
+                'title' => 'Title',
+                'description' => 'Description',
+                'category' => 'Category',
+                'amount' => 'Amount',
+            ],
+            'columns' => [
+                'title' => 'Title',
+                'requester' => 'Requester',
+                'category' => 'Category',
+                'amount' => 'Amount',
+                'status' => 'Status',
+                'created_at' => 'Created At',
+            ],
+            'categories' => [
+                'travel' => 'Travel',
+                'supplies' => 'Supplies',
+                'equipment' => 'Equipment',
+                'training' => 'Training',
+            ],
+            'statuses' => [
+                'draft' => 'Draft',
+                'approved' => 'Approved',
+                'rejected' => 'Rejected',
+            ],
+        ],
         'invoices' => [
             'model_label' => 'Invoice',
             'plural_model_label' => 'Invoices',
@@ -134,6 +166,16 @@ return [
                 'name' => 'Invoice send approval',
                 'description' => 'Single-step flow to approve sending an invoice.',
                 'manager_step' => 'Manager Approval',
+            ],
+            'expense_submit' => [
+                'name' => 'Expense submission approval',
+                'description' => 'Single-step flow to approve sending an expense for review.',
+                'manager_step' => 'Manager Approval',
+            ],
+            'expense_reimburse' => [
+                'name' => 'Expense reimbursement approval',
+                'description' => 'Single-step flow to approve reimbursing an expense.',
+                'director_step' => 'Director Approval',
             ],
         ],
         'invoices' => [
