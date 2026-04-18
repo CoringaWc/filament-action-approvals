@@ -2,13 +2,12 @@
 
 namespace CoringaWc\FilamentActionApprovals;
 
-use App\Models\User;
-use Filament\Contracts\Plugin;
-use Filament\Panel;
 use CoringaWc\FilamentActionApprovals\Contracts\ApproverResolver;
 use CoringaWc\FilamentActionApprovals\Resources\ApprovalFlowResource;
 use CoringaWc\FilamentActionApprovals\Widgets\ApprovalAnalyticsWidget;
 use CoringaWc\FilamentActionApprovals\Widgets\PendingApprovalsWidget;
+use Filament\Contracts\Plugin;
+use Filament\Panel;
 
 class FilamentActionApprovalsPlugin implements Plugin
 {
@@ -89,12 +88,19 @@ class FilamentActionApprovalsPlugin implements Plugin
 
     public function getUserModel(): string
     {
-        return $this->userModel ?? config('filament-action-approvals.user_model', User::class);
+        /** @var class-string $model */
+        $model = $this->userModel
+            ?? config('filament-action-approvals.user_model')
+            ?? config('auth.providers.users.model');
+
+        return $model;
     }
 
     public function getNavigationGroup(): ?string
     {
-        return $this->navigationGroup ?? config('filament-action-approvals.navigation_group', 'Approvals');
+        return $this->navigationGroup
+            ?? config('filament-action-approvals.navigation_group')
+            ?? __('filament-action-approvals::approval.navigation_group');
     }
 
     public function register(Panel $panel): void
@@ -132,8 +138,12 @@ class FilamentActionApprovalsPlugin implements Plugin
      */
     public static function resolveUserModel(): string
     {
-        return static::current()?->getUserModel()
-            ?? config('filament-action-approvals.user_model', User::class);
+        /** @var class-string $model */
+        $model = static::current()?->getUserModel()
+            ?? config('filament-action-approvals.user_model')
+            ?? config('auth.providers.users.model');
+
+        return $model;
     }
 
     /**
@@ -151,6 +161,7 @@ class FilamentActionApprovalsPlugin implements Plugin
     public static function resolveNavigationGroup(): ?string
     {
         return static::current()?->getNavigationGroup()
-            ?? config('filament-action-approvals.navigation_group', 'Approvals');
+            ?? config('filament-action-approvals.navigation_group')
+            ?? __('filament-action-approvals::approval.navigation_group');
     }
 }

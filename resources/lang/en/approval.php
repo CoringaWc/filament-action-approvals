@@ -77,12 +77,14 @@ return [
         'required_approvals' => 'Required Approvals',
         'required_approvals_hint' => 'Require :required of :total selected approvers',
         'required_approvals_helper' => 'How many approvers must approve for this step to pass',
-        'sla_hours' => 'SLA (hours)',
-        'sla_helper' => 'Leave blank for no SLA',
-        'escalation_action' => 'Escalation Action',
+        'sla_hours' => 'Response deadline (hours)',
+        'sla_helper' => 'Leave blank to keep this step without an automatic deadline',
+        'escalation_action' => 'What to do when the deadline expires',
         'add_step' => 'Add Step',
         'action_key' => 'Action',
-        'action_key_helper' => 'Select the specific action that requires approval. Available after selecting the model.',
+        'any_action' => 'Any action',
+        'action_key_helper' => 'Optional. When filled, the flow only applies to that model action. When left empty, the flow may be used for any action of that model.',
+        'select_model_first' => 'Select a model to list the available actions.',
     ],
 
     // Flow resource table
@@ -114,6 +116,8 @@ return [
         'delegate' => 'Delegate',
 
         'approval_flow' => 'Approval Flow',
+        'approval_action' => 'Action to approve',
+        'approval_action_helper' => 'Choose which business scenario is being submitted. The system will try a flow specific to that action and fall back to the model generic flow when none exists.',
         'comment_optional' => 'Comment (optional)',
         'rejection_reason' => 'Reason for rejection',
         'delegate_to' => 'Delegate to',
@@ -138,10 +142,10 @@ return [
         'approved_body' => ':model #:id has been approved.',
         'rejected_title' => 'Approval Rejected',
         'rejected_body' => ':model #:id has been rejected.',
-        'escalated_title' => 'Approval Escalated',
-        'escalated_body' => ':model #:id has breached its SLA deadline.',
-        'sla_warning_title' => 'SLA Warning: Approval Due Soon',
-        'sla_warning_body' => ':model #:id approval is due :deadline.',
+        'escalated_title' => 'Approval deadline expired',
+        'escalated_body' => ':model #:id has passed its configured deadline.',
+        'sla_warning_title' => 'Approval deadline is approaching',
+        'sla_warning_body' => ':model #:id must be approved by :deadline.',
     ],
 
     // Widgets
@@ -151,11 +155,11 @@ return [
         'record' => 'Record',
         'since' => 'Since',
         'due' => 'Due',
-        'no_sla' => 'No SLA',
+        'no_sla' => 'No deadline set',
         'pending_approvals' => 'Pending Approvals',
         'approved_30d' => 'Approved (30d)',
         'rejected_30d' => 'Rejected (30d)',
-        'overdue_steps' => 'Overdue Steps',
+        'overdue_steps' => 'Steps past deadline',
     ],
 
     // Relation manager
@@ -174,6 +178,7 @@ return [
         'date' => 'Date',
         'close' => 'Close',
         'approval_heading' => 'Approval: :flow',
+        'not_available' => 'N/A',
     ],
 
     // Infolist section
@@ -191,13 +196,14 @@ return [
         'pending_approvers' => 'Pending Approvers',
         'progress' => 'Progress',
         'approvals_count' => ':received / :required approvals',
-        'sla_deadline' => 'SLA Deadline',
-        'no_sla' => 'No SLA',
+        'sla_deadline' => 'Deadline',
+        'no_sla' => 'No deadline set',
         'recent_activity' => 'Recent Activity',
         'by' => 'By',
         'system' => 'System',
         'date' => 'Date',
         'no_approval' => 'No Approval',
+        'not_available' => 'N/A',
     ],
 
     // Status column
@@ -213,10 +219,35 @@ return [
         'resolver' => 'Resolver',
     ],
 
+    'flow_hints' => [
+        'name' => 'Internal flow name. Use a clear title so this process is easy to identify in lists and audit history.',
+        'description' => 'Optional description to explain when this flow should be used.',
+        'applies_to' => 'Defines which record type can use this flow. Leave blank to allow any compatible model.',
+        'action_key' => 'Use this field to restrict the flow to a specific model action when you have multiple approval scenarios.',
+        'is_active' => 'Disable it to stop new submissions without losing the existing configuration.',
+        'steps' => 'Register the steps in the order the approval should happen. Each item defines who approves, in which format, and with which deadline.',
+        'step_name' => 'Name shown to users and in the audit history for this step.',
+        'type' => 'Choose whether the step uses a single approver, a sequential chain, or parallel approvals.',
+        'approver_type' => 'Defines the rule used to resolve approvers for this step.',
+        'required_approvals' => 'For parallel steps, this is how many approvals are required to complete the step.',
+        'sla_hours' => 'Maximum response time for the step, in hours. Leave empty to disable SLA.',
+        'escalation_action' => 'Automatic action executed when the deadline for this step expires.',
+        'resolver_users' => 'Select the specific users who may approve this step.',
+        'resolver_role' => 'All users with this role will be considered approvers for this step.',
+        'resolver_callback' => 'Choose the registered callback that dynamically resolves approvers at runtime.',
+    ],
+
+    'select' => [
+        'search_prompt' => 'Type to search',
+        'no_options' => 'No options available',
+        'no_search_results' => 'No results found',
+        'loading' => 'Loading options...',
+    ],
+
     // SLA command
     'sla' => [
-        'auto_approved' => 'Auto-approved due to SLA breach',
-        'auto_rejected' => 'Auto-rejected due to SLA breach',
+        'auto_approved' => 'Auto-approved because the deadline expired',
+        'auto_rejected' => 'Auto-rejected because the deadline expired',
     ],
 
 ];

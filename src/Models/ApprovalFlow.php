@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Collection;
 
 class ApprovalFlow extends Model
 {
@@ -62,5 +63,39 @@ class ApprovalFlow extends Model
     {
         return $this->scopeForModel($query, $model)
             ->where('action_key', $actionKey);
+    }
+
+    /**
+     * @param  Collection<int, self>  $flows
+     * @return Collection<int, self>
+     */
+    public static function filterSubmissionFlows(Collection $flows, ?string $actionKey = null): Collection
+    {
+        if (filled($actionKey)) {
+            $exactMatches = $flows
+                ->where('action_key', $actionKey)
+                ->values();
+
+            if ($exactMatches->isNotEmpty()) {
+                return $exactMatches;
+            }
+        }
+
+        return $flows
+            ->whereNull('action_key')
+            ->values();
+    }
+
+    /**
+     * @return Collection<int, self>
+     */
+    public static function getSubmissionFlowsForModel(Model $model, ?string $actionKey = null): Collection
+    {
+        return static::filterSubmissionFlows(static::forModel($model)->get(), $actionKey);
+    }
+
+    public static function findSubmissionFlowForModel(Model $model, ?string $actionKey = null): ?self
+    {
+        return static::getSubmissionFlowsForModel($model, $actionKey)->first();
     }
 }

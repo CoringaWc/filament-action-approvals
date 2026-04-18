@@ -2,12 +2,14 @@
 
 namespace CoringaWc\FilamentActionApprovals\Actions;
 
+use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
+use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
+use CoringaWc\FilamentActionApprovals\Support\ApprovableActionLabel;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Support\Icons\Heroicon;
-use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
-use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 
 class SubmitForApprovalAction extends Action
 {
@@ -31,22 +33,50 @@ class SubmitForApprovalAction extends Action
                     return false;
                 }
 
-                return $record->canBeSubmittedForApproval();
+                $flows = ApprovalFlow::forModel($record)->get();
+                $hasGenericFlows = $flows->whereNull('action_key')->isNotEmpty();
+                $hasSpecificFlows = $flows->whereNotNull('action_key')->isNotEmpty();
+                $canResolveSpecificActions = ApprovableActionLabel::hasOptionsFor($record);
+
+                return $record->canBeSubmittedForApproval()
+                    && $flows->isNotEmpty()
+                    && ($hasGenericFlows || (! $hasSpecificFlows) || $canResolveSpecificActions);
             })
             ->schema(function (): array {
                 $record = $this->getRecord();
                 $flows = ApprovalFlow::forModel($record)->get();
+                $actionOptions = ApprovableActionLabel::optionsFor($record);
+                $hasGenericFlows = $flows->whereNull('action_key')->isNotEmpty();
+                $hasSpecificFlows = $flows->whereNotNull('action_key')->isNotEmpty();
+                $shouldAskForAction = ($actionOptions !== []) && ($hasSpecificFlows || (! $hasGenericFlows));
 
-                if ($flows->count() <= 1) {
+                if ((! $shouldAskForAction) && ($flows->count() <= 1)) {
                     return [];
                 }
 
-                return [
+                return array_values(array_filter([
+                    $shouldAskForAction
+                        ? Select::make('action_key')
+                            ->label(__('filament-action-approvals::approval.actions.approval_action'))
+                            ->options($actionOptions)
+                            ->helperText(__('filament-action-approvals::approval.actions.approval_action_helper'))
+                            ->live()
+                            ->required()
+                        : null,
                     Select::make('approval_flow_id')
                         ->label(__('filament-action-approvals::approval.actions.approval_flow'))
-                        ->options($flows->pluck('name', 'id'))
-                        ->required(),
-                ];
+                        ->options(function (Get $get) use ($flows): array {
+                            return ApprovalFlow::filterSubmissionFlows($flows, $get('action_key'))
+                                ->pluck('name', 'id')
+                                ->all();
+                        })
+                        ->visible(function (Get $get) use ($flows): bool {
+                            return ApprovalFlow::filterSubmissionFlows($flows, $get('action_key'))->count() > 1;
+                        })
+                        ->required(function (Get $get) use ($flows): bool {
+                            return ApprovalFlow::filterSubmissionFlows($flows, $get('action_key'))->count() > 1;
+                        }),
+                ]));
             })
             ->action(function (array $data): void {
                 $record = $this->getRecord();
@@ -54,7 +84,7 @@ class SubmitForApprovalAction extends Action
                     ? ApprovalFlow::find($data['approval_flow_id'])
                     : null;
 
-                app(ApprovalEngine::class)->submit($record, $flow);
+                app(ApprovalEngine::class)->submit($record, $flow, actionKey: $data['action_key'] ?? null);
 
                 Notification::make()
                     ->title(__('filament-action-approvals::approval.actions.submitted_success'))

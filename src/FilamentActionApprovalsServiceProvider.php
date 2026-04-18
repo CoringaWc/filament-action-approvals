@@ -12,6 +12,16 @@ class FilamentActionApprovalsServiceProvider extends PackageServiceProvider
 {
     public static string $name = 'filament-action-approvals';
 
+    public function registeringPackage(): void
+    {
+        $translationsPath = dirname(__DIR__).'/resources/lang';
+
+        // Filament may resolve resource labels before Package Tools boots translations.
+        // Register the namespace early to avoid caching missing translation groups.
+        $this->loadTranslationsFrom($translationsPath, static::$name);
+        $this->loadJsonTranslationsFrom($translationsPath);
+    }
+
     public function configurePackage(Package $package): void
     {
         $package->name(static::$name)

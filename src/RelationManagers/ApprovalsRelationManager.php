@@ -2,6 +2,9 @@
 
 namespace CoringaWc\FilamentActionApprovals\RelationManagers;
 
+use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
+use CoringaWc\FilamentActionApprovals\Models\Approval;
+use CoringaWc\FilamentActionApprovals\Support\DateDisplay;
 use Filament\Actions\ViewAction;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
@@ -10,8 +13,6 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
-use CoringaWc\FilamentActionApprovals\Models\Approval;
 
 class ApprovalsRelationManager extends RelationManager
 {
@@ -33,13 +34,15 @@ class ApprovalsRelationManager extends RelationManager
                     ->badge(),
                 TextColumn::make('submitter.name')
                     ->label(__('filament-action-approvals::approval.relation_manager.submitted_by')),
-                TextColumn::make('submitted_at')
-                    ->label(__('filament-action-approvals::approval.fields.submitted_at'))
-                    ->dateTime()
+                DateDisplay::column(
+                    TextColumn::make('submitted_at')
+                        ->label(__('filament-action-approvals::approval.fields.submitted_at')),
+                )
                     ->sortable(),
-                TextColumn::make('completed_at')
-                    ->label(__('filament-action-approvals::approval.fields.completed_at'))
-                    ->dateTime()
+                DateDisplay::column(
+                    TextColumn::make('completed_at')
+                        ->label(__('filament-action-approvals::approval.fields.completed_at')),
+                )
                     ->placeholder(__('filament-action-approvals::approval.relation_manager.in_progress'))
                     ->sortable(),
             ])
@@ -56,12 +59,14 @@ class ApprovalsRelationManager extends RelationManager
                                     ->badge(),
                                 TextEntry::make('submitter.name')
                                     ->label(__('filament-action-approvals::approval.relation_manager.submitted_by')),
-                                TextEntry::make('submitted_at')
-                                    ->label(__('filament-action-approvals::approval.fields.submitted_at'))
-                                    ->dateTime(),
-                                TextEntry::make('completed_at')
-                                    ->label(__('filament-action-approvals::approval.fields.completed_at'))
-                                    ->dateTime()
+                                DateDisplay::entry(
+                                    TextEntry::make('submitted_at')
+                                        ->label(__('filament-action-approvals::approval.fields.submitted_at')),
+                                ),
+                                DateDisplay::entry(
+                                    TextEntry::make('completed_at')
+                                        ->label(__('filament-action-approvals::approval.fields.completed_at')),
+                                )
                                     ->placeholder(__('filament-action-approvals::approval.relation_manager.in_progress')),
                             ])
                             ->columns(3),
@@ -69,7 +74,7 @@ class ApprovalsRelationManager extends RelationManager
                         Section::make(__('filament-action-approvals::approval.relation_manager.steps'))
                             ->schema([
                                 RepeatableEntry::make('stepInstances')
-                                    ->label('')
+                                    ->hiddenLabel()
                                     ->schema([
                                         TextEntry::make('step.name')
                                             ->label(__('filament-action-approvals::approval.widgets.step')),
@@ -85,21 +90,22 @@ class ApprovalsRelationManager extends RelationManager
                                                 $ids = $record->assigned_approver_ids;
 
                                                 if (empty($ids)) {
-                                                    return '-';
+                                                    return __('filament-action-approvals::approval.relation_manager.not_available');
                                                 }
 
                                                 $userModel = FilamentActionApprovalsPlugin::resolveUserModel();
 
                                                 return $userModel::whereIn('id', $ids)
                                                     ->pluck('name')
-                                                    ->join(', ') ?: '-';
+                                                    ->join(', ') ?: __('filament-action-approvals::approval.relation_manager.not_available');
                                             }),
                                         TextEntry::make('received_approvals')
                                             ->label(__('filament-action-approvals::approval.relation_manager.received_required'))
                                             ->formatStateUsing(fn ($record): string => "{$record->received_approvals} / {$record->required_approvals}"),
-                                        TextEntry::make('sla_deadline')
-                                            ->label(__('filament-action-approvals::approval.infolist.sla_deadline'))
-                                            ->dateTime()
+                                        DateDisplay::entry(
+                                            TextEntry::make('sla_deadline')
+                                                ->label(__('filament-action-approvals::approval.infolist.sla_deadline')),
+                                        )
                                             ->placeholder(__('filament-action-approvals::approval.widgets.no_sla')),
                                     ])
                                     ->columns(3),
@@ -108,7 +114,7 @@ class ApprovalsRelationManager extends RelationManager
                         Section::make(__('filament-action-approvals::approval.relation_manager.audit_trail'))
                             ->schema([
                                 RepeatableEntry::make('actions')
-                                    ->label('')
+                                    ->hiddenLabel()
                                     ->schema([
                                         TextEntry::make('type')
                                             ->label(__('filament-action-approvals::approval.fields.type'))
@@ -118,10 +124,11 @@ class ApprovalsRelationManager extends RelationManager
                                             ->placeholder(__('filament-action-approvals::approval.relation_manager.system')),
                                         TextEntry::make('comment')
                                             ->label(__('filament-action-approvals::approval.fields.comment'))
-                                            ->placeholder('-'),
-                                        TextEntry::make('created_at')
-                                            ->label(__('filament-action-approvals::approval.relation_manager.date'))
-                                            ->dateTime(),
+                                            ->placeholder(__('filament-action-approvals::approval.relation_manager.not_available')),
+                                        DateDisplay::entry(
+                                            TextEntry::make('created_at')
+                                                ->label(__('filament-action-approvals::approval.relation_manager.date')),
+                                        ),
                                     ])
                                     ->columns(4),
                             ]),

@@ -2,8 +2,6 @@
 
 namespace CoringaWc\FilamentActionApprovals\Services;
 
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\DB;
 use CoringaWc\FilamentActionApprovals\Enums\ActionType;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\Enums\StepInstanceStatus;
@@ -17,13 +15,20 @@ use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Notifications\ApprovalApprovedNotification;
 use CoringaWc\FilamentActionApprovals\Notifications\ApprovalRejectedNotification;
 use CoringaWc\FilamentActionApprovals\Notifications\ApprovalRequestedNotification;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Facades\DB;
 
 class ApprovalEngine
 {
-    public function submit(Model $approvable, ?ApprovalFlow $flow = null, int|string|null $submittedBy = null): Approval
+    public function submit(Model $approvable, ?ApprovalFlow $flow = null, int|string|null $submittedBy = null, ?string $actionKey = null): Approval
     {
-        $flow ??= ApprovalFlow::forModel($approvable)->firstOrFail();
+        $flow ??= ApprovalFlow::findSubmissionFlowForModel($approvable, $actionKey);
         $submittedBy ??= auth()->id();
+
+        if (! $flow) {
+            throw (new ModelNotFoundException)->setModel(ApprovalFlow::class);
+        }
 
         return DB::transaction(function () use ($approvable, $flow, $submittedBy) {
             $approval = Approval::create([

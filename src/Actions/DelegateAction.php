@@ -2,13 +2,14 @@
 
 namespace CoringaWc\FilamentActionApprovals\Actions;
 
+use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
+use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
+use CoringaWc\FilamentActionApprovals\Support\TranslatableSelect;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Support\Icons\Heroicon;
-use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
-use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 
 class DelegateAction extends Action
 {
@@ -44,11 +45,13 @@ class DelegateAction extends Action
                 return in_array(auth()->id(), $stepInstance->assigned_approver_ids);
             })
             ->schema([
-                Select::make('to_user_id')
-                    ->label(__('filament-action-approvals::approval.actions.delegate_to'))
-                    ->searchable()
-                    ->options(fn () => $userModel::where('id', '!=', auth()->id())->pluck('name', 'id'))
-                    ->required(),
+                TranslatableSelect::apply(
+                    Select::make('to_user_id')
+                        ->label(__('filament-action-approvals::approval.actions.delegate_to'))
+                        ->searchable()
+                        ->options(fn () => $userModel::where('id', '!=', auth()->id())->pluck('name', 'id'))
+                        ->required(),
+                ),
                 Textarea::make('reason')
                     ->label(__('filament-action-approvals::approval.actions.reason'))
                     ->rows(2),

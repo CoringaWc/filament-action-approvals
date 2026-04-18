@@ -1,6 +1,5 @@
 <?php
 
-use App\Models\User;
 use CoringaWc\FilamentActionApprovals\ApproverResolvers\CallbackResolver;
 use CoringaWc\FilamentActionApprovals\ApproverResolvers\RoleResolver;
 use CoringaWc\FilamentActionApprovals\ApproverResolvers\UserResolver;
@@ -12,7 +11,7 @@ return [
     | User Model
     |--------------------------------------------------------------------------
     */
-    'user_model' => User::class,
+    'user_model' => config('auth.providers.users.model'),
 
     /*
     |--------------------------------------------------------------------------
@@ -56,6 +55,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Date Display
+    |--------------------------------------------------------------------------
+    | Controls how dates are rendered in the package UI.
+    |
+    | display_format: PHP date format used for absolute dates and tooltips.
+    | use_since: when true, date fields use relative time (diffForHumans).
+    */
+    'date' => [
+        'display_format' => 'd/m/Y H:i',
+        'use_since' => true,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Auto-register SLA Command Schedule
     |--------------------------------------------------------------------------
     | When true, the package registers `approval:process-sla` to run every minute.
@@ -67,7 +80,7 @@ return [
     | Navigation Group
     |--------------------------------------------------------------------------
     */
-    'navigation_group' => 'Approvals',
+    'navigation_group' => null,
 
     /*
     |--------------------------------------------------------------------------

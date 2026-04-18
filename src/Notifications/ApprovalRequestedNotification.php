@@ -2,10 +2,11 @@
 
 namespace CoringaWc\FilamentActionApprovals\Notifications;
 
-use Filament\Notifications\Notification;
-use Filament\Support\Icons\Heroicon;
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
+use CoringaWc\FilamentActionApprovals\Support\ApprovableModelLabel;
+use Filament\Notifications\Notification;
+use Filament\Support\Icons\Heroicon;
 
 class ApprovalRequestedNotification
 {
@@ -19,7 +20,7 @@ class ApprovalRequestedNotification
         }
 
         $approvable = $stepInstance->approval->approvable;
-        $modelLabel = class_basename($approvable);
+        $modelLabel = ApprovableModelLabel::resolve($approvable);
 
         Notification::make()
             ->title(__('filament-action-approvals::approval.notifications.requested_title', ['step' => $stepInstance->step->name]))

@@ -14,12 +14,17 @@ class WorkbenchServiceProvider extends ServiceProvider
     public function register(): void
     {
         config([
+            'app.locale' => 'pt_BR',
+            'app.fallback_locale' => 'en',
+            'app.faker_locale' => 'pt_BR',
             'filament-action-approvals.user_model' => User::class,
         ]);
     }
 
     public function boot(): void
     {
+        $this->loadTranslationsFrom(__DIR__.'/../../lang', 'workbench');
+
         App::setLocale(config('app.locale'));
 
         $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');

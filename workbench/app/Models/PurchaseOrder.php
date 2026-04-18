@@ -17,6 +17,17 @@ class PurchaseOrder extends Model
 
     protected $guarded = [];
 
+    /**
+     * @return array<string, string>
+     */
+    public static function approvableActions(): array
+    {
+        return [
+            'submit' => __('workbench::workbench.approval_actions.purchase_orders.submit'),
+            'cancel' => __('workbench::workbench.approval_actions.purchase_orders.cancel'),
+        ];
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

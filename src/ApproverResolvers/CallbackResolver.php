@@ -3,9 +3,11 @@
 namespace CoringaWc\FilamentActionApprovals\ApproverResolvers;
 
 use Closure;
+use CoringaWc\FilamentActionApprovals\Contracts\ApproverResolver;
+use CoringaWc\FilamentActionApprovals\Support\FormFieldHint;
+use CoringaWc\FilamentActionApprovals\Support\TranslatableSelect;
 use Filament\Forms\Components\Select;
 use Illuminate\Database\Eloquent\Model;
-use CoringaWc\FilamentActionApprovals\Contracts\ApproverResolver;
 
 class CallbackResolver implements ApproverResolver
 {
@@ -45,13 +47,19 @@ class CallbackResolver implements ApproverResolver
     public static function configSchema(): array
     {
         return [
-            Select::make('approver_config.callback')
-                ->label(__('filament-action-approvals::approval.resolver_config.resolver'))
-                ->options(fn () => collect(array_keys(static::$callbacks))
-                    ->mapWithKeys(fn ($k) => [$k => str($k)->headline()->toString()])
-                    ->all()
-                )
-                ->required(),
+            TranslatableSelect::apply(
+                FormFieldHint::apply(
+                    Select::make('approver_config.callback')
+                        ->label(__('filament-action-approvals::approval.resolver_config.resolver'))
+                        ->searchable()
+                        ->options(fn () => collect(array_keys(static::$callbacks))
+                            ->mapWithKeys(fn ($k) => [$k => str($k)->headline()->toString()])
+                            ->all()
+                        )
+                        ->required(),
+                    __('filament-action-approvals::approval.flow_hints.resolver_callback'),
+                ),
+            ),
         ];
     }
 }

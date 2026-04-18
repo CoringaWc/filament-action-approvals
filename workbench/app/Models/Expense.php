@@ -18,6 +18,17 @@ class Expense extends Model
 
     protected $guarded = [];
 
+    /**
+     * @return array<string, string>
+     */
+    public static function approvableActions(): array
+    {
+        return [
+            'submit' => __('workbench::workbench.approval_actions.expenses.submit'),
+            'reimburse' => __('workbench::workbench.approval_actions.expenses.reimburse'),
+        ];
+    }
+
     protected function casts(): array
     {
         return [

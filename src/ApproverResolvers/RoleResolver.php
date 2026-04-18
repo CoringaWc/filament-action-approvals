@@ -2,11 +2,13 @@
 
 namespace CoringaWc\FilamentActionApprovals\ApproverResolvers;
 
+use CoringaWc\FilamentActionApprovals\Contracts\ApproverResolver;
+use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
+use CoringaWc\FilamentActionApprovals\Support\FormFieldHint;
+use CoringaWc\FilamentActionApprovals\Support\TranslatableSelect;
 use Filament\Forms\Components\Select;
 use Illuminate\Database\Eloquent\Model;
 use Spatie\Permission\Models\Role;
-use CoringaWc\FilamentActionApprovals\Contracts\ApproverResolver;
-use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 
 class RoleResolver implements ApproverResolver
 {
@@ -40,11 +42,16 @@ class RoleResolver implements ApproverResolver
     public static function configSchema(): array
     {
         return [
-            Select::make('approver_config.role')
-                ->label(__('filament-action-approvals::approval.resolver_config.role'))
-                ->searchable()
-                ->options(fn () => Role::pluck('name', 'name'))
-                ->required(),
+            TranslatableSelect::apply(
+                FormFieldHint::apply(
+                    Select::make('approver_config.role')
+                        ->label(__('filament-action-approvals::approval.resolver_config.role'))
+                        ->searchable()
+                        ->options(fn () => Role::pluck('name', 'name'))
+                        ->required(),
+                    __('filament-action-approvals::approval.flow_hints.resolver_role'),
+                ),
+            ),
         ];
     }
 }

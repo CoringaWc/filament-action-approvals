@@ -57,7 +57,7 @@ return [
     // Labels dos resolvers
     'resolvers' => [
         'user' => 'Usuários Específicos',
-        'role' => 'Usuários por Papel',
+        'role' => 'Usuários por Função',
         'callback' => 'Callback Personalizado',
     ],
 
@@ -77,12 +77,14 @@ return [
         'required_approvals' => 'Aprovações Necessárias',
         'required_approvals_hint' => 'Requer :required de :total aprovadores selecionados',
         'required_approvals_helper' => 'Quantos aprovadores devem aprovar para esta etapa passar',
-        'sla_hours' => 'SLA (horas)',
-        'sla_helper' => 'Deixe em branco para sem SLA',
-        'escalation_action' => 'Ação de Escalação',
+        'sla_hours' => 'Prazo para resposta (horas)',
+        'sla_helper' => 'Deixe em branco para não definir prazo automático',
+        'escalation_action' => 'O que fazer quando o prazo vencer',
         'add_step' => 'Adicionar Etapa',
         'action_key' => 'Ação',
-        'action_key_helper' => 'Selecione a ação específica que requer aprovação. Disponível após selecionar o modelo.',
+        'any_action' => 'Qualquer ação',
+        'action_key_helper' => 'Opcional. Se preenchido, o fluxo valerá apenas para esta ação do modelo. Se ficar vazio, o fluxo poderá ser usado em qualquer ação desse modelo.',
+        'select_model_first' => 'Selecione um modelo para listar as ações disponíveis.',
     ],
 
     // Tabela do flow
@@ -114,6 +116,8 @@ return [
         'delegate' => 'Delegar',
 
         'approval_flow' => 'Fluxo de Aprovação',
+        'approval_action' => 'Ação a aprovar',
+        'approval_action_helper' => 'Informe qual cenário está sendo submetido. O sistema tentará usar um fluxo específico para essa ação e, se não existir, usará o fluxo genérico do modelo.',
         'comment_optional' => 'Comentário (opcional)',
         'rejection_reason' => 'Motivo da rejeição',
         'delegate_to' => 'Delegar para',
@@ -138,10 +142,10 @@ return [
         'approved_body' => ':model #:id foi aprovado.',
         'rejected_title' => 'Aprovação Rejeitada',
         'rejected_body' => ':model #:id foi rejeitado.',
-        'escalated_title' => 'Aprovação Escalada',
-        'escalated_body' => ':model #:id ultrapassou o prazo de SLA.',
-        'sla_warning_title' => 'Aviso de SLA: Aprovação Próxima do Prazo',
-        'sla_warning_body' => ':model #:id tem aprovação com prazo para :deadline.',
+        'escalated_title' => 'Prazo de aprovação vencido',
+        'escalated_body' => ':model #:id ultrapassou o prazo definido.',
+        'sla_warning_title' => 'Prazo de aprovação próximo do vencimento',
+        'sla_warning_body' => ':model #:id precisa ser aprovado até :deadline.',
     ],
 
     // Widgets
@@ -151,11 +155,11 @@ return [
         'record' => 'Registro',
         'since' => 'Desde',
         'due' => 'Prazo',
-        'no_sla' => 'Sem SLA',
+        'no_sla' => 'Sem prazo definido',
         'pending_approvals' => 'Aprovações Pendentes',
         'approved_30d' => 'Aprovadas (30d)',
         'rejected_30d' => 'Rejeitadas (30d)',
-        'overdue_steps' => 'Etapas Vencidas',
+        'overdue_steps' => 'Etapas com prazo vencido',
     ],
 
     // Relation manager
@@ -174,6 +178,7 @@ return [
         'date' => 'Data',
         'close' => 'Fechar',
         'approval_heading' => 'Aprovação: :flow',
+        'not_available' => 'N/D',
     ],
 
     // Seção infolist
@@ -191,13 +196,14 @@ return [
         'pending_approvers' => 'Aprovadores Pendentes',
         'progress' => 'Progresso',
         'approvals_count' => ':received / :required aprovações',
-        'sla_deadline' => 'Prazo SLA',
-        'no_sla' => 'Sem SLA',
+        'sla_deadline' => 'Prazo limite',
+        'no_sla' => 'Sem prazo definido',
         'recent_activity' => 'Atividade Recente',
         'by' => 'Por',
         'system' => 'Sistema',
         'date' => 'Data',
         'no_approval' => 'Sem Aprovação',
+        'not_available' => 'N/D',
     ],
 
     // Coluna de status
@@ -209,14 +215,39 @@ return [
     // Config do resolver
     'resolver_config' => [
         'users' => 'Usuários',
-        'role' => 'Papel',
+        'role' => 'Função',
         'resolver' => 'Resolver',
+    ],
+
+    'flow_hints' => [
+        'name' => 'Nome interno do fluxo. Use um título claro para identificar este processo na listagem e no histórico.',
+        'description' => 'Descrição opcional para contextualizar quando este fluxo deve ser usado.',
+        'applies_to' => 'Define para qual tipo de registro este fluxo ficará disponível. Em branco, ele poderá ser usado em qualquer modelo compatível.',
+        'action_key' => 'Use este campo para limitar o fluxo a uma ação específica do modelo, quando houver mais de um cenário de aprovação.',
+        'is_active' => 'Desative para impedir novas submissões sem perder a configuração já cadastrada.',
+        'steps' => 'Cadastre as etapas na ordem em que a aprovação deve acontecer. Cada item define quem aprova, em qual formato e com qual prazo.',
+        'step_name' => 'Nome exibido para os usuários e no histórico da aprovação desta etapa.',
+        'type' => 'Escolhe se a etapa terá um único aprovador, uma sequência de aprovação ou aprovações paralelas.',
+        'approver_type' => 'Define a regra usada para descobrir os aprovadores desta etapa.',
+        'required_approvals' => 'Em etapas paralelas, informa quantas aprovações são necessárias para concluir a etapa.',
+        'sla_hours' => 'Prazo máximo, em horas, para a etapa receber resposta. Deixe vazio para não aplicar SLA.',
+        'escalation_action' => 'Ação automática executada quando o prazo desta etapa vencer.',
+        'resolver_users' => 'Selecione os usuários específicos que poderão aprovar esta etapa.',
+        'resolver_role' => 'Todos os usuários com esta função serão considerados aprovadores desta etapa.',
+        'resolver_callback' => 'Escolha o callback registrado que calcula os aprovadores dinamicamente em tempo de execução.',
+    ],
+
+    'select' => [
+        'search_prompt' => 'Digite para pesquisar',
+        'no_options' => 'Nenhuma opção disponível',
+        'no_search_results' => 'Nenhum resultado encontrado',
+        'loading' => 'Carregando opções...',
     ],
 
     // Comando SLA
     'sla' => [
-        'auto_approved' => 'Aprovado automaticamente por violação de SLA',
-        'auto_rejected' => 'Rejeitado automaticamente por violação de SLA',
+        'auto_approved' => 'Aprovado automaticamente porque o prazo venceu',
+        'auto_rejected' => 'Rejeitado automaticamente porque o prazo venceu',
     ],
 
 ];

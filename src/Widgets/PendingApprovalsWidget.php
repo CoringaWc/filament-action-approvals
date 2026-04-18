@@ -2,12 +2,14 @@
 
 namespace CoringaWc\FilamentActionApprovals\Widgets;
 
+use CoringaWc\FilamentActionApprovals\Enums\StepInstanceStatus;
+use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
+use CoringaWc\FilamentActionApprovals\Support\ApprovableModelLabel;
+use CoringaWc\FilamentActionApprovals\Support\DateDisplay;
 use Filament\Facades\Filament;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget;
-use CoringaWc\FilamentActionApprovals\Enums\StepInstanceStatus;
-use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 
 class PendingApprovalsWidget extends TableWidget
 {
@@ -35,13 +37,15 @@ class PendingApprovalsWidget extends TableWidget
                     ->label(__('filament-action-approvals::approval.widgets.step')),
                 TextColumn::make('approval.approvable_type')
                     ->label(__('filament-action-approvals::approval.widgets.record'))
-                    ->formatStateUsing(fn ($record): string => class_basename($record->approval->approvable_type).' #'.$record->approval->approvable_id),
-                TextColumn::make('activated_at')
-                    ->label(__('filament-action-approvals::approval.widgets.since'))
-                    ->since(),
-                TextColumn::make('sla_deadline')
-                    ->label(__('filament-action-approvals::approval.widgets.due'))
-                    ->since()
+                    ->formatStateUsing(fn ($record): string => ApprovableModelLabel::resolveWithKey($record->approval->approvable_type, $record->approval->approvable_id)),
+                DateDisplay::column(
+                    TextColumn::make('activated_at')
+                        ->label(__('filament-action-approvals::approval.widgets.since')),
+                ),
+                DateDisplay::column(
+                    TextColumn::make('sla_deadline')
+                        ->label(__('filament-action-approvals::approval.widgets.due')),
+                )
                     ->placeholder(__('filament-action-approvals::approval.widgets.no_sla'))
                     ->color(fn ($record): string => match (true) {
                         $record->sla_deadline?->isPast() => 'danger',

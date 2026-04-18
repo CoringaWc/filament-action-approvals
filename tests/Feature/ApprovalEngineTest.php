@@ -12,6 +12,7 @@ use CoringaWc\FilamentActionApprovals\Events\ApprovalSubmitted;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use CoringaWc\FilamentActionApprovals\Tests\TestCase;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\Event;
 use Workbench\App\Models\PurchaseOrder;
 
@@ -82,6 +83,43 @@ class ApprovalEngineTest extends TestCase
         $this->engine->submit($order, $flow, $approver->getKey());
 
         Event::assertDispatched(ApprovalSubmitted::class);
+    }
+
+    public function test_submit_uses_generic_flow_when_no_action_key_is_provided(): void
+    {
+        $approver = $this->createUser();
+        $genericFlow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
+        $actionFlow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()], 'cancel');
+        $order = PurchaseOrder::factory()->create();
+
+        $approval = $this->engine->submit($order, submittedBy: $approver->getKey());
+
+        $this->assertTrue($approval->flow->is($genericFlow));
+        $this->assertFalse($approval->flow->is($actionFlow));
+    }
+
+    public function test_submit_uses_action_specific_flow_when_action_key_is_provided(): void
+    {
+        $approver = $this->createUser();
+        $genericFlow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
+        $actionFlow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()], 'cancel');
+        $order = PurchaseOrder::factory()->create();
+
+        $approval = $this->engine->submit($order, submittedBy: $approver->getKey(), actionKey: 'cancel');
+
+        $this->assertTrue($approval->flow->is($actionFlow));
+        $this->assertFalse($approval->flow->is($genericFlow));
+    }
+
+    public function test_submit_throws_when_only_action_specific_flows_exist_and_no_action_key_is_provided(): void
+    {
+        $approver = $this->createUser();
+        $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()], 'cancel');
+        $order = PurchaseOrder::factory()->create();
+
+        $this->expectException(ModelNotFoundException::class);
+
+        $this->engine->submit($order, submittedBy: $approver->getKey());
     }
 
     // ─── Approve ──────────────────────────────────────────────────

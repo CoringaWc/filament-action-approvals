@@ -2,13 +2,13 @@
 
 namespace CoringaWc\FilamentActionApprovals\Concerns;
 
-use Illuminate\Database\Eloquent\Relations\MorphMany;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalAction;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 trait HasApprovals
 {
@@ -35,9 +35,17 @@ trait HasApprovals
         return $this->latestApproval()?->status;
     }
 
-    public function submitForApproval(?ApprovalFlow $flow = null, int|string|null $submittedBy = null): Approval
+    public function submitForApproval(?ApprovalFlow $flow = null, int|string|null $submittedBy = null, ?string $actionKey = null): Approval
     {
-        return app(ApprovalEngine::class)->submit($this, $flow, $submittedBy);
+        return app(ApprovalEngine::class)->submit($this, $flow, $submittedBy, $actionKey);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function approvableActions(): array
+    {
+        return [];
     }
 
     public function isPendingApproval(): bool

@@ -101,8 +101,9 @@ abstract class TestCase extends Orchestra
         $app['config']->set('database.default', 'testing');
         $app['config']->set('app.key', 'base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=');
         $app['config']->set('app.cipher', 'AES-256-CBC');
-        $app['config']->set('app.locale', 'en');
+        $app['config']->set('app.locale', 'pt_BR');
         $app['config']->set('app.fallback_locale', 'en');
+        $app['config']->set('app.faker_locale', 'pt_BR');
         $app['config']->set('auth.providers.users.model', User::class);
         $app['config']->set('session.driver', 'array');
 

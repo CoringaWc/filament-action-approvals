@@ -18,8 +18,12 @@ workbench:
 env:
   APP_KEY: "base64:Xk9d6lV1RUWJXz7HP2oZPelGkgcXBB1k9QxFegMkNO8="
   APP_DEBUG: true
+  APP_LOCALE: pt_BR
+  APP_FALLBACK_LOCALE: en
+  APP_FAKER_LOCALE: pt_BR
 
   DB_CONNECTION: sqlite
+  DB_DATABASE: workbench/database/database.sqlite
 
   CACHE_STORE: array
   SESSION_DRIVER: array

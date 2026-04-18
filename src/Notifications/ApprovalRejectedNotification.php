@@ -2,10 +2,11 @@
 
 namespace CoringaWc\FilamentActionApprovals\Notifications;
 
-use Filament\Notifications\Notification;
-use Filament\Support\Icons\Heroicon;
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
+use CoringaWc\FilamentActionApprovals\Support\ApprovableModelLabel;
+use Filament\Notifications\Notification;
+use Filament\Support\Icons\Heroicon;
 
 class ApprovalRejectedNotification
 {
@@ -19,7 +20,7 @@ class ApprovalRejectedNotification
         }
 
         $approvable = $approval->approvable;
-        $modelLabel = class_basename($approvable);
+        $modelLabel = ApprovableModelLabel::resolve($approvable);
 
         Notification::make()
             ->title(__('filament-action-approvals::approval.notifications.rejected_title'))
