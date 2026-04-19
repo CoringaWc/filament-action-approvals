@@ -1,7 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CoringaWc\FilamentActionApprovals\Actions;
 
+use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
@@ -43,6 +46,10 @@ class ApproveAction extends Action
 
                 if (! $stepInstance) {
                     return false;
+                }
+
+                if (FilamentActionApprovalsPlugin::isSuperAdmin($userId)) {
+                    return ! $stepInstance->hasUserActed($userId);
                 }
 
                 return $stepInstance->canUserAct($userId)

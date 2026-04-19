@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CoringaWc\FilamentActionApprovals\Models;
 
 use CoringaWc\FilamentActionApprovals\Contracts\ApproverResolver;

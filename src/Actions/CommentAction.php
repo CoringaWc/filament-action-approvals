@@ -1,7 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CoringaWc\FilamentActionApprovals\Actions;
 
+use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
@@ -40,6 +43,10 @@ class CommentAction extends Action
                 }
 
                 $stepInstance = $approval->currentStepInstance();
+
+                if (FilamentActionApprovalsPlugin::isSuperAdmin($userId)) {
+                    return $stepInstance !== null;
+                }
 
                 return $stepInstance?->canUserAct($userId) ?? false;
             })

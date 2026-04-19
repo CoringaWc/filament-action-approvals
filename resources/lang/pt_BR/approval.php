@@ -58,7 +58,7 @@ return [
     'resolvers' => [
         'user' => 'Usuários Específicos',
         'role' => 'Usuários por Função',
-        'callback' => 'Callback Personalizado',
+        'custom_rule' => 'Regra Personalizada',
     ],
 
     // Formulário do flow
@@ -204,6 +204,7 @@ return [
         'date' => 'Data',
         'no_approval' => 'Sem Aprovação',
         'not_available' => 'N/D',
+        'rejection_reason' => 'Motivo da Rejeição',
     ],
 
     // Coluna de status
@@ -215,8 +216,8 @@ return [
     // Config do resolver
     'resolver_config' => [
         'users' => 'Usuários',
-        'role' => 'Função',
-        'resolver' => 'Resolver',
+        'role' => 'Funções',
+        'custom_rule' => 'Regra Personalizada',
     ],
 
     'flow_hints' => [
@@ -233,8 +234,8 @@ return [
         'sla_hours' => 'Prazo máximo, em horas, para a etapa receber resposta. Deixe vazio para não aplicar SLA.',
         'escalation_action' => 'Ação automática executada quando o prazo desta etapa vencer.',
         'resolver_users' => 'Selecione os usuários específicos que poderão aprovar esta etapa.',
-        'resolver_role' => 'Todos os usuários com esta função serão considerados aprovadores desta etapa.',
-        'resolver_callback' => 'Escolha o callback registrado que calcula os aprovadores dinamicamente em tempo de execução.',
+        'resolver_role' => 'Todos os usuários com qualquer uma das funções selecionadas serão considerados aprovadores desta etapa.',
+        'resolver_custom_rule' => 'Escolha a regra personalizada que calcula os aprovadores dinamicamente em tempo de execução.',
     ],
 
     'select' => [
@@ -242,6 +243,14 @@ return [
         'no_options' => 'Nenhuma opção disponível',
         'no_search_results' => 'Nenhum resultado encontrado',
         'loading' => 'Carregando opções...',
+    ],
+
+    // Tabs (Página de listagem)
+    'tabs' => [
+        'all' => 'Todos',
+        'active' => 'Ativos',
+        'inactive' => 'Inativos',
+        'pending' => 'Minhas Pendentes',
     ],
 
     // Comando SLA

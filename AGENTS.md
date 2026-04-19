@@ -6,7 +6,7 @@ This repository contains the `coringawc/filament-action-approvals` package.
 
 The package provides action-based approval workflows for Filament v5. It allows any Eloquent model to go through configurable multi-step approval chains with:
 
-- Pluggable approver resolvers (user, role, callback, custom)
+- Pluggable approver resolvers (user, role, custom rule)
 - Approvable actions — domain-specific action keys (submit, cancel, etc.) each with their own flows
 - Per-action submit buttons via `actionKey()` — dedicated Filament buttons that skip the selector modal
 - SLA enforcement with automated escalation
@@ -15,6 +15,9 @@ The package provides action-based approval workflows for Filament v5. It allows 
 - Lifecycle callbacks on the approvable model
 - Built-in Filament UI components (resource, relation manager, actions, widgets)
 - Centralized user display name resolution via `UserDisplayName` (supports `getFilamentName()`)
+- Opt-in broadcasting per event via config
+- Super admin bypass for approval actions
+- Enum-based approvable actions with HasLabel/HasColor/HasIcon support
 
 ## Architectural Rules
 
@@ -47,19 +50,24 @@ $engine->cancel($approval);
 
 ### Resolver Contract
 
-Approver resolvers implement `Contracts\ApproverResolver` with three methods:
+Approver resolvers implement `Contracts\ApproverResolver` with four methods:
 
 - `resolve(array $config, Model $approvable): array` — returns user IDs
 - `label(): string` — human-readable name for the flow builder UI
 - `configSchema(): array` — Filament form components for resolver configuration
+- `isAvailable(?string $modelClass = null): bool` — whether the resolver should appear for a given model class
 
 Built-in resolvers:
 
-| Resolver           | Config                    | Purpose                                               |
-| ------------------ | ------------------------- | ----------------------------------------------------- |
-| `UserResolver`     | `['user_ids' => [1,2,3]]` | Specific user IDs                                     |
-| `RoleResolver`     | `['role' => 'manager']`   | Users by spatie/laravel-permission role                |
-| `CallbackResolver` | `['callback' => 'key']`   | Registered closure via `CallbackResolver::register()` |
+| Resolver             | Config                                  | Purpose                                                         |
+| -------------------- | --------------------------------------- | --------------------------------------------------------------- |
+| `UserResolver`       | `['user_ids' => [1,2,3]]`               | Specific user IDs (always available)                            |
+| `RoleResolver`       | `['role' => ['manager', 'supervisor']]` | Users by spatie/laravel-permission roles (always available)     |
+| `CustomRuleResolver` | `['custom_rule' => 'key']`              | Model-defined closures via `approvalCustomRules()` on the model |
+
+`RoleResolver` accepts both a single string (`'role' => 'manager'`) for backward compatibility and an array (`'role' => ['manager', 'supervisor']`) for multi-role selection.
+
+`CustomRuleResolver` is only available when the selected model defines `approvalCustomRules()`. The resolver options in the flow builder form are dynamically filtered based on the selected `approvable_type` using `isAvailable()`.
 
 When adding new resolvers, implement the contract. Do not bypass it.
 
@@ -106,9 +114,61 @@ public static function approvableActions(): array
 ```
 
 Each action key can have its own `ApprovalFlow` (matched via `approval_flows.action_key`). This enables:
+
 - Multiple independent approval workflows per model type
 - Dedicated `SubmitForApprovalAction` buttons per action key via `->actionKey('submit')`
 - The generic submit action showing a selector when no `actionKey()` is locked
+
+**Enum support via `#[ApprovableActions]` attribute:** Instead of a plain array, models can use a backed enum with `HasLabel` (and optionally `HasColor`, `HasIcon`) configured via PHP attribute:
+
+```php
+use CoringaWc\FilamentActionApprovals\Attributes\ApprovableActions;
+
+#[ApprovableActions(MyApprovableAction::class)]
+class MyModel extends Model
+{
+    use HasApprovals;
+}
+```
+
+The attribute accepts either a `class-string<BackedEnum>` or an `array<string, string>` of key-label pairs.
+
+Resolution priority for `approvableActions()`:
+
+1. Model method override (PHP native — highest priority)
+2. `#[ApprovableActions]` attribute on the class
+3. `resolveApprovableActions()` from `HasStateApprovals` trait (if used)
+4. Empty array (default)
+
+When an enum is configured, `approvableActions()` resolves labels from `getLabel()`, and `ApprovableActionLabel` can extract icon/color per action key via `iconFor()` / `colorFor()`.
+
+> **PHP 8.4 safety:** The `#[ApprovableActions]` attribute replaces the old `$approvableActionsEnum` property approach. PHP 8.4 fatals on trait property redefinition with different default values. Attributes are on the class, not the trait, avoiding this issue.
+
+### Custom Rules (approvalCustomRules)
+
+Models can define `approvalCustomRules()` to provide model-scoped closures for the `CustomRuleResolver`:
+
+```php
+public static function approvalCustomRules(): array
+{
+    return [
+        'manager' => function (MyModel $model): array {
+            return [$model->user->manager_id];
+        },
+        'department_heads' => function (MyModel $model): array {
+            return User::where('department', $model->department)->pluck('id')->all();
+        },
+    ];
+}
+```
+
+Each key becomes a selectable option in the flow builder when `CustomRuleResolver` is chosen. The closures receive the approvable model instance and must return an array of user IDs. Rules are intrinsically model-scoped — no global registry needed.
+
+### Completed Action Key Filtering
+
+When using `->actionKey('key')` on `SubmitForApprovalAction`, the button is **hidden entirely** (not disabled) once the action key has a completed approval (approved or rejected). This prevents re-submission of already-processed actions.
+
+Use `Approval::completedActionKeysFor($model)` to query which action keys have been processed.
 
 ### Per-Action Submit Buttons (actionKey)
 
@@ -121,6 +181,7 @@ SubmitForApprovalAction::make('submitPO')
 ```
 
 When `actionKey()` is set:
+
 - The action key selector modal is **skipped** entirely
 - Visibility is scoped to flows matching that specific action key
 - If one matching flow exists → direct submission (confirmation only)
@@ -140,6 +201,46 @@ SLA is processed by the `ProcessApprovalSlaCommand` (signature: `approval:proces
    - `Reassign` — re-resolve approvers using the step's resolver
 
 Do not move SLA logic into the main request cycle. It must remain in a scheduled command.
+
+### Broadcasting
+
+Events implement `ShouldBroadcast` with a `broadcastWhen()` guard that checks per-event config:
+
+```php
+// config/filament-action-approvals.php
+'broadcasting' => [
+    'events' => [
+        'submitted' => false,     // ApprovalSubmitted
+        'approved' => false,      // ApprovalCompleted
+        'rejected' => false,      // ApprovalRejected
+        'cancelled' => false,     // ApprovalCancelled
+        'commented' => false,     // ApprovalCommented
+        'delegated' => false,     // ApprovalDelegated
+        'step_completed' => false, // ApprovalStepCompleted
+        'escalated' => false,     // ApprovalEscalated
+    ],
+    'queue' => null,
+],
+```
+
+All events are **disabled by default** — opt-in per event. The `BroadcastsConditionally` trait provides `broadcastWhen()` and `broadcastOn()`. Broadcasting has zero overhead when disabled.
+
+### Super Admin Bypass
+
+When enabled via config, super admins can see and act on **all** approval actions regardless of being an assigned approver:
+
+```php
+'super_admin' => [
+    'enabled' => false,
+    'roles' => ['super_admin'],   // spatie/laravel-permission roles
+    'user_ids' => [],             // explicit user IDs
+    'hide_from_selects' => true,  // hide super admins from resolver selects
+],
+```
+
+Checked via `FilamentActionApprovalsPlugin::isSuperAdmin(?int $userId)`. Supports both role-based and ID-based matching. When `spatie/laravel-permission` is not installed, only `user_ids` matching works.
+
+**`hide_from_selects`**: When `true` (default), users and roles configured as super admins are excluded from the resolver select fields (UserResolver, RoleResolver, DelegateAction). This prevents accidentally assigning super admins as step approvers. Set to `false` to show them in selects.
 
 ## Plugin Configuration
 
@@ -174,6 +275,7 @@ UserDisplayName::resolveMany($userIds)  // array of IDs → comma-separated stri
 ```
 
 Resolution order:
+
 1. If user implements `Filament\Models\Contracts\HasName` → `getFilamentName()`
 2. Fallback → `getAttribute('name')`
 
@@ -189,13 +291,13 @@ The `src/` directory must NOT import or reference `coringawc/filament-acl` class
 
 All five actions are in `src/Actions/`:
 
-| Action                    | Purpose                         | Visibility                                                     |
-| ------------------------- | ------------------------------- | -------------------------------------------------------------- |
-| `SubmitForApprovalAction` | Submits the record for approval | `canBeSubmittedForApproval()` returns true (+ flow exists)     |
-| `ApproveAction`           | Approves the current step       | User is assigned approver or delegate                          |
-| `RejectAction`            | Rejects the approval            | User is assigned approver or delegate                          |
-| `CommentAction`           | Adds a comment                  | Approval exists and is pending                                 |
-| `DelegateAction`          | Delegates to another user       | User is assigned approver                                      |
+| Action                    | Purpose                         | Visibility                                                 |
+| ------------------------- | ------------------------------- | ---------------------------------------------------------- |
+| `SubmitForApprovalAction` | Submits the record for approval | `canBeSubmittedForApproval()` returns true (+ flow exists) |
+| `ApproveAction`           | Approves the current step       | User is assigned approver or delegate                      |
+| `RejectAction`            | Rejects the approval            | User is assigned approver or delegate                      |
+| `CommentAction`           | Adds a comment                  | Approval exists and is pending                             |
+| `DelegateAction`          | Delegates to another user       | User is assigned approver                                  |
 
 **Usage patterns:**
 
@@ -330,8 +432,10 @@ src/
 │   ├── DelegateAction.php
 │   ├── RejectAction.php
 │   └── SubmitForApprovalAction.php
+├── Attributes/
+│   └── ApprovableActions.php
 ├── ApproverResolvers/
-│   ├── CallbackResolver.php
+│   ├── CustomRuleResolver.php
 │   ├── RoleResolver.php
 │   └── UserResolver.php
 ├── Columns/
@@ -377,6 +481,7 @@ src/
 ├── Services/
 │   └── ApprovalEngine.php
 ├── Support/
+│   ├── ApprovableActionLabel.php
 │   ├── ApprovableModelLabel.php
 │   └── UserDisplayName.php
 ├── Widgets/

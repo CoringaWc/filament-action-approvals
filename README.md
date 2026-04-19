@@ -11,7 +11,7 @@ Action-based approval workflows for [Filament v5](https://filamentphp.com). Defi
 
 - **Multi-step approval flows** — sequential steps with configurable approver resolution
 - **Polymorphic** — any Eloquent model can be approvable via the `HasApprovals` trait
-- **Pluggable approver resolvers** — `UserResolver`, `RoleResolver`, `CallbackResolver`, or create your own
+- **Pluggable approver resolvers** — `UserResolver`, `RoleResolver`, `CustomRuleResolver`, or create your own
 - **Approvable actions** — define domain-specific actions (submit, cancel, etc.) on your model, each with its own approval flow
 - **Per-action submit buttons** — create dedicated `SubmitForApprovalAction` instances locked to a specific `actionKey`
 - **Delegation** — approvers can delegate their step to another user
@@ -74,7 +74,7 @@ return [
     'approver_resolvers' => [
         \CoringaWc\FilamentActionApprovals\ApproverResolvers\UserResolver::class,
         \CoringaWc\FilamentActionApprovals\ApproverResolvers\RoleResolver::class,
-        \CoringaWc\FilamentActionApprovals\ApproverResolvers\CallbackResolver::class,
+        \CoringaWc\FilamentActionApprovals\ApproverResolvers\CustomRuleResolver::class,
     ],
 
     // Multi-tenancy settings
@@ -98,6 +98,37 @@ return [
 
     // Navigation group for the ApprovalFlow resource
     'navigation_group' => null,
+
+    // Broadcasting — opt-in per event (all disabled by default)
+    'broadcasting' => [
+        'events' => [
+            'submitted' => false,
+            'approved' => false,
+            'rejected' => false,
+            'cancelled' => false,
+            'commented' => false,
+            'delegated' => false,
+            'step_completed' => false,
+            'escalated' => false,
+        ],
+        'queue' => null,
+    ],
+
+    // Super admin bypass — see and act on all approvals
+    'super_admin' => [
+        'enabled' => false,
+        'roles' => ['super_admin'],
+        'user_ids' => [],
+    ],
+
+    // Resource customization
+    'resource' => [
+        'enabled' => true,
+        'cluster' => null,
+        'navigation_sort' => null,
+        'navigation_icon' => null,
+        'show_widgets' => true,
+    ],
 
     // Database table prefix (empty = no prefix)
     'table_prefix' => '',
@@ -482,22 +513,37 @@ Resolves all users with a given role (requires `spatie/laravel-permission`):
 'approver_config' => ['role' => 'manager'],
 ```
 
-### CallbackResolver
+### CustomRuleResolver
 
-Register custom resolution logic:
+Define model-scoped custom rules directly on your model via `approvalCustomRules()`:
 
 ```php
-use CoringaWc\FilamentActionApprovals\ApproverResolvers\CallbackResolver;
+class PurchaseOrder extends Model
+{
+    use HasApprovals;
 
-// Register in a service provider
-CallbackResolver::register('department_head', function (array $config, Model $approvable) {
-    return [$approvable->department->head_id];
-});
-
-// Use in a step
-'approver_resolver' => CallbackResolver::class,
-'approver_config' => ['callback' => 'department_head'],
+    public static function approvalCustomRules(): array
+    {
+        return [
+            'department_head' => function (PurchaseOrder $model): array {
+                return [$model->department->head_id];
+            },
+            'finance_team' => function (PurchaseOrder $model): array {
+                return User::where('department', 'finance')->pluck('id')->all();
+            },
+        ];
+    }
+}
 ```
+
+Use in a step:
+
+```php
+'approver_resolver' => CustomRuleResolver::class,
+'approver_config' => ['custom_rule' => 'department_head'],
+```
+
+The resolver is only available in the flow builder when the selected model defines `approvalCustomRules()`. Each key becomes a selectable option.
 
 ### Custom Resolver
 
@@ -521,6 +567,11 @@ class HierarchyResolver implements ApproverResolver
     public static function configSchema(): array
     {
         return []; // Filament form components for the flow builder
+    }
+
+    public static function isAvailable(?string $modelClass = null): bool
+    {
+        return true; // Available for all models
     }
 }
 ```
@@ -605,13 +656,139 @@ The SLA processor runs via the `approval:process-sla` command, automatically sch
 
 ## Events
 
-| Event                   | Payload                              |
-| ----------------------- | ------------------------------------ |
-| `ApprovalSubmitted`     | `Approval $approval`                 |
-| `ApprovalCompleted`     | `Approval $approval`                 |
-| `ApprovalRejected`      | `Approval $approval`                 |
-| `ApprovalStepCompleted` | `ApprovalStepInstance $stepInstance`  |
-| `ApprovalEscalated`     | `ApprovalStepInstance $stepInstance`  |
+| Event                   | Payload                                                              |
+| ----------------------- | -------------------------------------------------------------------- |
+| `ApprovalSubmitted`     | `Approval $approval`                                                 |
+| `ApprovalCompleted`     | `Approval $approval`                                                 |
+| `ApprovalRejected`      | `Approval $approval`                                                 |
+| `ApprovalCancelled`     | `Approval $approval`                                                 |
+| `ApprovalCommented`     | `ApprovalAction $action`                                             |
+| `ApprovalDelegated`     | `ApprovalStepInstance $stepInstance, int $fromUserId, int $toUserId` |
+| `ApprovalStepCompleted` | `ApprovalStepInstance $stepInstance`                                 |
+| `ApprovalEscalated`     | `ApprovalStepInstance $stepInstance`                                 |
+
+### Broadcasting
+
+All events implement `ShouldBroadcast` but are **disabled by default**. Enable per-event broadcasting via config:
+
+```php
+// config/filament-action-approvals.php
+'broadcasting' => [
+    'events' => [
+        'submitted' => true,      // Enable ApprovalSubmitted broadcasting
+        'approved' => true,       // Enable ApprovalCompleted broadcasting
+        'rejected' => false,
+        'cancelled' => false,
+        'commented' => false,
+        'delegated' => false,
+        'step_completed' => false,
+        'escalated' => false,
+    ],
+    'queue' => 'broadcasting',    // null = default queue
+],
+```
+
+Events broadcast on the `approval-events` channel. The `BroadcastsConditionally` trait provides `broadcastWhen()` that checks the per-event config — zero overhead when disabled.
+
+## Super Admin Bypass
+
+When enabled, super admins can see and act on **all** approval actions (Approve, Reject, Comment, Delegate) regardless of being an assigned approver:
+
+```php
+// config/filament-action-approvals.php
+'super_admin' => [
+    'enabled' => true,
+    'roles' => ['super_admin'],    // spatie/laravel-permission roles
+    'user_ids' => [1],             // explicit user IDs (always works)
+    'hide_from_selects' => true,   // hide super admins from resolver selects
+],
+```
+
+Check programmatically:
+
+```php
+FilamentActionApprovalsPlugin::isSuperAdmin($userId);
+```
+
+When `spatie/laravel-permission` is not installed, only `user_ids` matching works. Role-based matching requires the package.
+
+## Enum-Based Approvable Actions
+
+Instead of returning a plain array from `approvableActions()`, you can use a backed enum with `HasLabel`:
+
+```php
+use Filament\Support\Contracts\HasColor;
+use Filament\Support\Contracts\HasIcon;
+use Filament\Support\Contracts\HasLabel;
+
+enum PurchaseOrderAction: string implements HasLabel, HasColor, HasIcon
+{
+    case Submit = 'submit';
+    case Cancel = 'cancel';
+
+    public function getLabel(): string
+    {
+        return match ($this) {
+            self::Submit => __('Submit for Processing'),
+            self::Cancel => __('Request Cancellation'),
+        };
+    }
+
+    public function getColor(): string
+    {
+        return match ($this) {
+            self::Submit => 'success',
+            self::Cancel => 'danger',
+        };
+    }
+
+    public function getIcon(): string
+    {
+        return match ($this) {
+            self::Submit => 'heroicon-o-paper-airplane',
+            self::Cancel => 'heroicon-o-x-mark',
+        };
+    }
+}
+```
+
+Then configure on your model using the `#[ApprovableActions]` attribute:
+
+```php
+use CoringaWc\FilamentActionApprovals\Attributes\ApprovableActions;
+
+#[ApprovableActions(PurchaseOrderAction::class)]
+class PurchaseOrder extends Model
+{
+    use HasApprovals;
+}
+```
+
+> **PHP 8.4 safety:** The `#[ApprovableActions]` attribute replaces the old `$approvableActionsEnum` property approach. PHP 8.4 fatals on trait property redefinition with different default values. Attributes are on the class, not the trait, avoiding this issue.
+
+When an enum is configured, `approvableActions()` resolves labels from `getLabel()` automatically. You can also extract icon/color per action key:
+
+```php
+use CoringaWc\FilamentActionApprovals\Support\ApprovableActionLabel;
+
+ApprovableActionLabel::iconFor($model, 'submit');  // 'heroicon-o-paper-airplane'
+ApprovableActionLabel::colorFor($model, 'submit'); // 'success'
+```
+
+## Resource Customization
+
+Customize the built-in `ApprovalFlowResource` appearance via config:
+
+```php
+// config/filament-action-approvals.php
+'resource' => [
+    'enabled' => true,
+    'cluster' => \App\Filament\Admin\Clusters\Settings::class,
+    'navigation_sort' => 5,
+    'navigation_icon' => 'heroicon-o-cog',
+    'show_widgets' => true,  // Show analytics widgets on the list page
+],
+```
 
 ## Multi-Tenancy
 
@@ -678,14 +855,14 @@ The package uses `filament-action-approvals::approval.*` keys for all user-facin
 
 Key groups:
 
-| Group          | Description                                          |
-| -------------- | ---------------------------------------------------- |
-| `status.*`     | Approval status labels (pending, approved, etc.)     |
-| `action_type.*`| Action type labels (submitted, approved, etc.)       |
-| `step_type.*`  | Step type labels (single, sequential, parallel)      |
-| `step_status.*`| Step instance status labels                          |
-| `escalation.*` | Escalation action labels                             |
-| `actions.*`    | UI action button labels and messages                 |
+| Group           | Description                                      |
+| --------------- | ------------------------------------------------ |
+| `status.*`      | Approval status labels (pending, approved, etc.) |
+| `action_type.*` | Action type labels (submitted, approved, etc.)   |
+| `step_type.*`   | Step type labels (single, sequential, parallel)  |
+| `step_status.*` | Step instance status labels                      |
+| `escalation.*`  | Escalation action labels                         |
+| `actions.*`     | UI action button labels and messages             |
 
 To publish translations for customization:
 

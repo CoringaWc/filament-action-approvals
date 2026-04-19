@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CoringaWc\FilamentActionApprovals\Resources;
 
 use CoringaWc\FilamentActionApprovals\Concerns\HasApprovals;
@@ -15,6 +17,8 @@ use CoringaWc\FilamentActionApprovals\Support\ApprovableModelLabel;
 use CoringaWc\FilamentActionApprovals\Support\DateDisplay;
 use CoringaWc\FilamentActionApprovals\Support\FormFieldHint;
 use CoringaWc\FilamentActionApprovals\Support\TranslatableSelect;
+use CoringaWc\FilamentActionApprovals\Widgets\ApprovalAnalyticsWidget;
+use Filament\Clusters\Cluster;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -37,6 +41,25 @@ class ApprovalFlowResource extends Resource
     protected static ?string $model = ApprovalFlow::class;
 
     protected static string|\BackedEnum|null $navigationIcon = Heroicon::OutlinedArrowPath;
+
+    public static function getNavigationIcon(): string|\BackedEnum|null
+    {
+        return FilamentActionApprovalsPlugin::resolveResourceNavigationIcon()
+            ?? static::$navigationIcon;
+    }
+
+    public static function getNavigationSort(): ?int
+    {
+        return FilamentActionApprovalsPlugin::resolveResourceNavigationSort();
+    }
+
+    /**
+     * @return class-string<Cluster>|null
+     */
+    public static function getCluster(): ?string
+    {
+        return FilamentActionApprovalsPlugin::resolveResourceCluster();
+    }
 
     public static function getModelLabel(): string
     {
@@ -80,6 +103,7 @@ class ApprovalFlowResource extends Resource
                             ->placeholder(__('filament-action-approvals::approval.flow.any_model'))
                             ->searchable()
                             ->live()
+                            ->partiallyRenderComponentsAfterStateUpdated(['action_key', 'steps'])
                             ->afterStateUpdated(fn (Set $set) => $set('action_key', null))
                             ->helperText(__('filament-action-approvals::approval.flow.applies_to_helper')),
                     ),
@@ -117,15 +141,20 @@ class ApprovalFlowResource extends Resource
                                     ->options(StepType::class)
                                     ->default('single')
                                     ->required()
-                                    ->live(),
+                                    ->live()
+                                    ->partiallyRenderComponentsAfterStateUpdated(['required_approvals']),
                                 __('filament-action-approvals::approval.flow_hints.type'),
                             ),
                             FormFieldHint::apply(
                                 Select::make('approver_resolver')
                                     ->label(__('filament-action-approvals::approval.flow.approver_type'))
-                                    ->options(static::getResolverOptions($resolvers))
+                                    ->options(fn (Get $get): array => static::getFilteredResolverOptions(
+                                        $resolvers,
+                                        $get('../../approvable_type'),
+                                    ))
                                     ->required()
-                                    ->live(),
+                                    ->live()
+                                    ->afterStateUpdated(fn (Set $set) => $set('approver_config', [])),
                                 __('filament-action-approvals::approval.flow_hints.approver_type'),
                             ),
 
@@ -142,7 +171,7 @@ class ApprovalFlowResource extends Resource
                                     ->helperText(function (Get $get): string {
                                         $config = [];
 
-                                        foreach (['user_ids', 'admin_ids', 'role', 'callback'] as $key) {
+                                        foreach (['user_ids', 'role', 'custom_rule'] as $key) {
                                             $value = $get('approver_config.'.$key);
 
                                             if ($value !== null) {
@@ -169,7 +198,8 @@ class ApprovalFlowResource extends Resource
 
                                         return __('filament-action-approvals::approval.flow.required_approvals_helper');
                                     })
-                                    ->live(),
+                                    ->live()
+                                    ->partiallyRenderAfterStateUpdated(),
                                 __('filament-action-approvals::approval.flow_hints.required_approvals'),
                             ),
                             FormFieldHint::apply(
@@ -177,7 +207,8 @@ class ApprovalFlowResource extends Resource
                                     ->numeric()
                                     ->label(__('filament-action-approvals::approval.flow.sla_hours'))
                                     ->helperText(__('filament-action-approvals::approval.flow.sla_helper'))
-                                    ->live(),
+                                    ->live()
+                                    ->partiallyRenderComponentsAfterStateUpdated(['escalation_action']),
                                 __('filament-action-approvals::approval.flow_hints.sla_hours'),
                             ),
                             FormFieldHint::apply(
@@ -238,13 +269,45 @@ class ApprovalFlowResource extends Resource
      */
     protected static function getResolverOptions(array $resolvers): array
     {
+        return static::getFilteredResolverOptions($resolvers, null);
+    }
+
+    /**
+     * Get resolver options filtered by model availability.
+     *
+     * When a model class is provided, resolvers that report themselves
+     * as unavailable for that model are excluded from the options.
+     *
+     * @param  array<class-string>  $resolvers
+     * @return array<string, string>
+     */
+    protected static function getFilteredResolverOptions(array $resolvers, ?string $modelClass): array
+    {
         $options = [];
 
         foreach ($resolvers as $resolverClass) {
+            if (! $resolverClass::isAvailable($modelClass)) {
+                continue;
+            }
+
             $options[$resolverClass] = $resolverClass::label();
         }
 
         return $options;
+    }
+
+    /**
+     * Filter out resolvers that report themselves as unavailable.
+     *
+     * @param  array<class-string>  $resolvers
+     * @return array<class-string>
+     */
+    protected static function filterAvailableResolvers(array $resolvers): array
+    {
+        return array_values(array_filter(
+            $resolvers,
+            fn (string $resolverClass): bool => $resolverClass::isAvailable(),
+        ));
     }
 
     protected static function makeActionKeySelect(): Select
@@ -356,6 +419,17 @@ class ApprovalFlowResource extends Resource
             'index' => ListApprovalFlows::route('/'),
             'create' => CreateApprovalFlow::route('/create'),
             'edit' => EditApprovalFlow::route('/{record}/edit'),
+        ];
+    }
+
+    public static function getWidgets(): array
+    {
+        if (! FilamentActionApprovalsPlugin::shouldShowResourceWidgets()) {
+            return [];
+        }
+
+        return [
+            ApprovalAnalyticsWidget::class,
         ];
     }
 }

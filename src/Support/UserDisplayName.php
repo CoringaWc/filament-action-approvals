@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CoringaWc\FilamentActionApprovals\Support;
 
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;

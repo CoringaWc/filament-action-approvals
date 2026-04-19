@@ -2,8 +2,6 @@
 
 declare(strict_types=1);
 
-namespace CoringaWc\FilamentActionApprovals\Tests\Feature;
-
 use CoringaWc\FilamentActionApprovals\Enums\ActionType;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\Enums\StepInstanceStatus;
@@ -11,446 +9,414 @@ use CoringaWc\FilamentActionApprovals\Events\ApprovalRejected;
 use CoringaWc\FilamentActionApprovals\Events\ApprovalSubmitted;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
-use CoringaWc\FilamentActionApprovals\Tests\TestCase;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\Event;
 use Workbench\App\Models\PurchaseOrder;
 
-class ApprovalEngineTest extends TestCase
-{
-    private ApprovalEngine $engine;
+beforeEach(function (): void {
+    $this->engine = app(ApprovalEngine::class);
+});
 
-    protected function setUp(): void
-    {
-        parent::setUp();
+// ─── Submit ───────────────────────────────────────────────────
 
-        $this->engine = $this->app->make(ApprovalEngine::class);
-    }
+it('creates approval with pending status on submit', function (): void {
+    $approver = $this->createUser();
+    $requester = $this->createUser();
+    $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
+    $order = PurchaseOrder::factory()->for($requester)->create();
 
-    // ─── Submit ───────────────────────────────────────────────────
+    $approval = $this->engine->submit($order, $flow, $requester->getKey());
 
-    public function test_submit_creates_approval_with_pending_status(): void
-    {
-        $approver = $this->createUser();
-        $requester = $this->createUser();
-        $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
-        $order = PurchaseOrder::factory()->for($requester)->create();
+    expect($approval)
+        ->toBeInstanceOf(Approval::class)
+        ->status->toBe(ApprovalStatus::Pending)
+        ->submitted_by->toBe($requester->getKey())
+        ->approvable_id->toBe($order->getKey());
+});
 
-        $approval = $this->engine->submit($order, $flow, $requester->getKey());
+it('creates step instances on submit', function (): void {
+    $approver = $this->createUser();
+    $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
+    $order = PurchaseOrder::factory()->create();
 
-        $this->assertInstanceOf(Approval::class, $approval);
-        $this->assertEquals(ApprovalStatus::Pending, $approval->status);
-        $this->assertEquals($requester->getKey(), $approval->submitted_by);
-        $this->assertEquals($order->getKey(), $approval->approvable_id);
-    }
+    $approval = $this->engine->submit($order, $flow, $approver->getKey());
 
-    public function test_submit_creates_step_instances(): void
-    {
-        $approver = $this->createUser();
-        $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
-        $order = PurchaseOrder::factory()->create();
-
-        $approval = $this->engine->submit($order, $flow, $approver->getKey());
+    expect($approval->stepInstances)->toHaveCount(1);
 
-        $this->assertCount(1, $approval->stepInstances);
+    $step = $approval->stepInstances->first();
+    expect($step)
+        ->status->toBe(StepInstanceStatus::Waiting)
+        ->and($step->assigned_approver_ids)->toContain($approver->getKey());
+});
 
-        $step = $approval->stepInstances->first();
-        $this->assertEquals(StepInstanceStatus::Waiting, $step->status);
-        $this->assertContains($approver->getKey(), $step->assigned_approver_ids);
-    }
+it('records submitted action on submit', function (): void {
+    $approver = $this->createUser();
+    $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
+    $order = PurchaseOrder::factory()->create();
 
-    public function test_submit_records_submitted_action(): void
-    {
-        $approver = $this->createUser();
-        $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
-        $order = PurchaseOrder::factory()->create();
+    $approval = $this->engine->submit($order, $flow, $approver->getKey());
 
-        $approval = $this->engine->submit($order, $flow, $approver->getKey());
-
-        $action = $approval->actions()->first();
-        $this->assertNotNull($action);
-        $this->assertEquals(ActionType::Submitted, $action->type);
-    }
+    $action = $approval->actions()->first();
+    expect($action)
+        ->not->toBeNull()
+        ->type->toBe(ActionType::Submitted);
+});
 
-    public function test_submit_fires_approval_submitted_event(): void
-    {
-        Event::fake();
+it('fires approval submitted event', function (): void {
+    Event::fake();
 
-        $approver = $this->createUser();
-        $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
-        $order = PurchaseOrder::factory()->create();
+    $approver = $this->createUser();
+    $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
+    $order = PurchaseOrder::factory()->create();
 
-        $this->engine->submit($order, $flow, $approver->getKey());
-
-        Event::assertDispatched(ApprovalSubmitted::class);
-    }
-
-    public function test_submit_uses_generic_flow_when_no_action_key_is_provided(): void
-    {
-        $approver = $this->createUser();
-        $genericFlow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
-        $actionFlow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()], 'cancel');
-        $order = PurchaseOrder::factory()->create();
-
-        $approval = $this->engine->submit($order, submittedBy: $approver->getKey());
-
-        $this->assertTrue($approval->flow->is($genericFlow));
-        $this->assertFalse($approval->flow->is($actionFlow));
-    }
-
-    public function test_submit_uses_action_specific_flow_when_action_key_is_provided(): void
-    {
-        $approver = $this->createUser();
-        $genericFlow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
-        $actionFlow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()], 'cancel');
-        $order = PurchaseOrder::factory()->create();
-
-        $approval = $this->engine->submit($order, submittedBy: $approver->getKey(), actionKey: 'cancel');
-
-        $this->assertTrue($approval->flow->is($actionFlow));
-        $this->assertFalse($approval->flow->is($genericFlow));
-    }
-
-    public function test_submit_throws_when_only_action_specific_flows_exist_and_no_action_key_is_provided(): void
-    {
-        $approver = $this->createUser();
-        $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()], 'cancel');
-        $order = PurchaseOrder::factory()->create();
-
-        $this->expectException(ModelNotFoundException::class);
+    $this->engine->submit($order, $flow, $approver->getKey());
 
-        $this->engine->submit($order, submittedBy: $approver->getKey());
-    }
-
-    // ─── Approve ──────────────────────────────────────────────────
-
-    public function test_approve_single_step_completes_approval(): void
-    {
-        $approver = $this->createUser();
-        $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
-        $order = PurchaseOrder::factory()->create();
-
-        $approval = $this->engine->submit($order, $flow, $approver->getKey());
-        $stepInstance = $approval->currentStepInstance();
-        $this->assertNotNull($stepInstance);
-
-        $this->engine->approve($stepInstance, $approver->getKey(), 'Looks good');
+    Event::assertDispatched(ApprovalSubmitted::class);
+});
 
-        $approval->refresh();
-        $this->assertEquals(ApprovalStatus::Approved, $approval->status);
-        $this->assertNotNull($approval->completed_at);
-    }
+it('uses generic flow when no action key is provided', function (): void {
+    $approver = $this->createUser();
+    $genericFlow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
+    $actionFlow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()], 'cancel');
+    $order = PurchaseOrder::factory()->create();
 
-    public function test_approve_triggers_model_callback(): void
-    {
-        $approver = $this->createUser();
-        $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
-        $order = PurchaseOrder::factory()->create(['status' => 'draft']);
-
-        $approval = $this->engine->submit($order, $flow, $approver->getKey());
-        $stepInstance = $approval->currentStepInstance();
-        $this->assertNotNull($stepInstance);
-
-        $this->engine->approve($stepInstance, $approver->getKey());
+    $approval = $this->engine->submit($order, submittedBy: $approver->getKey());
 
-        $order->refresh();
-        $this->assertEquals('approved', $order->status);
-    }
+    expect($approval->flow->is($genericFlow))->toBeTrue()
+        ->and($approval->flow->is($actionFlow))->toBeFalse();
+});
 
-    public function test_approve_multi_step_advances_to_next_step(): void
-    {
-        $manager = $this->createUser();
-        $director = $this->createUser();
+it('uses action-specific flow when action key is provided', function (): void {
+    $approver = $this->createUser();
+    $genericFlow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
+    $actionFlow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()], 'cancel');
+    $order = PurchaseOrder::factory()->create();
 
-        $flow = $this->createMultiStepFlow(PurchaseOrder::class, [
-            ['name' => 'Manager', 'approver_ids' => [$manager->getKey()]],
-            ['name' => 'Director', 'approver_ids' => [$director->getKey()]],
-        ]);
+    $approval = $this->engine->submit($order, submittedBy: $approver->getKey(), actionKey: 'cancel');
 
-        $order = PurchaseOrder::factory()->create();
-        $approval = $this->engine->submit($order, $flow, $manager->getKey());
+    expect($approval->flow->is($actionFlow))->toBeTrue()
+        ->and($approval->flow->is($genericFlow))->toBeFalse();
+});
 
-        // Approve step 1
-        $step1 = $approval->currentStepInstance();
-        $this->assertNotNull($step1);
-        $this->engine->approve($step1, $manager->getKey());
+it('throws when only action-specific flows exist and no action key is provided', function (): void {
+    $approver = $this->createUser();
+    $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()], 'cancel');
+    $order = PurchaseOrder::factory()->create();
 
-        $approval->refresh();
-        $this->assertEquals(ApprovalStatus::Pending, $approval->status);
+    $this->engine->submit($order, submittedBy: $approver->getKey());
+})->throws(ModelNotFoundException::class);
 
-        // Step 2 should now be waiting
-        $step2 = $approval->currentStepInstance();
-        $this->assertNotNull($step2);
-        $this->assertEquals(StepInstanceStatus::Waiting, $step2->status);
-        $this->assertContains($director->getKey(), $step2->assigned_approver_ids);
-    }
+// ─── Approve ──────────────────────────────────────────────────
 
-    public function test_approve_last_step_completes_approval(): void
-    {
-        $manager = $this->createUser();
-        $director = $this->createUser();
+it('approves single step and completes approval', function (): void {
+    $approver = $this->createUser();
+    $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
+    $order = PurchaseOrder::factory()->create();
 
-        $flow = $this->createMultiStepFlow(PurchaseOrder::class, [
-            ['name' => 'Manager', 'approver_ids' => [$manager->getKey()]],
-            ['name' => 'Director', 'approver_ids' => [$director->getKey()]],
-        ]);
+    $approval = $this->engine->submit($order, $flow, $approver->getKey());
+    $stepInstance = $approval->currentStepInstance();
+    expect($stepInstance)->not->toBeNull();
 
-        $order = PurchaseOrder::factory()->create(['status' => 'draft']);
-        $approval = $this->engine->submit($order, $flow, $manager->getKey());
+    $this->engine->approve($stepInstance, $approver->getKey(), 'Looks good');
+
+    $approval->refresh();
+    expect($approval)
+        ->status->toBe(ApprovalStatus::Approved)
+        ->completed_at->not->toBeNull();
+});
+
+it('triggers model callback on approve', function (): void {
+    $approver = $this->createUser();
+    $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
+    $order = PurchaseOrder::factory()->create(['status' => 'draft']);
 
-        // Approve step 1
-        $step1 = $approval->currentStepInstance();
-        $this->assertNotNull($step1);
-        $this->engine->approve($step1, $manager->getKey());
+    $approval = $this->engine->submit($order, $flow, $approver->getKey());
+    $stepInstance = $approval->currentStepInstance();
+    expect($stepInstance)->not->toBeNull();
 
-        // Approve step 2
-        $approval->refresh();
-        $step2 = $approval->currentStepInstance();
-        $this->assertNotNull($step2);
-        $this->engine->approve($step2, $director->getKey());
+    $this->engine->approve($stepInstance, $approver->getKey());
+
+    $order->refresh();
+    expect($order->status)->toBe('approved');
+});
+
+it('advances to next step in multi-step approval', function (): void {
+    $manager = $this->createUser();
+    $director = $this->createUser();
+
+    $flow = $this->createMultiStepFlow(PurchaseOrder::class, [
+        ['name' => 'Manager', 'approver_ids' => [$manager->getKey()]],
+        ['name' => 'Director', 'approver_ids' => [$director->getKey()]],
+    ]);
 
-        $approval->refresh();
-        $this->assertEquals(ApprovalStatus::Approved, $approval->status);
+    $order = PurchaseOrder::factory()->create();
+    $approval = $this->engine->submit($order, $flow, $manager->getKey());
+
+    $step1 = $approval->currentStepInstance();
+    expect($step1)->not->toBeNull();
+    $this->engine->approve($step1, $manager->getKey());
+
+    $approval->refresh();
+    expect($approval->status)->toBe(ApprovalStatus::Pending);
 
-        $order->refresh();
-        $this->assertEquals('approved', $order->status);
-    }
+    $step2 = $approval->currentStepInstance();
+    expect($step2)
+        ->not->toBeNull()
+        ->status->toBe(StepInstanceStatus::Waiting)
+        ->and($step2->assigned_approver_ids)->toContain($director->getKey());
+});
 
-    // ─── Reject ───────────────────────────────────────────────────
+it('completes approval when last step is approved', function (): void {
+    $manager = $this->createUser();
+    $director = $this->createUser();
 
-    public function test_reject_marks_approval_as_rejected(): void
-    {
-        $approver = $this->createUser();
-        $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
-        $order = PurchaseOrder::factory()->create(['status' => 'draft']);
+    $flow = $this->createMultiStepFlow(PurchaseOrder::class, [
+        ['name' => 'Manager', 'approver_ids' => [$manager->getKey()]],
+        ['name' => 'Director', 'approver_ids' => [$director->getKey()]],
+    ]);
 
-        $approval = $this->engine->submit($order, $flow, $approver->getKey());
-        $stepInstance = $approval->currentStepInstance();
-        $this->assertNotNull($stepInstance);
+    $order = PurchaseOrder::factory()->create(['status' => 'draft']);
+    $approval = $this->engine->submit($order, $flow, $manager->getKey());
 
-        $this->engine->reject($stepInstance, $approver->getKey(), 'Budget exceeded');
+    $step1 = $approval->currentStepInstance();
+    expect($step1)->not->toBeNull();
+    $this->engine->approve($step1, $manager->getKey());
 
-        $approval->refresh();
-        $this->assertEquals(ApprovalStatus::Rejected, $approval->status);
-        $this->assertNotNull($approval->completed_at);
+    $approval->refresh();
+    $step2 = $approval->currentStepInstance();
+    expect($step2)->not->toBeNull();
+    $this->engine->approve($step2, $director->getKey());
 
-        $order->refresh();
-        $this->assertEquals('rejected', $order->status);
-    }
+    $approval->refresh();
+    expect($approval->status)->toBe(ApprovalStatus::Approved);
 
-    public function test_reject_skips_remaining_steps(): void
-    {
-        $manager = $this->createUser();
-        $director = $this->createUser();
+    $order->refresh();
+    expect($order->status)->toBe('approved');
+});
 
-        $flow = $this->createMultiStepFlow(PurchaseOrder::class, [
-            ['name' => 'Manager', 'approver_ids' => [$manager->getKey()]],
-            ['name' => 'Director', 'approver_ids' => [$director->getKey()]],
-        ]);
+// ─── Reject ───────────────────────────────────────────────────
 
-        $order = PurchaseOrder::factory()->create();
-        $approval = $this->engine->submit($order, $flow, $manager->getKey());
+it('marks approval as rejected', function (): void {
+    $approver = $this->createUser();
+    $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
+    $order = PurchaseOrder::factory()->create(['status' => 'draft']);
 
-        $step1 = $approval->currentStepInstance();
-        $this->assertNotNull($step1);
+    $approval = $this->engine->submit($order, $flow, $approver->getKey());
+    $stepInstance = $approval->currentStepInstance();
+    expect($stepInstance)->not->toBeNull();
 
-        $this->engine->reject($step1, $manager->getKey(), 'Invalid');
+    $this->engine->reject($stepInstance, $approver->getKey(), 'Budget exceeded');
 
-        $approval->refresh();
-        $pendingSteps = $approval->stepInstances()
-            ->where('status', StepInstanceStatus::Pending)
-            ->count();
+    $approval->refresh();
+    expect($approval)
+        ->status->toBe(ApprovalStatus::Rejected)
+        ->completed_at->not->toBeNull();
 
-        $this->assertEquals(0, $pendingSteps);
+    $order->refresh();
+    expect($order->status)->toBe('rejected');
+});
 
-        $skippedSteps = $approval->stepInstances()
-            ->where('status', StepInstanceStatus::Skipped)
-            ->count();
+it('skips remaining steps on rejection', function (): void {
+    $manager = $this->createUser();
+    $director = $this->createUser();
 
-        $this->assertEquals(1, $skippedSteps);
-    }
+    $flow = $this->createMultiStepFlow(PurchaseOrder::class, [
+        ['name' => 'Manager', 'approver_ids' => [$manager->getKey()]],
+        ['name' => 'Director', 'approver_ids' => [$director->getKey()]],
+    ]);
 
-    public function test_reject_fires_approval_rejected_event(): void
-    {
-        Event::fake();
+    $order = PurchaseOrder::factory()->create();
+    $approval = $this->engine->submit($order, $flow, $manager->getKey());
 
-        $approver = $this->createUser();
-        $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
-        $order = PurchaseOrder::factory()->create();
+    $step1 = $approval->currentStepInstance();
+    expect($step1)->not->toBeNull();
+    $this->engine->reject($step1, $manager->getKey(), 'Invalid');
 
-        $approval = $this->engine->submit($order, $flow, $approver->getKey());
-        $stepInstance = $approval->currentStepInstance();
-        $this->assertNotNull($stepInstance);
+    $approval->refresh();
+    $pendingSteps = $approval->stepInstances()
+        ->where('status', StepInstanceStatus::Pending)
+        ->count();
 
-        $this->engine->reject($stepInstance, $approver->getKey(), 'No');
+    $skippedSteps = $approval->stepInstances()
+        ->where('status', StepInstanceStatus::Skipped)
+        ->count();
 
-        Event::assertDispatched(ApprovalRejected::class);
-    }
+    expect($pendingSteps)->toBe(0)
+        ->and($skippedSteps)->toBe(1);
+});
 
-    // ─── Comment ──────────────────────────────────────────────────
+it('fires approval rejected event', function (): void {
+    Event::fake();
 
-    public function test_comment_records_action(): void
-    {
-        $approver = $this->createUser();
-        $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
-        $order = PurchaseOrder::factory()->create();
+    $approver = $this->createUser();
+    $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
+    $order = PurchaseOrder::factory()->create();
 
-        $approval = $this->engine->submit($order, $flow, $approver->getKey());
+    $approval = $this->engine->submit($order, $flow, $approver->getKey());
+    $stepInstance = $approval->currentStepInstance();
+    expect($stepInstance)->not->toBeNull();
 
-        $this->engine->comment($approval, $approver->getKey(), 'Need more details');
+    $this->engine->reject($stepInstance, $approver->getKey(), 'No');
 
-        $commentAction = $approval->actions()
-            ->where('type', ActionType::Commented)
-            ->first();
+    Event::assertDispatched(ApprovalRejected::class);
+});
 
-        $this->assertNotNull($commentAction);
-        $this->assertEquals('Need more details', $commentAction->comment);
-    }
+// ─── Comment ──────────────────────────────────────────────────
 
-    // ─── Delegate ─────────────────────────────────────────────────
+it('records comment action', function (): void {
+    $approver = $this->createUser();
+    $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
+    $order = PurchaseOrder::factory()->create();
 
-    public function test_delegate_creates_delegation_record(): void
-    {
-        $approver = $this->createUser();
-        $delegate = $this->createUser();
-        $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
-        $order = PurchaseOrder::factory()->create();
+    $approval = $this->engine->submit($order, $flow, $approver->getKey());
 
-        $approval = $this->engine->submit($order, $flow, $approver->getKey());
-        $stepInstance = $approval->currentStepInstance();
-        $this->assertNotNull($stepInstance);
+    $this->engine->comment($approval, $approver->getKey(), 'Need more details');
 
-        $this->engine->delegate($stepInstance, $approver->getKey(), $delegate->getKey(), 'On vacation');
+    $commentAction = $approval->actions()
+        ->where('type', ActionType::Commented)
+        ->first();
 
-        $delegation = $stepInstance->delegations()->first();
-        $this->assertNotNull($delegation);
-        $this->assertEquals($approver->getKey(), $delegation->from_user_id);
-        $this->assertEquals($delegate->getKey(), $delegation->to_user_id);
-        $this->assertEquals('On vacation', $delegation->reason);
-    }
+    expect($commentAction)
+        ->not->toBeNull()
+        ->comment->toBe('Need more details');
+});
 
-    public function test_delegated_user_can_act_on_step(): void
-    {
-        $approver = $this->createUser();
-        $delegate = $this->createUser();
-        $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
-        $order = PurchaseOrder::factory()->create();
+// ─── Delegate ─────────────────────────────────────────────────
 
-        $approval = $this->engine->submit($order, $flow, $approver->getKey());
-        $stepInstance = $approval->currentStepInstance();
-        $this->assertNotNull($stepInstance);
+it('creates delegation record', function (): void {
+    $approver = $this->createUser();
+    $delegate = $this->createUser();
+    $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
+    $order = PurchaseOrder::factory()->create();
 
-        $this->engine->delegate($stepInstance, $approver->getKey(), $delegate->getKey());
+    $approval = $this->engine->submit($order, $flow, $approver->getKey());
+    $stepInstance = $approval->currentStepInstance();
+    expect($stepInstance)->not->toBeNull();
 
-        $this->assertTrue($stepInstance->canUserAct($delegate->getKey()));
-    }
+    $this->engine->delegate($stepInstance, $approver->getKey(), $delegate->getKey(), 'On vacation');
 
-    public function test_delegate_can_approve_step(): void
-    {
-        $approver = $this->createUser();
-        $delegate = $this->createUser();
-        $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
-        $order = PurchaseOrder::factory()->create(['status' => 'draft']);
+    $delegation = $stepInstance->delegations()->first();
+    expect($delegation)
+        ->not->toBeNull()
+        ->from_user_id->toBe($approver->getKey())
+        ->to_user_id->toBe($delegate->getKey())
+        ->reason->toBe('On vacation');
+});
 
-        $approval = $this->engine->submit($order, $flow, $approver->getKey());
-        $stepInstance = $approval->currentStepInstance();
-        $this->assertNotNull($stepInstance);
+it('allows delegated user to act on step', function (): void {
+    $approver = $this->createUser();
+    $delegate = $this->createUser();
+    $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
+    $order = PurchaseOrder::factory()->create();
 
-        $this->engine->delegate($stepInstance, $approver->getKey(), $delegate->getKey());
-        $this->engine->approve($stepInstance, $delegate->getKey());
+    $approval = $this->engine->submit($order, $flow, $approver->getKey());
+    $stepInstance = $approval->currentStepInstance();
+    expect($stepInstance)->not->toBeNull();
 
-        $approval->refresh();
-        $this->assertEquals(ApprovalStatus::Approved, $approval->status);
+    $this->engine->delegate($stepInstance, $approver->getKey(), $delegate->getKey());
 
-        $order->refresh();
-        $this->assertEquals('approved', $order->status);
-    }
+    expect($stepInstance->canUserAct($delegate->getKey()))->toBeTrue();
+});
 
-    // ─── Cancel ───────────────────────────────────────────────────
+it('allows delegate to approve step', function (): void {
+    $approver = $this->createUser();
+    $delegate = $this->createUser();
+    $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
+    $order = PurchaseOrder::factory()->create(['status' => 'draft']);
 
-    public function test_cancel_marks_approval_as_cancelled(): void
-    {
-        $approver = $this->createUser();
-        $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
-        $order = PurchaseOrder::factory()->create();
+    $approval = $this->engine->submit($order, $flow, $approver->getKey());
+    $stepInstance = $approval->currentStepInstance();
+    expect($stepInstance)->not->toBeNull();
 
-        $approval = $this->engine->submit($order, $flow, $approver->getKey());
+    $this->engine->delegate($stepInstance, $approver->getKey(), $delegate->getKey());
+    $this->engine->approve($stepInstance, $delegate->getKey());
 
-        $this->engine->cancel($approval);
+    $approval->refresh();
+    expect($approval->status)->toBe(ApprovalStatus::Approved);
 
-        $approval->refresh();
-        $this->assertEquals(ApprovalStatus::Cancelled, $approval->status);
-    }
+    $order->refresh();
+    expect($order->status)->toBe('approved');
+});
 
-    public function test_cancel_skips_all_pending_steps(): void
-    {
-        $manager = $this->createUser();
-        $director = $this->createUser();
+// ─── Cancel ───────────────────────────────────────────────────
 
-        $flow = $this->createMultiStepFlow(PurchaseOrder::class, [
-            ['name' => 'Manager', 'approver_ids' => [$manager->getKey()]],
-            ['name' => 'Director', 'approver_ids' => [$director->getKey()]],
-        ]);
+it('marks approval as cancelled', function (): void {
+    $approver = $this->createUser();
+    $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
+    $order = PurchaseOrder::factory()->create();
 
-        $order = PurchaseOrder::factory()->create();
-        $approval = $this->engine->submit($order, $flow, $manager->getKey());
+    $approval = $this->engine->submit($order, $flow, $approver->getKey());
 
-        $this->engine->cancel($approval);
+    $this->engine->cancel($approval);
 
-        $approval->refresh();
-        $activeSteps = $approval->stepInstances()
-            ->whereIn('status', [StepInstanceStatus::Pending, StepInstanceStatus::Waiting])
-            ->count();
+    $approval->refresh();
+    expect($approval->status)->toBe(ApprovalStatus::Cancelled);
+});
 
-        $this->assertEquals(0, $activeSteps);
-    }
+it('skips all pending steps on cancel', function (): void {
+    $manager = $this->createUser();
+    $director = $this->createUser();
 
-    // ─── HasApprovals trait ───────────────────────────────────────
+    $flow = $this->createMultiStepFlow(PurchaseOrder::class, [
+        ['name' => 'Manager', 'approver_ids' => [$manager->getKey()]],
+        ['name' => 'Director', 'approver_ids' => [$director->getKey()]],
+    ]);
 
-    public function test_model_has_approvals_relationship(): void
-    {
-        $approver = $this->createUser();
-        $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
-        $order = PurchaseOrder::factory()->create();
+    $order = PurchaseOrder::factory()->create();
+    $approval = $this->engine->submit($order, $flow, $manager->getKey());
 
-        $order->submitForApproval($flow, $approver->getKey());
+    $this->engine->cancel($approval);
 
-        $this->assertCount(1, $order->approvals);
-        $this->assertTrue($order->isPendingApproval());
-        $this->assertFalse($order->isApproved());
-    }
+    $approval->refresh();
+    $activeSteps = $approval->stepInstances()
+        ->whereIn('status', [StepInstanceStatus::Pending, StepInstanceStatus::Waiting])
+        ->count();
 
-    public function test_model_reports_correct_approval_status(): void
-    {
-        $approver = $this->createUser();
-        $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
-        $order = PurchaseOrder::factory()->create();
+    expect($activeSteps)->toBe(0);
+});
 
-        $approval = $order->submitForApproval($flow, $approver->getKey());
+// ─── HasApprovals trait ───────────────────────────────────────
 
-        $this->assertEquals(ApprovalStatus::Pending, $order->approvalStatus());
-        $this->assertTrue($order->isPendingApproval());
-        $this->assertFalse($order->isApproved());
-        $this->assertFalse($order->isRejected());
+it('provides approvals relationship on model', function (): void {
+    $approver = $this->createUser();
+    $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
+    $order = PurchaseOrder::factory()->create();
 
-        $stepInstance = $approval->currentStepInstance();
-        $this->assertNotNull($stepInstance);
-        $this->engine->approve($stepInstance, $approver->getKey());
+    $order->submitForApproval($flow, $approver->getKey());
 
-        $order->refresh();
-        $this->assertEquals(ApprovalStatus::Approved, $order->approvalStatus());
-        $this->assertTrue($order->isApproved());
-        $this->assertFalse($order->isPendingApproval());
-    }
+    expect($order->approvals)->toHaveCount(1)
+        ->and($order->isPendingApproval())->toBeTrue()
+        ->and($order->isApproved())->toBeFalse();
+});
 
-    public function test_cannot_submit_while_pending(): void
-    {
-        $approver = $this->createUser();
-        $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
-        $order = PurchaseOrder::factory()->create();
+it('reports correct approval status on model', function (): void {
+    $approver = $this->createUser();
+    $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
+    $order = PurchaseOrder::factory()->create();
 
-        $order->submitForApproval($flow, $approver->getKey());
+    $approval = $order->submitForApproval($flow, $approver->getKey());
 
-        $this->assertFalse($order->canBeSubmittedForApproval());
-    }
-}
+    expect($order->approvalStatus())->toBe(ApprovalStatus::Pending)
+        ->and($order->isPendingApproval())->toBeTrue()
+        ->and($order->isApproved())->toBeFalse()
+        ->and($order->isRejected())->toBeFalse();
+
+    $stepInstance = $approval->currentStepInstance();
+    expect($stepInstance)->not->toBeNull();
+    $this->engine->approve($stepInstance, $approver->getKey());
+
+    $order->refresh();
+    expect($order->approvalStatus())->toBe(ApprovalStatus::Approved)
+        ->and($order->isApproved())->toBeTrue()
+        ->and($order->isPendingApproval())->toBeFalse();
+});
+
+it('prevents submission while pending', function (): void {
+    $approver = $this->createUser();
+    $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
+    $order = PurchaseOrder::factory()->create();
+
+    $order->submitForApproval($flow, $approver->getKey());
+
+    expect($order->canBeSubmittedForApproval())->toBeFalse();
+});

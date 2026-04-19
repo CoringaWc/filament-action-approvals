@@ -58,7 +58,7 @@ return [
     'resolvers' => [
         'user' => 'Specific Users',
         'role' => 'Users by Role',
-        'callback' => 'Custom Callback',
+        'custom_rule' => 'Custom Rule',
     ],
 
     // Flow resource form
@@ -204,6 +204,7 @@ return [
         'date' => 'Date',
         'no_approval' => 'No Approval',
         'not_available' => 'N/A',
+        'rejection_reason' => 'Rejection Reason',
     ],
 
     // Status column
@@ -215,8 +216,8 @@ return [
     // Resolver config
     'resolver_config' => [
         'users' => 'Users',
-        'role' => 'Role',
-        'resolver' => 'Resolver',
+        'role' => 'Roles',
+        'custom_rule' => 'Custom Rule',
     ],
 
     'flow_hints' => [
@@ -233,8 +234,8 @@ return [
         'sla_hours' => 'Maximum response time for the step, in hours. Leave empty to disable SLA.',
         'escalation_action' => 'Automatic action executed when the deadline for this step expires.',
         'resolver_users' => 'Select the specific users who may approve this step.',
-        'resolver_role' => 'All users with this role will be considered approvers for this step.',
-        'resolver_callback' => 'Choose the registered callback that dynamically resolves approvers at runtime.',
+        'resolver_role' => 'All users with any of the selected roles will be considered approvers for this step.',
+        'resolver_custom_rule' => 'Choose the custom rule that dynamically resolves approvers at runtime.',
     ],
 
     'select' => [
@@ -242,6 +243,14 @@ return [
         'no_options' => 'No options available',
         'no_search_results' => 'No results found',
         'loading' => 'Loading options...',
+    ],
+
+    // Tabs (List page)
+    'tabs' => [
+        'all' => 'All',
+        'active' => 'Active',
+        'inactive' => 'Inactive',
+        'pending' => 'My Pending',
     ],
 
     // SLA command

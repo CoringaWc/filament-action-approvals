@@ -1,7 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CoringaWc\FilamentActionApprovals\Models;
 
+use CoringaWc\FilamentActionApprovals\Enums\ActionType;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\Enums\StepInstanceStatus;
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
@@ -103,5 +106,48 @@ class Approval extends Model
     public function isPending(): bool
     {
         return $this->status === ApprovalStatus::Pending;
+    }
+
+    /**
+     * Get the rejection reason (comment) from the latest rejection action.
+     */
+    public function latestRejectionReason(): ?string
+    {
+        if ($this->status !== ApprovalStatus::Rejected) {
+            return null;
+        }
+
+        /** @var ?ApprovalAction $rejectionAction */
+        $rejectionAction = $this->actions()
+            ->where('type', ActionType::Rejected)
+            ->latest()
+            ->first();
+
+        return $rejectionAction?->comment;
+    }
+
+    /**
+     * Get action_keys that already have a completed (non-pending) approval.
+     *
+     * Useful to hide submit buttons for actions that were already fully processed.
+     *
+     * @return list<string>
+     */
+    public static function completedActionKeysFor(Model $model): array
+    {
+        return array_values(
+            static::query()
+                ->where('approvable_type', $model->getMorphClass())
+                ->where('approvable_id', $model->getKey())
+                ->whereIn('status', [ApprovalStatus::Approved, ApprovalStatus::Rejected])
+                ->get()
+                ->pluck('flow')
+                ->filter()
+                ->pluck('action_key')
+                ->filter()
+                ->unique()
+                ->map(fn (mixed $key): string => (string) $key)
+                ->all(),
+        );
     }
 }

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CoringaWc\FilamentActionApprovals\ApproverResolvers;
 
 use CoringaWc\FilamentActionApprovals\Contracts\ApproverResolver;
@@ -41,6 +43,11 @@ class UserResolver implements ApproverResolver
         return __('filament-action-approvals::approval.resolvers.user');
     }
 
+    public static function isAvailable(?string $modelClass = null): bool
+    {
+        return true;
+    }
+
     /**
      * @return array<int, Component>
      */
@@ -56,7 +63,25 @@ class UserResolver implements ApproverResolver
                         ->multiple()
                         ->searchable()
                         ->options(function () use ($userModel): array {
-                            return $userModel::all()
+                            $query = $userModel::query();
+
+                            // Exclude super admin users from options
+                            $excludedIds = FilamentActionApprovalsPlugin::superAdminUserIds();
+
+                            if ($excludedIds !== []) {
+                                $query->whereNotIn($query->getModel()->getKeyName(), $excludedIds);
+                            }
+
+                            // Exclude users with super admin roles
+                            $excludedRoles = FilamentActionApprovalsPlugin::superAdminRoles();
+
+                            if ($excludedRoles !== [] && method_exists($userModel, 'role')) {
+                                $query->whereDoesntHave('roles', function ($q) use ($excludedRoles): void {
+                                    $q->whereIn('name', $excludedRoles);
+                                });
+                            }
+
+                            return $query->get()
                                 ->mapWithKeys(fn (Model $user): array => [$user->getKey() => UserDisplayName::resolve($user)])
                                 ->all();
                         })

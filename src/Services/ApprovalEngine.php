@@ -1,11 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CoringaWc\FilamentActionApprovals\Services;
 
 use CoringaWc\FilamentActionApprovals\Enums\ActionType;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\Enums\StepInstanceStatus;
+use CoringaWc\FilamentActionApprovals\Events\ApprovalCancelled;
+use CoringaWc\FilamentActionApprovals\Events\ApprovalCommented;
 use CoringaWc\FilamentActionApprovals\Events\ApprovalCompleted;
+use CoringaWc\FilamentActionApprovals\Events\ApprovalDelegated;
 use CoringaWc\FilamentActionApprovals\Events\ApprovalRejected;
 use CoringaWc\FilamentActionApprovals\Events\ApprovalStepCompleted;
 use CoringaWc\FilamentActionApprovals\Events\ApprovalSubmitted;
@@ -40,7 +45,7 @@ class ApprovalEngine
 
         return DB::transaction(function () use ($approvable, $flow, $submittedBy) {
             $approval = Approval::create([
-                'approval_flow_id' => $flow->id,
+                'approval_flow_id' => $flow->getKey(),
                 'approvable_type' => $approvable->getMorphClass(),
                 'approvable_id' => $approvable->getKey(),
                 'status' => ApprovalStatus::Pending,
@@ -52,8 +57,8 @@ class ApprovalEngine
                 $approverIds = $step->resolveApproverIds($approvable);
 
                 ApprovalStepInstance::create([
-                    'approval_id' => $approval->id,
-                    'approval_step_id' => $step->id,
+                    'approval_id' => $approval->getKey(),
+                    'approval_step_id' => $step->getKey(),
                     'order' => $step->order,
                     'type' => $step->type,
                     'status' => StepInstanceStatus::Pending,
@@ -82,7 +87,7 @@ class ApprovalEngine
             $approval = $stepInstance->approval;
 
             $approval->actions()->create([
-                'approval_step_instance_id' => $stepInstance->id,
+                'approval_step_instance_id' => $stepInstance->getKey(),
                 'user_id' => $userId,
                 'type' => ActionType::Approved,
                 'comment' => $comment,
@@ -111,7 +116,7 @@ class ApprovalEngine
             $approval = $stepInstance->approval;
 
             $approval->actions()->create([
-                'approval_step_instance_id' => $stepInstance->id,
+                'approval_step_instance_id' => $stepInstance->getKey(),
                 'user_id' => $userId,
                 'type' => ActionType::Rejected,
                 'comment' => $comment,
@@ -141,12 +146,13 @@ class ApprovalEngine
     public function comment(Approval $approval, int $userId, string $comment, ?ApprovalStepInstance $stepInstance = null): void
     {
         $action = $approval->actions()->create([
-            'approval_step_instance_id' => $stepInstance?->id,
+            'approval_step_instance_id' => $stepInstance?->getKey(),
             'user_id' => $userId,
             'type' => ActionType::Commented,
             'comment' => $comment,
         ]);
 
+        event(new ApprovalCommented($action));
         $this->fireModelCallback($approval->approvable, 'onApprovalCommented', $action);
     }
 
@@ -161,7 +167,7 @@ class ApprovalEngine
             ]);
 
             $stepInstance->approval->actions()->create([
-                'approval_step_instance_id' => $stepInstance->id,
+                'approval_step_instance_id' => $stepInstance->getKey(),
                 'user_id' => $fromUserId,
                 'type' => ActionType::Delegated,
                 'comment' => $reason,
@@ -169,6 +175,7 @@ class ApprovalEngine
             ]);
 
             ApprovalRequestedNotification::send($stepInstance, $toUserId);
+            event(new ApprovalDelegated($stepInstance, $fromUserId, $toUserId));
             $this->fireModelCallback($stepInstance->approval->approvable, 'onApprovalDelegated', $stepInstance, $fromUserId, $toUserId);
         });
     }
@@ -185,6 +192,7 @@ class ApprovalEngine
                 'completed_at' => now(),
             ]);
 
+            event(new ApprovalCancelled($approval));
             $this->fireModelCallback($approval->approvable, 'onApprovalCancelled', $approval);
         });
     }

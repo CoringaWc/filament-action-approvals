@@ -1,7 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CoringaWc\FilamentActionApprovals\Concerns;
 
+use CoringaWc\FilamentActionApprovals\Attributes\ApprovableActions;
+use CoringaWc\FilamentActionApprovals\Enums\ActionType;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalAction;
@@ -9,6 +13,7 @@ use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use ReflectionClass;
 
 trait HasApprovals
 {
@@ -54,6 +59,21 @@ trait HasApprovals
      */
     public static function approvableActions(): array
     {
+        // #[ApprovableActions] attribute (enum class-string or array)
+        $attribute = static::resolveApprovableActionsAttribute();
+
+        if ($attribute !== null) {
+            if (is_string($attribute->actions) && enum_exists($attribute->actions)) {
+                return static::resolveApprovableActionsFromEnum($attribute->actions);
+            }
+
+            /** @var array<string, string> $actions */
+            $actions = $attribute->actions;
+
+            return $actions;
+        }
+
+        // Method override (from HasStateApprovals or custom)
         if (is_callable([static::class, 'resolveApprovableActions'])) {
             /** @var array<string, string> $actions */
             $actions = static::resolveApprovableActions();
@@ -62,6 +82,68 @@ trait HasApprovals
         }
 
         return [];
+    }
+
+    /**
+     * Return the enum class-string for approvable actions, if configured
+     * via #[ApprovableActions] attribute with an enum class.
+     *
+     * @return class-string<\BackedEnum>|null
+     */
+    public static function approvableActionsEnumClass(): ?string
+    {
+        $attribute = static::resolveApprovableActionsAttribute();
+
+        if ($attribute !== null && is_string($attribute->actions) && enum_exists($attribute->actions)) {
+            return $attribute->actions;
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolve the #[ApprovableActions] attribute from the model class.
+     *
+     * @var array<class-string, ?ApprovableActions>
+     */
+    private static array $approvableActionsAttributeCache = [];
+
+    protected static function resolveApprovableActionsAttribute(): ?ApprovableActions
+    {
+        if (array_key_exists(static::class, self::$approvableActionsAttributeCache)) {
+            return self::$approvableActionsAttributeCache[static::class];
+        }
+
+        $ref = new ReflectionClass(static::class);
+        $attrs = $ref->getAttributes(ApprovableActions::class);
+
+        return self::$approvableActionsAttributeCache[static::class] = $attrs !== [] ? $attrs[0]->newInstance() : null;
+    }
+
+    /**
+     * Resolve approvable actions from a backed enum implementing HasLabel.
+     *
+     * @param  class-string<\BackedEnum>  $enumClass
+     * @return array<string, string>
+     */
+    protected static function resolveApprovableActionsFromEnum(string $enumClass): array
+    {
+        if (! enum_exists($enumClass)) {
+            return [];
+        }
+
+        $actions = [];
+
+        /** @var \BackedEnum[] $cases */
+        $cases = $enumClass::cases();
+
+        foreach ($cases as $case) {
+            $key = (string) $case->value;
+            $label = method_exists($case, 'getLabel') ? $case->getLabel() : $key;
+            $actions[$key] = $label;
+        }
+
+        return $actions;
     }
 
     public function isPendingApproval(): bool
@@ -77,6 +159,29 @@ trait HasApprovals
     public function isRejected(): bool
     {
         return $this->latestApproval()?->status === ApprovalStatus::Rejected;
+    }
+
+    /**
+     * Get the rejection reason from the latest rejected approval.
+     *
+     * Returns the comment from the rejection action (ActionType::Rejected)
+     * in the most recent completed approval that was rejected.
+     */
+    public function latestRejectionReason(): ?string
+    {
+        $latestApproval = $this->latestApproval();
+
+        if (! $latestApproval || $latestApproval->status !== ApprovalStatus::Rejected) {
+            return null;
+        }
+
+        /** @var ?ApprovalAction $rejectionAction */
+        $rejectionAction = $latestApproval->actions()
+            ->where('type', ActionType::Rejected)
+            ->latest()
+            ->first();
+
+        return $rejectionAction?->comment;
     }
 
     // ──────────────────────────────────────────────────────────────

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CoringaWc\FilamentActionApprovals;
 
 use CoringaWc\FilamentActionApprovals\Commands\ProcessApprovalSlaCommand;

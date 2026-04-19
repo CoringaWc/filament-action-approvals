@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CoringaWc\FilamentActionApprovals\Contracts;
 
 use Filament\Schemas\Components\Component;
@@ -26,4 +28,15 @@ interface ApproverResolver
      * @return array<int, Component>
      */
     public static function configSchema(): array;
+
+    /**
+     * Whether this resolver is available for the given model.
+     *
+     * Used by the flow builder to filter out resolver types that are
+     * not applicable for the selected approvable model. Return true
+     * when no model is selected (show all resolver options).
+     *
+     * @param  class-string|null  $modelClass  The selected approvable model FQCN
+     */
+    public static function isAvailable(?string $modelClass = null): bool;
 }

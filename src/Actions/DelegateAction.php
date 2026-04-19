@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CoringaWc\FilamentActionApprovals\Actions;
 
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
@@ -54,6 +56,10 @@ class DelegateAction extends Action
                     return false;
                 }
 
+                if (FilamentActionApprovalsPlugin::isSuperAdmin($userId)) {
+                    return true;
+                }
+
                 return in_array($userId, $stepInstance->assigned_approver_ids, true);
             })
             ->schema([
@@ -67,6 +73,22 @@ class DelegateAction extends Action
 
                             if (is_int($currentUserId) || is_string($currentUserId)) {
                                 $users->where($userKeyName, '!=', $currentUserId);
+                            }
+
+                            // Exclude super admin users
+                            $excludedIds = FilamentActionApprovalsPlugin::superAdminUserIds();
+
+                            if ($excludedIds !== []) {
+                                $users->whereNotIn($userKeyName, $excludedIds);
+                            }
+
+                            // Exclude users with super admin roles
+                            $excludedRoles = FilamentActionApprovalsPlugin::superAdminRoles();
+
+                            if ($excludedRoles !== [] && method_exists($userModel, 'role')) {
+                                $users->whereDoesntHave('roles', function ($q) use ($excludedRoles): void {
+                                    $q->whereIn('name', $excludedRoles);
+                                });
                             }
 
                             return $users

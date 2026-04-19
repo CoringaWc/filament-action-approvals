@@ -39,6 +39,8 @@
         "laravel/boost": "^2.4",
         "laravel/pint": "^1.0",
         "nunomaduro/collision": "^8.0",
+        "pestphp/pest": "^4.6",
+        "pestphp/pest-plugin-laravel": "^4.1",
         "phpunit/phpunit": "^12.0",
         "rector/rector": "^2.0",
         "spatie/laravel-model-states": "^2.11",
@@ -65,7 +67,7 @@
         "analyse": "phpstan analyse --memory-limit=1G",
         "lint": "pint",
         "refactor": "rector",
-        "test": "phpunit",
+        "test": "pest",
         "test:types": "phpstan analyse --memory-limit=1G",
         "test:refactor": "rector --dry-run",
         "clear": "@php vendor/bin/testbench package:purge-skeleton --ansi",
@@ -97,7 +99,8 @@
         "sort-packages": true,
         "allow-plugins": {
             "composer/package-versions-deprecated": true,
-            "phpstan/extension-installer": true
+            "phpstan/extension-installer": true,
+            "pestphp/pest-plugin": true
         }
     },
     "minimum-stability": "dev",

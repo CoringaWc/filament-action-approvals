@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CoringaWc\FilamentActionApprovals\Resources\ApprovalFlowResource\Pages;
 
 use CoringaWc\FilamentActionApprovals\Resources\ApprovalFlowResource;

@@ -1,7 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CoringaWc\FilamentActionApprovals\Actions;
 
+use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use CoringaWc\FilamentActionApprovals\Support\ApprovableActionLabel;
@@ -70,7 +73,14 @@ class SubmitForApprovalAction extends Action
                 }
 
                 // When locked to a specific action key, only show if there are matching flows
+                // and the action_key has NOT been completed yet (D4-A: hide entirely)
                 if ($this->lockedActionKey !== null) {
+                    $completedKeys = Approval::completedActionKeysFor($record);
+
+                    if (in_array($this->lockedActionKey, $completedKeys, true)) {
+                        return false;
+                    }
+
                     return ApprovalFlow::filterSubmissionFlows($flows, $this->lockedActionKey)->isNotEmpty();
                 }
 
@@ -110,6 +120,19 @@ class SubmitForApprovalAction extends Action
                 $hasSpecificFlows = $flows->whereNotNull('action_key')->isNotEmpty();
                 $shouldAskForAction = ($actionOptions !== []) && ($hasSpecificFlows || (! $hasGenericFlows));
 
+                // Filter out action_keys that already have completed approvals
+                if ($shouldAskForAction && method_exists($record, 'latestApproval')) {
+                    $completedKeys = Approval::completedActionKeysFor($record);
+
+                    if ($completedKeys !== []) {
+                        $actionOptions = array_diff_key($actionOptions, array_flip($completedKeys));
+
+                        if ($actionOptions === []) {
+                            return [];
+                        }
+                    }
+                }
+
                 if ((! $shouldAskForAction) && ($flows->count() <= 1)) {
                     return [];
                 }
@@ -121,6 +144,7 @@ class SubmitForApprovalAction extends Action
                             ->options($actionOptions)
                             ->helperText(__('filament-action-approvals::approval.actions.approval_action_helper'))
                             ->live()
+                            ->partiallyRenderComponentsAfterStateUpdated(['approval_flow_id'])
                             ->required()
                         : null,
                     Select::make('approval_flow_id')

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CoringaWc\FilamentActionApprovals\Commands;
 
 use CoringaWc\FilamentActionApprovals\Enums\ActionType;
@@ -87,7 +89,7 @@ class ProcessApprovalSlaCommand extends Command
         }
 
         $instance->approval->actions()->create([
-            'approval_step_instance_id' => $instance->id,
+            'approval_step_instance_id' => $instance->getKey(),
             'type' => ActionType::Escalated,
             'metadata' => ['escalation_action' => $action->value],
         ]);

@@ -1,7 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CoringaWc\FilamentActionApprovals\Infolists;
 
+use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
+use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalAction;
 use CoringaWc\FilamentActionApprovals\Support\DateDisplay;
 use CoringaWc\FilamentActionApprovals\Support\UserDisplayName;
@@ -46,6 +50,20 @@ class ApprovalStatusSection
                 )
                     ->placeholder(__('filament-action-approvals::approval.infolist.in_progress'))
                     ->columnSpan(1),
+
+                TextEntry::make('rejectionReason')
+                    ->label(__('filament-action-approvals::approval.infolist.rejection_reason'))
+                    ->state(fn ($record) => $record->latestApproval()?->latestRejectionReason())
+                    ->icon('heroicon-o-x-circle')
+                    ->color('danger')
+                    ->columnSpanFull()
+                    ->visible(function ($record): bool {
+                        $approval = $record->latestApproval();
+
+                        return $approval instanceof Approval
+                            && $approval->status === ApprovalStatus::Rejected
+                            && $approval->latestRejectionReason() !== null;
+                    }),
 
                 Section::make(__('filament-action-approvals::approval.infolist.current_step'))
                     ->schema([

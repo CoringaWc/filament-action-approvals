@@ -1,6 +1,6 @@
 <?php
 
-use CoringaWc\FilamentActionApprovals\ApproverResolvers\CallbackResolver;
+use CoringaWc\FilamentActionApprovals\ApproverResolvers\CustomRuleResolver;
 use CoringaWc\FilamentActionApprovals\ApproverResolvers\RoleResolver;
 use CoringaWc\FilamentActionApprovals\ApproverResolvers\UserResolver;
 
@@ -22,7 +22,7 @@ return [
     'approver_resolvers' => [
         UserResolver::class,
         RoleResolver::class,
-        CallbackResolver::class,
+        CustomRuleResolver::class,
     ],
 
     /*
@@ -81,6 +81,60 @@ return [
     |--------------------------------------------------------------------------
     */
     'navigation_group' => null,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Broadcasting
+    |--------------------------------------------------------------------------
+    | Enable broadcasting per event. When enabled, the event implements
+    | ShouldBroadcast and is pushed to the broadcasting queue.
+    | All events are disabled by default — opt-in per event.
+    */
+    'broadcasting' => [
+        'events' => [
+            'submitted' => false,
+            'approved' => false,
+            'rejected' => false,
+            'cancelled' => false,
+            'commented' => false,
+            'delegated' => false,
+            'step_completed' => false,
+            'escalated' => false,
+        ],
+        'queue' => null, // null = default queue
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Super Admin
+    |--------------------------------------------------------------------------
+    | When enabled, users matching the configured roles or IDs can see and
+    | act on all approval actions regardless of being an assigned approver.
+    |
+    | Works with or without spatie/laravel-permission.
+    */
+    'super_admin' => [
+        'enabled' => false,
+        'roles' => ['super_admin'],
+        'user_ids' => [],
+        'hide_from_selects' => true,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Resource Customization
+    |--------------------------------------------------------------------------
+    | Customize the built-in ApprovalFlowResource appearance and behavior.
+    | Set 'enabled' to false to hide the resource entirely.
+    | To fully customize, extend ApprovalFlowResource in your app.
+    */
+    'resource' => [
+        'enabled' => true,
+        'cluster' => null,
+        'navigation_sort' => null,
+        'navigation_icon' => null,
+        'show_widgets' => true,
+    ],
 
     /*
     |--------------------------------------------------------------------------

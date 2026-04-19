@@ -2,87 +2,76 @@
 
 declare(strict_types=1);
 
-namespace CoringaWc\FilamentActionApprovals\Tests\Feature;
-
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
-use CoringaWc\FilamentActionApprovals\Tests\TestCase;
-use ReflectionMethod;
 use Workbench\App\Models\Invoice;
 use Workbench\App\States\Invoice\Issuing;
 use Workbench\App\States\Invoice\Sent;
 
-class StateApprovalsTest extends TestCase
-{
-    public function test_stateful_models_expose_transition_actions_from_the_state_machine(): void
-    {
-        $actions = Invoice::approvableActions();
-        $sendActionKey = Invoice::stateApprovalActionKey(Issuing::class, Sent::class);
+it('exposes transition actions from the state machine', function (): void {
+    $actions = Invoice::approvableActions();
+    $sendActionKey = Invoice::stateApprovalActionKey(Issuing::class, Sent::class);
 
-        $this->assertArrayHasKey($sendActionKey, $actions);
-        $this->assertSame('Em emissão -> Enviada', $actions[$sendActionKey]);
-    }
+    expect($actions)
+        ->toHaveKey($sendActionKey)
+        ->and($actions[$sendActionKey])->toBe('Em emissão -> Enviada');
+});
 
-    public function test_legacy_state_action_keys_are_parsed_for_backward_compatibility(): void
-    {
-        $parseStateApprovalActionKey = new ReflectionMethod(Invoice::class, 'parseStateApprovalActionKey');
-        $parseStateApprovalActionKey->setAccessible(true);
+it('parses legacy state action keys for backward compatibility', function (): void {
+    $parseStateApprovalActionKey = new ReflectionMethod(Invoice::class, 'parseStateApprovalActionKey');
+    $parseStateApprovalActionKey->setAccessible(true);
 
-        /** @var array{0: class-string, 1: class-string} $parsedStates */
-        $parsedStates = $parseStateApprovalActionKey->invoke(null, 'Issuing-Sent');
+    /** @var array{0: class-string, 1: class-string} $parsedStates */
+    $parsedStates = $parseStateApprovalActionKey->invoke(null, 'Issuing-Sent');
 
-        $this->assertSame(Issuing::class, $parsedStates[0]);
-        $this->assertSame(Sent::class, $parsedStates[1]);
-    }
+    expect($parsedStates[0])->toBe(Issuing::class)
+        ->and($parsedStates[1])->toBe(Sent::class);
+});
 
-    public function test_transition_executes_immediately_when_no_action_specific_flow_exists(): void
-    {
-        $invoice = Invoice::factory()->issuing()->create();
+it('executes transition immediately when no action-specific flow exists', function (): void {
+    $invoice = Invoice::factory()->issuing()->create();
 
-        $result = $invoice->transitionWithApproval('status', Sent::class);
+    $result = $invoice->transitionWithApproval('status', Sent::class);
 
-        $this->assertTrue($result->executed);
-        $this->assertFalse($result->pendingApproval);
+    expect($result->executed)->toBeTrue()
+        ->and($result->pendingApproval)->toBeFalse();
 
-        $invoice->refresh();
+    $invoice->refresh();
 
-        $this->assertInstanceOf(Sent::class, $invoice->status);
-        $this->assertSame(Issuing::getMorphClass(), $invoice->previous_status);
-        $this->assertNotNull($invoice->sent_at);
-    }
+    expect($invoice->status)->toBeInstanceOf(Sent::class)
+        ->and($invoice->previous_status)->toBe(Issuing::getMorphClass())
+        ->and($invoice->sent_at)->not->toBeNull();
+});
 
-    public function test_transition_submits_for_approval_and_executes_after_approval(): void
-    {
-        $requester = $this->createUser();
-        $approver = $this->createUser();
-        $invoice = Invoice::factory()->for($requester)->issuing()->create();
-        $actionKey = Invoice::stateApprovalActionKey(Issuing::class, Sent::class);
-        $engine = $this->app->make(ApprovalEngine::class);
+it('submits for approval and executes after approval', function (): void {
+    $requester = $this->createUser();
+    $approver = $this->createUser();
+    $invoice = Invoice::factory()->for($requester)->issuing()->create();
+    $actionKey = Invoice::stateApprovalActionKey(Issuing::class, Sent::class);
+    $engine = app(ApprovalEngine::class);
 
-        $this->createSingleStepFlow(Invoice::class, [$approver->getKey()], $actionKey);
+    $this->createSingleStepFlow(Invoice::class, [$approver->getKey()], $actionKey);
 
-        $result = $invoice->transitionWithApproval('status', Sent::class, submittedBy: $requester->getKey());
+    $result = $invoice->transitionWithApproval('status', Sent::class, submittedBy: $requester->getKey());
 
-        $this->assertFalse($result->executed);
-        $this->assertTrue($result->pendingApproval);
-        $this->assertInstanceOf(Approval::class, $result->approval);
+    expect($result->executed)->toBeFalse()
+        ->and($result->pendingApproval)->toBeTrue()
+        ->and($result->approval)->toBeInstanceOf(Approval::class);
 
-        $invoice->refresh();
-        $this->assertInstanceOf(Issuing::class, $invoice->status);
+    $invoice->refresh();
+    expect($invoice->status)->toBeInstanceOf(Issuing::class);
 
-        $stepInstance = $result->approval?->currentStepInstance();
+    $stepInstance = $result->approval?->currentStepInstance();
+    expect($stepInstance)->not->toBeNull();
 
-        $this->assertNotNull($stepInstance);
+    $engine->approve($stepInstance, $approver->getKey(), 'Approved for sending');
 
-        $engine->approve($stepInstance, $approver->getKey(), 'Approved for sending');
+    $invoice->refresh();
+    $result->approval?->refresh();
 
-        $invoice->refresh();
-        $result->approval?->refresh();
-
-        $this->assertInstanceOf(Sent::class, $invoice->status);
-        $this->assertSame(Issuing::getMorphClass(), $invoice->previous_status);
-        $this->assertNotNull($invoice->sent_at);
-        $this->assertNotNull($result->approval);
-        $this->assertFalse($result->approval->isPending());
-    }
-}
+    expect($invoice->status)->toBeInstanceOf(Sent::class)
+        ->and($invoice->previous_status)->toBe(Issuing::getMorphClass())
+        ->and($invoice->sent_at)->not->toBeNull()
+        ->and($result->approval)->not->toBeNull()
+        ->and($result->approval->isPending())->toBeFalse();
+});

@@ -2,69 +2,52 @@
 
 declare(strict_types=1);
 
-namespace CoringaWc\FilamentActionApprovals\Tests\Feature;
-
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
-use CoringaWc\FilamentActionApprovals\Tests\TestCase;
 use Workbench\App\Models\Expense;
 use Workbench\App\Models\PurchaseOrder;
 
-class ResubmissionPolicyTest extends TestCase
-{
-    private ApprovalEngine $engine;
+beforeEach(function (): void {
+    $this->engine = app(ApprovalEngine::class);
+});
 
-    protected function setUp(): void
-    {
-        parent::setUp();
+it('allows resubmission by default', function (): void {
+    $approver = $this->createUser();
+    $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
+    $order = PurchaseOrder::factory()->create();
 
-        $this->engine = $this->app->make(ApprovalEngine::class);
-    }
+    $approval = $this->engine->submit($order, $flow, $approver->getKey());
+    $step = $approval->currentStepInstance();
+    expect($step)->not->toBeNull();
+    $this->engine->reject($step, $approver->getKey(), 'Rejected');
 
-    public function test_default_model_allows_resubmission(): void
-    {
-        $approver = $this->createUser();
-        $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
-        $order = PurchaseOrder::factory()->create();
+    $order->refresh();
+    expect($order->canBeSubmittedForApproval())->toBeTrue();
+});
 
-        // Submit and reject
-        $approval = $this->engine->submit($order, $flow, $approver->getKey());
-        $step = $approval->currentStepInstance();
-        $this->assertNotNull($step);
-        $this->engine->reject($step, $approver->getKey(), 'Rejected');
+it('blocks expense resubmission after approval', function (): void {
+    $approver = $this->createUser();
+    $flow = $this->createSingleStepFlow(Expense::class, [$approver->getKey()]);
+    $expense = Expense::factory()->create();
 
-        $order->refresh();
-        $this->assertTrue($order->canBeSubmittedForApproval());
-    }
+    $approval = $this->engine->submit($expense, $flow, $approver->getKey());
+    $step = $approval->currentStepInstance();
+    expect($step)->not->toBeNull();
+    $this->engine->approve($step, $approver->getKey());
 
-    public function test_expense_blocks_resubmission_after_approval(): void
-    {
-        $approver = $this->createUser();
-        $flow = $this->createSingleStepFlow(Expense::class, [$approver->getKey()]);
-        $expense = Expense::factory()->create();
+    $expense->refresh();
+    expect($expense->canBeSubmittedForApproval())->toBeFalse();
+});
 
-        // Submit and approve
-        $approval = $this->engine->submit($expense, $flow, $approver->getKey());
-        $step = $approval->currentStepInstance();
-        $this->assertNotNull($step);
-        $this->engine->approve($step, $approver->getKey());
+it('allows expense resubmission after rejection', function (): void {
+    $approver = $this->createUser();
+    $flow = $this->createSingleStepFlow(Expense::class, [$approver->getKey()]);
+    $expense = Expense::factory()->create();
 
-        $expense->refresh();
-        $this->assertFalse($expense->canBeSubmittedForApproval());
-    }
+    $approval = $this->engine->submit($expense, $flow, $approver->getKey());
+    $step = $approval->currentStepInstance();
+    expect($step)->not->toBeNull();
+    $this->engine->reject($step, $approver->getKey(), 'Invalid receipt');
 
-    public function test_expense_allows_resubmission_after_rejection(): void
-    {
-        $approver = $this->createUser();
-        $flow = $this->createSingleStepFlow(Expense::class, [$approver->getKey()]);
-        $expense = Expense::factory()->create();
-
-        // Submit and reject
-        $approval = $this->engine->submit($expense, $flow, $approver->getKey());
-        $step = $approval->currentStepInstance();
-        $this->assertNotNull($step);
-        $this->engine->reject($step, $approver->getKey(), 'Invalid receipt');
-
-        $expense->refresh();
-        $this->assertTrue($expense->canBeSubmittedForApproval());
-    }
-}
+    $expense->refresh();
+    expect($expense->canBeSubmittedForApproval())->toBeTrue();
+});

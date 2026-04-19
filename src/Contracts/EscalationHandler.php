@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CoringaWc\FilamentActionApprovals\Contracts;
 
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
