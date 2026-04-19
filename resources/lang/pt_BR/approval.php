@@ -142,6 +142,8 @@ return [
         'approved_body' => ':model #:id foi aprovado.',
         'rejected_title' => 'Aprovação Rejeitada',
         'rejected_body' => ':model #:id foi rejeitado.',
+        'cancelled_title' => 'Aprovação Cancelada',
+        'cancelled_body' => 'A aprovação de :model #:id foi cancelada.',
         'escalated_title' => 'Prazo de aprovação vencido',
         'escalated_body' => ':model #:id ultrapassou o prazo definido.',
         'sla_warning_title' => 'Prazo de aprovação próximo do vencimento',

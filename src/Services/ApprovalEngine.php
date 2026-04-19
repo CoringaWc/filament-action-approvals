@@ -18,6 +18,7 @@ use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Notifications\ApprovalApprovedNotification;
+use CoringaWc\FilamentActionApprovals\Notifications\ApprovalCancelledNotification;
 use CoringaWc\FilamentActionApprovals\Notifications\ApprovalRejectedNotification;
 use CoringaWc\FilamentActionApprovals\Notifications\ApprovalRequestedNotification;
 use Illuminate\Database\Eloquent\Model;
@@ -194,6 +195,8 @@ class ApprovalEngine
 
             event(new ApprovalCancelled($approval));
             $this->fireModelCallback($approval->approvable, 'onApprovalCancelled', $approval);
+
+            $this->notifySubmitter($approval, ApprovalCancelledNotification::class);
         });
     }
 

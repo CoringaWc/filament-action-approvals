@@ -16,6 +16,7 @@ The package provides action-based approval workflows for Filament v5. It allows 
 - Built-in Filament UI components (resource, relation manager, actions, widgets)
 - Centralized user display name resolution via `UserDisplayName` (supports `getFilamentName()`)
 - Opt-in broadcasting per event via config
+- Database notifications with optional real-time WebSocket bell update via config
 - Super admin bypass for approval actions
 - Enum-based approvable actions with HasLabel/HasColor/HasIcon support
 
@@ -224,6 +225,34 @@ Events implement `ShouldBroadcast` with a `broadcastWhen()` guard that checks pe
 ```
 
 All events are **disabled by default** — opt-in per event. The `BroadcastsConditionally` trait provides `broadcastWhen()` and `broadcastOn()`. Broadcasting has zero overhead when disabled.
+
+### Database Notifications and Real-Time Bell
+
+All six notification classes store notifications in the database and optionally dispatch Filament's `DatabaseNotificationsSent` event for real-time WebSocket bell updates. Controlled by two config keys:
+
+```php
+// config/filament-action-approvals.php
+'notifications' => [
+    'database' => true,   // Save to notifications table (default: true)
+    'broadcast' => false, // Dispatch DatabaseNotificationsSent for real-time bell (default: false)
+],
+```
+
+- `database: true` — current default behaviour, saves to the `notifications` table via Filament's `sendToDatabase()`.
+- `broadcast: true` — after saving, dispatches `Filament\Notifications\Events\DatabaseNotificationsSent` on the recipient's private channel. This signals the Filament panel to refresh the notification bell in real time (requires a running broadcast server such as Reverb or Pusher).
+
+**When to set `broadcast: true`:** Enable this when your application has a running WebSocket server and you want the notification bell to ring immediately without requiring a page refresh. Requires that the user model implements `receivesBroadcastNotificationsOn()` (automatically satisfied when using Laravel's built-in notification broadcasting or Filament's notification system).
+
+Notification classes affected:
+
+- `ApprovalRequestedNotification` — sent to approvers when a step activates
+- `ApprovalApprovedNotification` — sent to submitter when approval is completed
+- `ApprovalRejectedNotification` — sent to submitter when approval is rejected
+- `ApprovalCancelledNotification` — sent to submitter when approval is cancelled
+- `ApprovalSlaWarningNotification` — sent to approvers when SLA threshold is reached
+- `ApprovalEscalatedNotification` — sent to approvers/submitter on SLA breach
+
+> **Note:** `broadcasting.events` and `notifications.broadcast` are independent. The former controls Laravel broadcast events (pushed to WebSocket channels for real-time frontend state updates). The latter controls Filament's notification bell refresh via `DatabaseNotificationsSent`. Both can coexist.
 
 ### Super Admin Bypass
 
@@ -470,6 +499,7 @@ src/
 │   └── ApprovalStepInstance.php
 ├── Notifications/
 │   ├── ApprovalApprovedNotification.php
+│   ├── ApprovalCancelledNotification.php
 │   ├── ApprovalEscalatedNotification.php
 │   ├── ApprovalRejectedNotification.php
 │   ├── ApprovalRequestedNotification.php

@@ -142,6 +142,8 @@ return [
         'approved_body' => ':model #:id has been approved.',
         'rejected_title' => 'Approval Rejected',
         'rejected_body' => ':model #:id has been rejected.',
+        'cancelled_title' => 'Approval Cancelled',
+        'cancelled_body' => ':model #:id has been cancelled.',
         'escalated_title' => 'Approval deadline expired',
         'escalated_body' => ':model #:id has passed its configured deadline.',
         'sla_warning_title' => 'Approval deadline is approaching',

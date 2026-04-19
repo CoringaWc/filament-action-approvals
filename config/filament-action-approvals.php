@@ -84,6 +84,31 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Notifications
+    |--------------------------------------------------------------------------
+    | Controls how approval notifications are delivered to users.
+    |
+    | database: Store notifications in the database (notifications table).
+    |           Default true — matches the behaviour before this config key existed.
+    |
+    | broadcast: After saving to the database, dispatch Filament's
+    |            DatabaseNotificationsSent event so the notification bell
+    |            updates in real-time via WebSocket (Reverb/Pusher).
+    |            Requires database driver and a running broadcast server.
+    |            Default false — opt-in to avoid extra WebSocket traffic.
+    |
+    | This controls ALL package notification classes:
+    |   ApprovalRequestedNotification, ApprovalApprovedNotification,
+    |   ApprovalRejectedNotification, ApprovalCancelledNotification,
+    |   ApprovalSlaWarningNotification, ApprovalEscalatedNotification.
+    */
+    'notifications' => [
+        'database' => true,
+        'broadcast' => false,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Broadcasting
     |--------------------------------------------------------------------------
     | Enable broadcasting per event. When enabled, the event implements

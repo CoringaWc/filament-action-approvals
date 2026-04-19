@@ -14,6 +14,10 @@ class ApprovalApprovedNotification
 {
     public static function send(Approval $approval, int $userId): void
     {
+        if (! config('filament-action-approvals.notifications.database', true)) {
+            return;
+        }
+
         $userModel = FilamentActionApprovalsPlugin::resolveUserModel();
         $recipient = $userModel::find($userId);
 
@@ -30,6 +34,6 @@ class ApprovalApprovedNotification
             ->body(__('filament-action-approvals::approval.notifications.approved_body', ['model' => $modelLabel, 'id' => $approvableKey]))
             ->icon(Heroicon::OutlinedCheckCircle)
             ->success()
-            ->sendToDatabase($recipient);
+            ->sendToDatabase($recipient, config('filament-action-approvals.notifications.broadcast', false));
     }
 }

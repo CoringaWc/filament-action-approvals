@@ -14,6 +14,10 @@ class ApprovalEscalatedNotification
 {
     public static function send(ApprovalStepInstance $stepInstance, int $userId): void
     {
+        if (! config('filament-action-approvals.notifications.database', true)) {
+            return;
+        }
+
         $userModel = FilamentActionApprovalsPlugin::resolveUserModel();
         $recipient = $userModel::find($userId);
 
@@ -30,6 +34,6 @@ class ApprovalEscalatedNotification
             ->body(__('filament-action-approvals::approval.notifications.escalated_body', ['model' => $modelLabel, 'id' => $approvableKey]))
             ->icon(Heroicon::OutlinedExclamationTriangle)
             ->danger()
-            ->sendToDatabase($recipient);
+            ->sendToDatabase($recipient, config('filament-action-approvals.notifications.broadcast', false));
     }
 }
