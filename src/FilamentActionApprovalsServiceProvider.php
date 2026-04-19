@@ -14,6 +14,18 @@ class FilamentActionApprovalsServiceProvider extends PackageServiceProvider
 {
     public static string $name = 'filament-action-approvals';
 
+    /**
+     * @var list<string>
+     */
+    private const MIGRATION_FILE_NAMES = [
+        'create_approval_flows_table',
+        'create_approval_steps_table',
+        'create_approvals_table',
+        'create_approval_step_instances_table',
+        'create_approval_actions_table',
+        'create_approval_delegations_table',
+    ];
+
     public function registeringPackage(): void
     {
         $translationsPath = dirname(__DIR__).'/resources/lang';
@@ -29,15 +41,7 @@ class FilamentActionApprovalsServiceProvider extends PackageServiceProvider
         $package->name(static::$name)
             ->hasConfigFile()
             ->hasViews()
-            ->hasMigrations([
-                'create_approval_flows_table',
-                'create_approval_steps_table',
-                'create_approvals_table',
-                'create_approval_step_instances_table',
-                'create_approval_actions_table',
-                'create_approval_delegations_table',
-            ])
-            ->runsMigrations()
+            ->hasMigrations(self::MIGRATION_FILE_NAMES)
             ->hasTranslations()
             ->hasCommand(ProcessApprovalSlaCommand::class);
     }
@@ -49,6 +53,8 @@ class FilamentActionApprovalsServiceProvider extends PackageServiceProvider
 
     public function packageBooted(): void
     {
+        $this->loadPackageMigrationsConditionally();
+
         if (config('filament-action-approvals.schedule_sla_command', true)) {
             $this->app->booted(function () {
                 $schedule = $this->app->make(Schedule::class);
@@ -57,5 +63,21 @@ class FilamentActionApprovalsServiceProvider extends PackageServiceProvider
                     ->withoutOverlapping();
             });
         }
+    }
+
+    private function loadPackageMigrationsConditionally(): void
+    {
+        foreach (self::MIGRATION_FILE_NAMES as $migrationFileName) {
+            if ($this->hasPublishedMigration($migrationFileName)) {
+                continue;
+            }
+
+            $this->loadMigrationsFrom(dirname(__DIR__)."/database/migrations/{$migrationFileName}.php");
+        }
+    }
+
+    private function hasPublishedMigration(string $migrationFileName): bool
+    {
+        return glob(database_path("migrations/*_{$migrationFileName}.php")) !== [];
     }
 }
