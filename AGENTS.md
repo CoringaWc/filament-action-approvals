@@ -67,7 +67,7 @@ Built-in resolvers:
 
 `RoleResolver` accepts both a single string (`'role' => 'manager'`) for backward compatibility and an array (`'role' => ['manager', 'supervisor']`) for multi-role selection.
 
-`CustomRuleResolver` is only available when the selected model defines `approvalCustomRules()`. The resolver options in the flow builder form are dynamically filtered based on the selected `approvable_type` using `isAvailable()`.
+`CustomRuleResolver` is only available when a specific model is selected AND that model defines `approvalCustomRules()`. When no model is selected (generic flow), `CustomRuleResolver` is hidden — custom rules are model-specific. The resolver options in the flow builder form are dynamically filtered based on the selected `approvable_type` using `isAvailable()`.
 
 When adding new resolvers, implement the contract. Do not bypass it.
 

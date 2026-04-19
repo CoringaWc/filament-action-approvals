@@ -58,14 +58,15 @@ class CustomRuleResolver implements ApproverResolver
     /**
      * Whether the custom rule resolver is available for the given model.
      *
-     * Returns true when no model is selected (show all options).
+     * Returns false when no model is selected — custom rules are model-specific,
+     * so they should only appear when a concrete model is chosen.
      * Returns false when the model does not define approvalCustomRules()
      * or when the method returns an empty array.
      */
     public static function isAvailable(?string $modelClass = null): bool
     {
         if ($modelClass === null) {
-            return true;
+            return false;
         }
 
         if (! method_exists($modelClass, 'approvalCustomRules')) {

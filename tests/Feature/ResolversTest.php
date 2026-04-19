@@ -84,8 +84,8 @@ it('reports available when model defines approvalCustomRules', function (): void
     expect(CustomRuleResolver::isAvailable(Expense::class))->toBeTrue();
 });
 
-it('reports available when no model class is provided', function (): void {
-    expect(CustomRuleResolver::isAvailable(null))->toBeTrue();
+it('reports unavailable when no model class is provided', function (): void {
+    expect(CustomRuleResolver::isAvailable(null))->toBeFalse();
 });
 
 it('resolves users from model custom rule', function (): void {
