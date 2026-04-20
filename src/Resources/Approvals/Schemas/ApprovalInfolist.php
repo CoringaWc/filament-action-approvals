@@ -213,8 +213,7 @@ class ApprovalInfolist
                 );
 
                 return __('filament-action-approvals::approval.relation_manager.approval_heading', [
-                    'flow' => $actionLabel
-                        ?? __('filament-action-approvals::approval.relation_manager.not_available'),
+                    'flow' => $actionLabel,
                 ]);
             });
     }
