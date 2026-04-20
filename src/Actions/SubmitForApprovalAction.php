@@ -55,8 +55,8 @@ class SubmitForApprovalAction extends Action
             ->label(__('filament-action-approvals::approval.actions.submit'))
             ->icon(Heroicon::OutlinedPaperAirplane)
             ->color('info')
-            ->visible(function (): bool {
-                $record = $this->resolveRecord();
+            ->visible(function (self $action): bool {
+                $record = $action->resolveRecord();
 
                 if (! $record || ! method_exists($record, 'canBeSubmittedForApproval')) {
                     return false;
@@ -74,14 +74,14 @@ class SubmitForApprovalAction extends Action
 
                 // When locked to a specific action key, only show if there are matching flows
                 // and the action_key has NOT been completed yet (D4-A: hide entirely)
-                if ($this->lockedActionKey !== null) {
+                if ($action->lockedActionKey !== null) {
                     $completedKeys = Approval::completedActionKeysFor($record);
 
-                    if (in_array($this->lockedActionKey, $completedKeys, true)) {
+                    if (in_array($action->lockedActionKey, $completedKeys, true)) {
                         return false;
                     }
 
-                    return ApprovalFlow::filterSubmissionFlows($flows, $this->lockedActionKey)->isNotEmpty();
+                    return ApprovalFlow::filterSubmissionFlows($flows, $action->lockedActionKey)->isNotEmpty();
                 }
 
                 $hasGenericFlows = $flows->whereNull('action_key')->isNotEmpty();
@@ -90,8 +90,8 @@ class SubmitForApprovalAction extends Action
 
                 return $hasGenericFlows || (! $hasSpecificFlows) || $canResolveSpecificActions;
             })
-            ->schema(function (): array {
-                $record = $this->resolveRecord();
+            ->schema(function (self $action): array {
+                $record = $action->resolveRecord();
 
                 if (! $record) {
                     return [];
@@ -100,8 +100,8 @@ class SubmitForApprovalAction extends Action
                 $flows = ApprovalFlow::forModel($record)->get();
 
                 // When locked to a specific action key, skip the action selector entirely
-                if ($this->lockedActionKey !== null) {
-                    $matchingFlows = ApprovalFlow::filterSubmissionFlows($flows, $this->lockedActionKey);
+                if ($action->lockedActionKey !== null) {
+                    $matchingFlows = ApprovalFlow::filterSubmissionFlows($flows, $action->lockedActionKey);
 
                     if ($matchingFlows->count() <= 1) {
                         return [];
@@ -162,14 +162,14 @@ class SubmitForApprovalAction extends Action
                         }),
                 ]));
             })
-            ->action(function (array $data): void {
-                $record = $this->resolveRecord();
+            ->action(function (self $action, array $data): void {
+                $record = $action->resolveRecord();
 
                 if (! $record) {
                     return;
                 }
 
-                $actionKey = $this->lockedActionKey ?? ($data['action_key'] ?? null);
+                $actionKey = $action->lockedActionKey ?? ($data['action_key'] ?? null);
                 $flowId = $data['approval_flow_id'] ?? null;
 
                 $flow = (is_int($flowId) || is_string($flowId))
@@ -183,8 +183,8 @@ class SubmitForApprovalAction extends Action
                     ->success()
                     ->send();
             })
-            ->after(function (): void {
-                $this->dispatchApprovalUpdated();
+            ->after(function (self $action): void {
+                $action->dispatchApprovalUpdated();
             })
             ->requiresConfirmation();
     }

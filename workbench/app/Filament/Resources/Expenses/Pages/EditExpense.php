@@ -4,10 +4,6 @@ declare(strict_types=1);
 
 namespace Workbench\App\Filament\Resources\Expenses\Pages;
 
-use CoringaWc\FilamentActionApprovals\Actions\ApproveAction;
-use CoringaWc\FilamentActionApprovals\Actions\CommentAction;
-use CoringaWc\FilamentActionApprovals\Actions\DelegateAction;
-use CoringaWc\FilamentActionApprovals\Actions\RejectAction;
 use CoringaWc\FilamentActionApprovals\Actions\SubmitForApprovalAction;
 use Filament\Resources\Pages\EditRecord;
 use Filament\Support\Icons\Heroicon;
@@ -31,10 +27,7 @@ class EditExpense extends EditRecord
                 ->icon(Heroicon::OutlinedCheckCircle)
                 ->color('success'),
 
-            ApproveAction::make(),
-            RejectAction::make(),
-            CommentAction::make(),
-            DelegateAction::make(),
+            ...static::getResource()::getApprovalResponseHeaderActions(),
         ];
     }
 }

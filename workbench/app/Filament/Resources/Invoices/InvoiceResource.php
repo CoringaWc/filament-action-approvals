@@ -6,6 +6,7 @@ namespace Workbench\App\Filament\Resources\Invoices;
 
 use CoringaWc\FilamentAcl\Attributes\PermissionSubject;
 use CoringaWc\FilamentAcl\Resources\Concerns\HasResourcePermissions;
+use CoringaWc\FilamentActionApprovals\Concerns\HasApprovalsResource;
 use CoringaWc\FilamentActionApprovals\RelationManagers\ApprovalsRelationManager;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -23,6 +24,7 @@ use Workbench\App\Models\Invoice;
 #[PermissionSubject('invoice')]
 class InvoiceResource extends Resource
 {
+    use HasApprovalsResource;
     use HasResourcePermissions;
 
     protected static ?string $model = Invoice::class;

@@ -37,30 +37,20 @@ class DelegateAction extends Action
             ->label(__('filament-action-approvals::approval.actions.delegate'))
             ->icon(Heroicon::OutlinedArrowPath)
             ->color('warning')
-            ->visible(function (): bool {
+            ->visible(function (self $action): bool {
                 $userId = auth()->id();
 
                 if ($userId === null) {
                     return false;
                 }
 
-                $approval = $this->resolveCurrentApproval();
+                $approval = $action->resolveCurrentApproval();
 
                 if (! $approval) {
                     return false;
                 }
 
-                $stepInstance = $approval->currentStepInstance();
-
-                if (! $stepInstance) {
-                    return false;
-                }
-
-                if (FilamentActionApprovalsPlugin::isSuperAdmin($userId)) {
-                    return true;
-                }
-
-                return in_array($userId, $stepInstance->assigned_approver_ids, true);
+                return $approval->canBeDelegatedBy($userId);
             })
             ->schema([
                 TranslatableSelect::apply(
@@ -102,8 +92,8 @@ class DelegateAction extends Action
                     ->label(__('filament-action-approvals::approval.actions.reason'))
                     ->rows(2),
             ])
-            ->action(function (array $data): void {
-                $stepInstance = $this->resolveCurrentStepInstance();
+            ->action(function (self $action, array $data): void {
+                $stepInstance = $action->resolveCurrentStepInstance();
                 $userId = auth()->id();
                 $delegateToUserId = $data['to_user_id'] ?? null;
 
@@ -128,8 +118,8 @@ class DelegateAction extends Action
                     ->success()
                     ->send();
             })
-            ->after(function (): void {
-                $this->dispatchApprovalUpdated();
+            ->after(function (self $action): void {
+                $action->dispatchApprovalUpdated();
             })
             ->requiresConfirmation();
     }
@@ -137,6 +127,10 @@ class DelegateAction extends Action
     protected function resolveCurrentApproval(): ?Approval
     {
         $record = $this->getRecord();
+
+        if ($record instanceof Approval) {
+            return $record;
+        }
 
         if (! $record instanceof Model || ! method_exists($record, 'currentApproval')) {
             return null;

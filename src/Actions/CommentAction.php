@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace CoringaWc\FilamentActionApprovals\Actions;
 
-use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
@@ -29,26 +28,20 @@ class CommentAction extends Action
             ->label(__('filament-action-approvals::approval.actions.comment'))
             ->icon(Heroicon::OutlinedChatBubbleLeftEllipsis)
             ->color('gray')
-            ->visible(function (): bool {
+            ->visible(function (self $action): bool {
                 $userId = auth()->id();
 
                 if ($userId === null) {
                     return false;
                 }
 
-                $approval = $this->resolveCurrentApproval();
+                $approval = $action->resolveCurrentApproval();
 
                 if (! $approval) {
                     return false;
                 }
 
-                $stepInstance = $approval->currentStepInstance();
-
-                if (FilamentActionApprovalsPlugin::isSuperAdmin($userId)) {
-                    return $stepInstance !== null;
-                }
-
-                return $stepInstance?->canUserAct($userId) ?? false;
+                return $approval->canReceiveCommentsFrom($userId);
             })
             ->schema([
                 Textarea::make('comment')
@@ -56,8 +49,8 @@ class CommentAction extends Action
                     ->required()
                     ->rows(3),
             ])
-            ->action(function (array $data): void {
-                $approval = $this->resolveCurrentApproval();
+            ->action(function (self $action, array $data): void {
+                $approval = $action->resolveCurrentApproval();
                 $stepInstance = $approval?->currentStepInstance();
                 $userId = auth()->id();
 
@@ -77,14 +70,18 @@ class CommentAction extends Action
                     ->success()
                     ->send();
             })
-            ->after(function (): void {
-                $this->dispatchApprovalUpdated();
+            ->after(function (self $action): void {
+                $action->dispatchApprovalUpdated();
             });
     }
 
     protected function resolveCurrentApproval(): ?Approval
     {
         $record = $this->getRecord();
+
+        if ($record instanceof Approval) {
+            return $record;
+        }
 
         if (! $record instanceof Model || ! method_exists($record, 'currentApproval')) {
             return null;

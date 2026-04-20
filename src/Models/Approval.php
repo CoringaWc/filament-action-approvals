@@ -8,6 +8,7 @@ use CoringaWc\FilamentActionApprovals\Enums\ActionType;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\Enums\StepInstanceStatus;
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -103,9 +104,146 @@ class Approval extends Model
             ->first();
     }
 
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeForApprovable(Builder $query, Model $approvable): Builder
+    {
+        return $query
+            ->where('approvable_type', $approvable->getMorphClass())
+            ->where('approvable_id', $approvable->getKey());
+    }
+
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeForApprovableType(Builder $query, string $approvableType): Builder
+    {
+        return $query->where('approvable_type', $approvableType);
+    }
+
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeWithStatus(Builder $query, ApprovalStatus|string|null $status): Builder
+    {
+        if ($status === null || $status === '') {
+            return $query;
+        }
+
+        return $query->where('status', $status instanceof ApprovalStatus ? $status->value : $status);
+    }
+
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeSubmittedBy(Builder $query, int|string|null $userId): Builder
+    {
+        if (! is_int($userId) && ! is_string($userId)) {
+            return $query;
+        }
+
+        return $query->where('submitted_by', $userId);
+    }
+
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeAwaitingUserAction(Builder $query, int|string|null $userId): Builder
+    {
+        if (! is_int($userId) && ! is_string($userId)) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query
+            ->withStatus(ApprovalStatus::Pending)
+            ->whereHas('stepInstances', function (Builder $stepInstances) use ($userId): void {
+                /** @var Builder<ApprovalStepInstance> $stepInstances */
+                $stepInstances
+                    ->waiting()
+                    ->assignedTo($userId);
+            });
+    }
+
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeWithOperationalRelations(Builder $query): Builder
+    {
+        return $query->with([
+            'approvable',
+            'flow',
+            'submitter',
+            'stepInstances.step',
+        ]);
+    }
+
     public function isPending(): bool
     {
         return $this->status === ApprovalStatus::Pending;
+    }
+
+    public function isAwaitingUserAction(int|string|null $userId): bool
+    {
+        if (! is_int($userId) && ! is_string($userId)) {
+            return false;
+        }
+
+        if (! $this->isPending()) {
+            return false;
+        }
+
+        $currentStep = $this->relationLoaded('stepInstances')
+            ? $this->stepInstances->firstWhere('status', StepInstanceStatus::Waiting)
+            : $this->currentStepInstance();
+
+        if (! $currentStep instanceof ApprovalStepInstance) {
+            return false;
+        }
+
+        return $currentStep->isAssignedTo($userId);
+    }
+
+    public function canBeApprovedBy(int|string|null $userId): bool
+    {
+        if (! $this->isPending()) {
+            return false;
+        }
+
+        return $this->currentStepInstance()?->canBeApprovedBy($userId) ?? false;
+    }
+
+    public function canBeRejectedBy(int|string|null $userId): bool
+    {
+        if (! $this->isPending()) {
+            return false;
+        }
+
+        return $this->currentStepInstance()?->canBeRejectedBy($userId) ?? false;
+    }
+
+    public function canReceiveCommentsFrom(int|string|null $userId): bool
+    {
+        if (! $this->isPending()) {
+            return false;
+        }
+
+        return $this->currentStepInstance()?->canReceiveCommentsFrom($userId) ?? false;
+    }
+
+    public function canBeDelegatedBy(int|string|null $userId): bool
+    {
+        if (! $this->isPending()) {
+            return false;
+        }
+
+        return $this->currentStepInstance()?->canBeDelegatedBy($userId) ?? false;
     }
 
     /**

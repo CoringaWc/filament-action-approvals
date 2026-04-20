@@ -4,26 +4,29 @@ declare(strict_types=1);
 
 namespace CoringaWc\FilamentActionApprovals\Concerns;
 
-use CoringaWc\FilamentActionApprovals\Actions\ApproveAction;
-use CoringaWc\FilamentActionApprovals\Actions\CommentAction;
-use CoringaWc\FilamentActionApprovals\Actions\DelegateAction;
-use CoringaWc\FilamentActionApprovals\Actions\RejectAction;
-use CoringaWc\FilamentActionApprovals\Actions\SubmitForApprovalAction;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalActionGroup;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 
 trait HasApprovalsResource
 {
     /**
-     * @return array<Action>
+     * @return array<Action|ActionGroup>
      */
     public static function getApprovalHeaderActions(): array
     {
         return [
-            SubmitForApprovalAction::make(),
-            ApproveAction::make(),
-            RejectAction::make(),
-            CommentAction::make(),
-            DelegateAction::make(),
+            ApprovalActionGroup::make(),
+        ];
+    }
+
+    /**
+     * @return array<Action|ActionGroup>
+     */
+    public static function getApprovalResponseHeaderActions(): array
+    {
+        return [
+            ApprovalActionGroup::make(includeSubmit: false),
         ];
     }
 }

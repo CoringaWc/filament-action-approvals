@@ -63,6 +63,8 @@ class AdminPanelProvider extends PanelProvider
                     ->permissionsResourceNavigationGroup(__('workbench::workbench.resources.roles.navigation_group')),
                 FilamentActionApprovalsPlugin::make()
                     ->flowResource()
+                    ->approvalResource()
+                    ->dashboard()
                     ->userModel(User::class)
                     ->navigationGroup(__('filament-action-approvals::approval.navigation_group')),
             ]);

@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace CoringaWc\FilamentActionApprovals\Enums;
 
 use Filament\Support\Contracts\HasColor;
+use Filament\Support\Contracts\HasIcon;
 use Filament\Support\Contracts\HasLabel;
+use Filament\Support\Icons\Heroicon;
 
-enum StepInstanceStatus: string implements HasColor, HasLabel
+enum StepInstanceStatus: string implements HasColor, HasIcon, HasLabel
 {
     case Pending = 'pending';
     case Waiting = 'waiting';
@@ -28,6 +30,17 @@ enum StepInstanceStatus: string implements HasColor, HasLabel
             self::Approved => 'success',
             self::Rejected => 'danger',
             self::Skipped => 'gray',
+        };
+    }
+
+    public function getIcon(): Heroicon
+    {
+        return match ($this) {
+            self::Pending => Heroicon::OutlinedMinusCircle,
+            self::Waiting => Heroicon::OutlinedClock,
+            self::Approved => Heroicon::OutlinedCheckCircle,
+            self::Rejected => Heroicon::OutlinedXCircle,
+            self::Skipped => Heroicon::OutlinedArrowUturnLeft,
         };
     }
 }

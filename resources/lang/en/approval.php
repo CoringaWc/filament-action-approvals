@@ -10,6 +10,8 @@ return [
     'navigation_group' => 'Approvals',
     'flow_resource_label' => 'Approval Flow',
     'flow_resource_plural' => 'Approval Flows',
+    'approval_resource_label' => 'Approval',
+    'approval_resource_plural' => 'Approvals',
 
     // Statuses
     'status' => [
@@ -114,7 +116,8 @@ return [
         'reject' => 'Reject',
         'comment' => 'Comment',
         'delegate' => 'Delegate',
-
+        'list_approvals' => 'View approvals',
+        'clear_context' => 'Clear context',
         'approval_flow' => 'Approval Flow',
         'approval_action' => 'Action to approve',
         'approval_action_helper' => 'Choose which business scenario is being submitted. The system will try a flow specific to that action and fall back to the model generic flow when none exists.',
@@ -132,6 +135,11 @@ return [
         'rejected_success' => 'Rejected',
         'comment_success' => 'Comment added',
         'delegated_success' => 'Delegated successfully',
+    ],
+
+    'approval_context' => [
+        'model_scope' => 'Showing approvals for the :model model.',
+        'record_scope' => 'Showing approvals for the :record record.',
     ],
 
     // Notifications
@@ -183,11 +191,32 @@ return [
         'not_available' => 'N/A',
     ],
 
+    'approval_table' => [
+        'record' => 'Record',
+        'flow' => 'Flow',
+        'action' => 'Action',
+        'current_step' => 'Current Step',
+        'no_current_step' => 'No active step',
+        'submitted_by' => 'Submitted By',
+    ],
+
+    'approval_filters' => [
+        'model' => 'Model',
+        'flow' => 'Flow',
+        'submitted_by' => 'Submitted By',
+        'submitted_between' => 'Submission period',
+        'submitted_from' => 'Submitted from',
+        'submitted_until' => 'Submitted until',
+    ],
+
     // Infolist section
     'infolist' => [
         'approval_status' => 'Approval Status',
+        'approval_details' => 'Approval Details',
         'status' => 'Status',
+        'record' => 'Record',
         'flow' => 'Flow',
+        'action' => 'Action',
         'submitted_by' => 'Submitted By',
         'submitted' => 'Submitted',
         'completed' => 'Completed',
@@ -252,7 +281,39 @@ return [
         'all' => 'All',
         'active' => 'Active',
         'inactive' => 'Inactive',
-        'pending' => 'My Pending',
+        'pending' => 'Pending',
+        'approved' => 'Approved',
+        'rejected' => 'Rejected',
+        'cancelled' => 'Cancelled',
+    ],
+
+    'dashboard' => [
+        'title' => 'Approvals Dashboard',
+        'navigation_label' => 'Approvals Dashboard',
+        'subheading' => 'Operational view for :period.',
+        'filters' => [
+            'period' => 'Period',
+            'start_date' => 'Start date',
+            'end_date' => 'End date',
+            'last_5_days' => 'Last 5 days',
+            'last_15_days' => 'Last 15 days',
+            'last_30_days' => 'Last 30 days',
+            'all_time' => 'All time',
+            'custom_range' => 'Custom range',
+            'last_5_days_short' => '5d',
+            'last_15_days_short' => '15d',
+            'last_30_days_short' => '30d',
+            'all_time_short' => 'All',
+        ],
+        'widgets' => [
+            'status_chart' => 'Status distribution',
+            'bottlenecks' => 'Flows with the biggest bottlenecks',
+            'pending_count' => 'Pending',
+            'overdue_count' => 'Overdue',
+            'oldest_pending' => 'Oldest pending approvals',
+            'average_approval_time' => 'Average approval time',
+            'average_hours_value' => ':hours h',
+        ],
     ],
 
     // SLA command

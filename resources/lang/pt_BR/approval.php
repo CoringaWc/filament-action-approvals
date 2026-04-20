@@ -10,6 +10,8 @@ return [
     'navigation_group' => 'Aprovações',
     'flow_resource_label' => 'Fluxo de Aprovação',
     'flow_resource_plural' => 'Fluxos de Aprovação',
+    'approval_resource_label' => 'Aprovação',
+    'approval_resource_plural' => 'Aprovações',
 
     // Status
     'status' => [
@@ -114,7 +116,8 @@ return [
         'reject' => 'Rejeitar',
         'comment' => 'Comentar',
         'delegate' => 'Delegar',
-
+        'list_approvals' => 'Ver aprovações',
+        'clear_context' => 'Limpar contexto',
         'approval_flow' => 'Fluxo de Aprovação',
         'approval_action' => 'Ação a aprovar',
         'approval_action_helper' => 'Informe qual cenário está sendo submetido. O sistema tentará usar um fluxo específico para essa ação e, se não existir, usará o fluxo genérico do modelo.',
@@ -132,6 +135,11 @@ return [
         'rejected_success' => 'Rejeitado',
         'comment_success' => 'Comentário adicionado',
         'delegated_success' => 'Delegado com sucesso',
+    ],
+
+    'approval_context' => [
+        'model_scope' => 'Mostrando aprovações do modelo :model.',
+        'record_scope' => 'Mostrando aprovações do registro :record.',
     ],
 
     // Notificações
@@ -183,11 +191,32 @@ return [
         'not_available' => 'N/D',
     ],
 
+    'approval_table' => [
+        'record' => 'Registro',
+        'flow' => 'Fluxo',
+        'action' => 'Ação',
+        'current_step' => 'Etapa Atual',
+        'no_current_step' => 'Sem etapa ativa',
+        'submitted_by' => 'Submetido por',
+    ],
+
+    'approval_filters' => [
+        'model' => 'Modelo',
+        'flow' => 'Fluxo',
+        'submitted_by' => 'Submetido por',
+        'submitted_between' => 'Período de submissão',
+        'submitted_from' => 'Submetido a partir de',
+        'submitted_until' => 'Submetido até',
+    ],
+
     // Seção infolist
     'infolist' => [
         'approval_status' => 'Status da Aprovação',
+        'approval_details' => 'Detalhes da Aprovação',
         'status' => 'Status',
+        'record' => 'Registro',
         'flow' => 'Fluxo',
+        'action' => 'Ação',
         'submitted_by' => 'Submetido por',
         'submitted' => 'Submetido',
         'completed' => 'Concluído',
@@ -252,7 +281,39 @@ return [
         'all' => 'Todos',
         'active' => 'Ativos',
         'inactive' => 'Inativos',
-        'pending' => 'Minhas Pendentes',
+        'pending' => 'Pendentes',
+        'approved' => 'Aprovadas',
+        'rejected' => 'Rejeitadas',
+        'cancelled' => 'Canceladas',
+    ],
+
+    'dashboard' => [
+        'title' => 'Dashboard de Aprovações',
+        'navigation_label' => 'Dashboard de Aprovações',
+        'subheading' => 'Visão operacional para :period.',
+        'filters' => [
+            'period' => 'Período',
+            'start_date' => 'Data inicial',
+            'end_date' => 'Data final',
+            'last_5_days' => 'Últimos 5 dias',
+            'last_15_days' => 'Últimos 15 dias',
+            'last_30_days' => 'Últimos 30 dias',
+            'all_time' => 'Todo o período',
+            'custom_range' => 'Período personalizado',
+            'last_5_days_short' => '5d',
+            'last_15_days_short' => '15d',
+            'last_30_days_short' => '30d',
+            'all_time_short' => 'Todos',
+        ],
+        'widgets' => [
+            'status_chart' => 'Distribuição por status',
+            'bottlenecks' => 'Fluxos com maior gargalo',
+            'pending_count' => 'Pendentes',
+            'overdue_count' => 'Vencidas',
+            'oldest_pending' => 'Pendências mais antigas',
+            'average_approval_time' => 'Tempo médio de aprovação',
+            'average_hours_value' => ':hours h',
+        ],
     ],
 
     // Comando SLA

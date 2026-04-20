@@ -21,10 +21,13 @@ Action-based approval workflows for [Filament v5](https://filamentphp.com). Defi
 - **User display name** — uses Filament's `getFilamentName()` when available, falls back to `name` attribute
 - **Built-in Filament components**:
   - `ApprovalFlowResource` — CRUD for managing approval flow definitions
+    - `ApprovalResource` — operational approvals listing with status tabs, filters, overview stats, and slide-over detail view
+    - `ListApprovalsAction` — contextual action that opens a slide-over table for approvals scoped to a model or record
+    - `ApprovalsDashboard` — opt-in global dashboard with period filters and operational widgets
   - `ApprovalsRelationManager` — shows approval history with slide-over details
   - `ApprovalStatusColumn` — ready-to-use status badge column
   - `ApprovalStatusSection` — infolist section with approval details and timeline
-  - Header actions: Submit, Approve, Reject, Comment, Delegate (usable individually or as a group)
+    - Grouped approval actions: Submit, Approve, Reject, Comment, Delegate (usable individually or through the `Aprovações` dropdown)
   - Widgets: Pending Approvals, Approval Analytics
 - **Multi-tenancy support** — scope flows and approvers per tenant
 - **Event-driven** — fires events for submitted, completed, rejected, step-completed, and escalated
@@ -99,6 +102,14 @@ return [
     // Navigation group for the ApprovalFlow resource
     'navigation_group' => null,
 
+    // Toggle built-in operational actions in package UIs
+    'actions' => [
+        'approve' => true,
+        'reject' => true,
+        'comment' => false,
+        'delegate' => false,
+    ],
+
     // Broadcasting — opt-in per event (all disabled by default)
     'broadcasting' => [
         'events' => [
@@ -130,6 +141,21 @@ return [
         'show_widgets' => true,
     ],
 
+    // ApprovalResource customization
+    'approvals_resource' => [
+        'enabled' => true,
+        'navigation_sort' => null,
+        'navigation_icon' => null,
+    ],
+
+    // Opt-in operational dashboard
+    'dashboard' => [
+        'enabled' => false,
+        'route_path' => 'approvals-dashboard',
+        'navigation_sort' => null,
+        'navigation_icon' => null,
+    ],
+
     // Database table prefix (empty = no prefix)
     'table_prefix' => '',
 ];
@@ -148,6 +174,8 @@ public function panel(Panel $panel): Panel
         ->plugins([
             FilamentActionApprovalsPlugin::make()
                 ->flowResource()      // Enable the ApprovalFlow CRUD resource (default: true)
+                ->approvalResource()  // Enable the operational ApprovalResource (default: true)
+                ->dashboard()         // Enable the ApprovalsDashboard page (default: false / opt-in)
                 ->widgets()           // Enable dashboard widgets (default: true)
                 ->navigationGroup('Workflow'),  // Override navigation group
         ]);
@@ -156,13 +184,53 @@ public function panel(Panel $panel): Panel
 
 ### Plugin Methods
 
-| Method                               | Description                                           |
-| ------------------------------------ | ----------------------------------------------------- |
-| `flowResource(bool $enabled = true)` | Enable/disable the built-in ApprovalFlow resource     |
-| `widgets(bool $enabled = true)`      | Enable/disable PendingApprovals and Analytics widgets |
-| `resolvers(array $resolvers)`        | Override approver resolvers for this panel            |
-| `userModel(string $model)`           | Override the user model for this panel                |
-| `navigationGroup(string $group)`     | Override the navigation group label                   |
+| Method                                   | Description                                           |
+| ---------------------------------------- | ----------------------------------------------------- |
+| `flowResource(bool $enabled = true)`     | Enable/disable the built-in ApprovalFlow resource     |
+| `approvalResource(bool $enabled = true)` | Enable/disable the built-in ApprovalResource          |
+| `dashboard(bool $enabled = true)`        | Enable/disable the opt-in ApprovalsDashboard page     |
+| `widgets(bool $enabled = true)`          | Enable/disable PendingApprovals and Analytics widgets |
+| `resolvers(array $resolvers)`            | Override approver resolvers for this panel            |
+| `userModel(string $model)`               | Override the user model for this panel                |
+| `navigationGroup(string $group)`         | Override the navigation group label                   |
+
+### Contextual approvals navigation
+
+Use `ListApprovalsAction` when you want to open a slide-over table already scoped to a model type or a specific record:
+
+```php
+use CoringaWc\FilamentActionApprovals\Actions\ListApprovalsAction;
+
+protected function getHeaderActions(): array
+{
+    return [
+        ListApprovalsAction::make()
+            ->forApprovableType(PurchaseOrderResource::getModel()),
+    ];
+}
+```
+
+For relation managers or nested contexts, pass the owner record instead:
+
+```php
+ListApprovalsAction::make()
+    ->forApprovable(fn (): Model => $this->getOwnerRecord())
+```
+
+The action opens a slide-over containing the approvals table already filtered to the relevant model or record. Use it on resource list pages or on headers of relation managers/nested resources that belong to an approvable model. Do not add it to `ApprovalsRelationManager` itself.
+
+### Dashboard opt-in
+
+`ApprovalsDashboard` is disabled by default. Enable it explicitly when your panel needs a global operational view:
+
+```php
+FilamentActionApprovalsPlugin::make()
+    ->flowResource()
+    ->approvalResource()
+    ->dashboard()
+```
+
+The dashboard includes quick period actions (`5d`, `15d`, `30d`, `All`), an advanced filter slideover, status distribution, bottleneck visibility, stale pending approvals, and filtered analytics.
 
 ## Usage
 
@@ -265,7 +333,7 @@ $flow->steps()->create([
 
 #### Option A: All actions at once (quickstart)
 
-Use the `HasApprovalsResource` trait to add all 5 approval actions as header actions:
+Use the `HasApprovalsResource` trait to add the grouped approval menu as header actions:
 
 ```php
 use CoringaWc\FilamentActionApprovals\Concerns\HasApprovalsResource;
@@ -283,12 +351,15 @@ class EditPurchaseOrder extends EditRecord
     {
         return [
             ...static::getResource()::getApprovalHeaderActions(),
-            // Returns: SubmitForApprovalAction, ApproveAction, RejectAction,
-            //          CommentAction, DelegateAction
+            // Returns: a single ActionGroup labeled "Aprovações"
+            // containing SubmitForApprovalAction, ApproveAction,
+            // RejectAction, CommentAction, and DelegateAction
         ];
     }
 }
 ```
+
+The default grouped trigger uses the vertical ellipsis icon and the `Aprovações` label so it can be reused consistently in resource headers and in approval detail infolists.
 
 #### Option B: Individual actions (fine-grained control)
 
@@ -396,6 +467,7 @@ class PurchaseOrderResource extends Resource
 The relation manager shows a table of all approvals for the record. Each row has a "View" action that opens a **slide-over** with:
 
 - Approval details (flow, status, submitter, dates)
+- Grouped approval actions at the top of the infolist when the current user can act
 - Step-by-step progress with approver names and received/required counts
 - Full audit trail (submitted, approved, rejected, commented, delegated, escalated)
 
@@ -833,7 +905,7 @@ namespace App\Filament\Admin\Resources;
 
 use CoringaWc\FilamentAcl\Attributes\PermissionSubject;
 use CoringaWc\FilamentAcl\Resources\Concerns\HasResourcePermissions;
-use CoringaWc\FilamentActionApprovals\Resources\ApprovalFlowResource as BaseResource;
+use CoringaWc\FilamentActionApprovals\Resources\ApprovalFlows\ApprovalFlowResource as BaseResource;
 
 #[PermissionSubject('ApprovalFlow')]
 class ApprovalFlowResource extends BaseResource

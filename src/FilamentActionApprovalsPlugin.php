@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace CoringaWc\FilamentActionApprovals;
 
 use CoringaWc\FilamentActionApprovals\Contracts\ApproverResolver;
-use CoringaWc\FilamentActionApprovals\Resources\ApprovalFlowResource;
+use CoringaWc\FilamentActionApprovals\Pages\ApprovalsDashboard;
+use CoringaWc\FilamentActionApprovals\Resources\ApprovalFlows\ApprovalFlowResource;
+use CoringaWc\FilamentActionApprovals\Resources\Approvals\ApprovalResource;
 use CoringaWc\FilamentActionApprovals\Widgets\ApprovalAnalyticsWidget;
 use CoringaWc\FilamentActionApprovals\Widgets\PendingApprovalsWidget;
 use Filament\Clusters\Cluster;
@@ -15,9 +17,13 @@ use Illuminate\Database\Eloquent\Model;
 
 class FilamentActionApprovalsPlugin implements Plugin
 {
-    protected bool $hasFlowResource = true;
+    protected ?bool $hasFlowResource = null;
 
-    protected bool $hasWidgets = true;
+    protected ?bool $hasApprovalResource = null;
+
+    protected ?bool $hasDashboardPage = null;
+
+    protected ?bool $hasWidgets = null;
 
     /** @var array<class-string>|null */
     protected ?array $approverResolvers = null;
@@ -40,6 +46,20 @@ class FilamentActionApprovalsPlugin implements Plugin
     public function flowResource(bool $enabled = true): static
     {
         $this->hasFlowResource = $enabled;
+
+        return $this;
+    }
+
+    public function approvalResource(bool $enabled = true): static
+    {
+        $this->hasApprovalResource = $enabled;
+
+        return $this;
+    }
+
+    public function dashboard(bool $enabled = true): static
+    {
+        $this->hasDashboardPage = $enabled;
 
         return $this;
     }
@@ -115,13 +135,27 @@ class FilamentActionApprovalsPlugin implements Plugin
 
     public function register(Panel $panel): void
     {
-        if ($this->hasFlowResource) {
-            $panel->resources([
-                ApprovalFlowResource::class,
+        $resources = [];
+
+        if ($this->hasFlowResource()) {
+            $resources[] = ApprovalFlowResource::class;
+        }
+
+        if ($this->hasApprovalResource()) {
+            $resources[] = ApprovalResource::class;
+        }
+
+        if ($resources !== []) {
+            $panel->resources($resources);
+        }
+
+        if ($this->hasDashboardPage()) {
+            $panel->pages([
+                ApprovalsDashboard::class,
             ]);
         }
 
-        if ($this->hasWidgets) {
+        if ($this->hasWidgets()) {
             $panel->widgets([
                 PendingApprovalsWidget::class,
                 ApprovalAnalyticsWidget::class,
@@ -130,6 +164,30 @@ class FilamentActionApprovalsPlugin implements Plugin
     }
 
     public function boot(Panel $panel): void {}
+
+    protected function hasFlowResource(): bool
+    {
+        return $this->hasFlowResource
+            ?? (bool) config('filament-action-approvals.resource.enabled', true);
+    }
+
+    protected function hasApprovalResource(): bool
+    {
+        return $this->hasApprovalResource
+            ?? (bool) config('filament-action-approvals.approvals_resource.enabled', true);
+    }
+
+    protected function hasDashboardPage(): bool
+    {
+        return $this->hasDashboardPage
+            ?? (bool) config('filament-action-approvals.dashboard.enabled', false);
+    }
+
+    protected function hasWidgets(): bool
+    {
+        return $this->hasWidgets
+            ?? (bool) config('filament-action-approvals.widgets.enabled', true);
+    }
 
     /**
      * Get the current plugin instance from the active Filament panel.
@@ -327,5 +385,61 @@ class FilamentActionApprovalsPlugin implements Plugin
     public static function shouldShowResourceWidgets(): bool
     {
         return (bool) config('filament-action-approvals.resource.show_widgets', true);
+    }
+
+    /**
+     * Resolve the approval resource navigation sort order from config.
+     */
+    public static function resolveApprovalResourceNavigationSort(): ?int
+    {
+        /** @var int|null $sort */
+        $sort = config('filament-action-approvals.approvals_resource.navigation_sort');
+
+        return $sort;
+    }
+
+    /**
+     * Resolve the approval resource navigation icon from config.
+     */
+    public static function resolveApprovalResourceNavigationIcon(): ?string
+    {
+        /** @var string|null $icon */
+        $icon = config('filament-action-approvals.approvals_resource.navigation_icon');
+
+        return $icon;
+    }
+
+    public static function shouldGroupApprovalResourceRecordActions(): bool
+    {
+        return (bool) config('filament-action-approvals.approvals_resource.group_record_actions', true);
+    }
+
+    public static function isOperationalActionEnabled(string $action, bool $default = true): bool
+    {
+        return (bool) config("filament-action-approvals.actions.{$action}", $default);
+    }
+
+    public static function resolveDashboardNavigationSort(): ?int
+    {
+        /** @var int|null $sort */
+        $sort = config('filament-action-approvals.dashboard.navigation_sort');
+
+        return $sort;
+    }
+
+    public static function resolveDashboardNavigationIcon(): ?string
+    {
+        /** @var string|null $icon */
+        $icon = config('filament-action-approvals.dashboard.navigation_icon');
+
+        return $icon;
+    }
+
+    public static function resolveDashboardRoutePath(): string
+    {
+        /** @var string|null $routePath */
+        $routePath = config('filament-action-approvals.dashboard.route_path');
+
+        return filled($routePath) ? $routePath : 'approvals-dashboard';
     }
 }

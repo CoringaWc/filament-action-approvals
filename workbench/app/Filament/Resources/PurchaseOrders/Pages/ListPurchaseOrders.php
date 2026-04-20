@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Workbench\App\Filament\Resources\PurchaseOrders\Pages;
 
+use CoringaWc\FilamentActionApprovals\Actions\ListApprovalsAction;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 use Workbench\App\Filament\Resources\PurchaseOrders\PurchaseOrderResource;
@@ -16,6 +17,8 @@ class ListPurchaseOrders extends ListRecords
     {
         return [
             CreateAction::make(),
+            ListApprovalsAction::make()
+                ->forApprovableType(PurchaseOrderResource::getModel()),
         ];
     }
 }

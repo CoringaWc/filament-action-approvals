@@ -84,6 +84,28 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Actions
+    |--------------------------------------------------------------------------
+    | Toggle each operational approval action independently.
+    | Disable actions you do not want exposed in the built-in ApprovalResource,
+    | contextual action flows, or reusable package UI.
+    */
+    'actions' => [
+        // Show the approve action for eligible users.
+        'approve' => true,
+
+        // Show the reject action for eligible users.
+        'reject' => true,
+
+        // Show the comment action in built-in operational UIs.
+        'comment' => false,
+
+        // Show the delegate action in built-in operational UIs.
+        'delegate' => false,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Notifications
     |--------------------------------------------------------------------------
     | Controls how approval notifications are delivered to users.
@@ -159,6 +181,41 @@ return [
         'navigation_sort' => null,
         'navigation_icon' => null,
         'show_widgets' => true,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Approval Resource Customization
+    |--------------------------------------------------------------------------
+    | Customize the built-in ApprovalResource appearance and behavior.
+    | Set 'enabled' to false to hide the resource entirely.
+    */
+    'approvals_resource' => [
+        'enabled' => true,
+        'navigation_sort' => null,
+        'navigation_icon' => null,
+        'group_record_actions' => true,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Dashboard Customization
+    |--------------------------------------------------------------------------
+    | Enable the built-in approvals dashboard when you want a global operational
+    | view with widgets and period filters. It stays disabled by default so the
+    | consuming panel can opt in explicitly.
+    */
+    'dashboard' => [
+        'enabled' => false,
+
+        // Route path used by the custom dashboard page inside the Filament panel.
+        'route_path' => 'approvals-dashboard',
+
+        // Optional navigation sort override for the dashboard page.
+        'navigation_sort' => null,
+
+        // Optional navigation icon override for the dashboard page.
+        'navigation_icon' => null,
     ],
 
     /*

@@ -8,6 +8,8 @@ use CoringaWc\FilamentAcl\Support\Utils;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
+use Filament\Support\Enums\IconPosition;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Workbench\App\Filament\Resources\Users\Schemas\UserForm;
@@ -26,7 +28,13 @@ class UsersTable
                 TextColumn::make('email')
                     ->label(__('workbench::workbench.resources.users.columns.email'))
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->copyable()
+                    ->icon(Heroicon::Clipboard)
+                    ->iconPosition(IconPosition::After)
+                    ->tooltip(__('workbench::workbench.resources.users.copy_tooltip'))
+                    ->copyMessage(__('workbench::workbench.resources.users.copy_email_message'))
+                    ->copyMessageDuration(1500),
                 TextColumn::make('visible_roles')
                     ->label(__('workbench::workbench.resources.users.columns.roles'))
                     ->badge()

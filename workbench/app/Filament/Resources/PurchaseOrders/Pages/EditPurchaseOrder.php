@@ -4,10 +4,6 @@ declare(strict_types=1);
 
 namespace Workbench\App\Filament\Resources\PurchaseOrders\Pages;
 
-use CoringaWc\FilamentActionApprovals\Actions\ApproveAction;
-use CoringaWc\FilamentActionApprovals\Actions\CommentAction;
-use CoringaWc\FilamentActionApprovals\Actions\DelegateAction;
-use CoringaWc\FilamentActionApprovals\Actions\RejectAction;
 use CoringaWc\FilamentActionApprovals\Actions\SubmitForApprovalAction;
 use Filament\Resources\Pages\EditRecord;
 use Filament\Support\Icons\Heroicon;
@@ -32,11 +28,7 @@ class EditPurchaseOrder extends EditRecord
                 ->icon(Heroicon::OutlinedXMark)
                 ->color('danger'),
 
-            // Approval response actions (used by approvers)
-            ApproveAction::make(),
-            RejectAction::make(),
-            CommentAction::make(),
-            DelegateAction::make(),
+            ...static::getResource()::getApprovalResponseHeaderActions(),
         ];
     }
 }

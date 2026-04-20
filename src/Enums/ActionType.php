@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace CoringaWc\FilamentActionApprovals\Enums;
 
 use Filament\Support\Contracts\HasColor;
+use Filament\Support\Contracts\HasIcon;
 use Filament\Support\Contracts\HasLabel;
+use Filament\Support\Icons\Heroicon;
 
-enum ActionType: string implements HasColor, HasLabel
+enum ActionType: string implements HasColor, HasIcon, HasLabel
 {
     case Submitted = 'submitted';
     case Approved = 'approved';
@@ -32,6 +34,19 @@ enum ActionType: string implements HasColor, HasLabel
             self::Delegated => 'warning',
             self::Escalated => 'danger',
             self::Returned => 'warning',
+        };
+    }
+
+    public function getIcon(): Heroicon
+    {
+        return match ($this) {
+            self::Submitted => Heroicon::OutlinedPaperAirplane,
+            self::Approved => Heroicon::OutlinedCheckCircle,
+            self::Rejected => Heroicon::OutlinedXCircle,
+            self::Commented => Heroicon::OutlinedChatBubbleLeftRight,
+            self::Delegated => Heroicon::OutlinedArrowRightCircle,
+            self::Escalated => Heroicon::OutlinedExclamationTriangle,
+            self::Returned => Heroicon::OutlinedArrowUturnLeft,
         };
     }
 }

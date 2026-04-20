@@ -113,6 +113,8 @@ return [
             'plural_model_label' => 'Users',
             'navigation_label' => 'Users',
             'navigation_group' => 'Access Control',
+            'copy_tooltip' => 'Click to copy',
+            'copy_email_message' => 'Email address copied',
             'fields' => [
                 'name' => 'Name',
                 'email' => 'Email',

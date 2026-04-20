@@ -14,6 +14,8 @@ The package provides action-based approval workflows for Filament v5. It allows 
 - Full audit trail of all approval actions
 - Lifecycle callbacks on the approvable model
 - Built-in Filament UI components (resource, relation manager, actions, widgets)
+- Built-in operational approvals navigation via `ListApprovalsAction`
+- Opt-in global approvals dashboard via `ApprovalsDashboard`
 - Centralized user display name resolution via `UserDisplayName` (supports `getFilamentName()`)
 - Opt-in broadcasting per event via config
 - Database notifications with optional real-time WebSocket bell update via config
@@ -48,6 +50,25 @@ $engine->comment($approval, $userId, $text);
 $engine->delegate($stepInstance, $fromId, $toId, $reason);
 $engine->cancel($approval);
 ```
+
+### Authorization Boundary for Operational Actions
+
+`ApprovalEngine` is the single entry point for executing approval state transitions, but it does **not** currently perform actor authorization.
+
+That authorization boundary lives in the domain helpers used by Filament UI and other operational entry points.
+
+When deciding whether a user can see or trigger an operational action, use these helpers instead of reimplementing the rules inline:
+
+- `Approval::canBeApprovedBy($userId)`
+- `Approval::canBeRejectedBy($userId)`
+- `Approval::canReceiveCommentsFrom($userId)`
+- `Approval::canBeDelegatedBy($userId)`
+- `ApprovalStepInstance::canBeApprovedBy($userId)`
+- `ApprovalStepInstance::canBeRejectedBy($userId)`
+- `ApprovalStepInstance::canReceiveCommentsFrom($userId)`
+- `ApprovalStepInstance::canBeDelegatedBy($userId)`
+
+Do not duplicate this logic inside widgets, resources, relation managers, or action `visible()` callbacks when a domain helper already exists.
 
 ### Resolver Contract
 
@@ -84,6 +105,24 @@ The data model has a clear separation:
 - **ApprovalDelegation** — delegation record (from_user → to_user per step instance)
 
 Do not conflate definition models with runtime models. Flow/Step define the template; Approval/StepInstance track the runtime state.
+
+### Operational Pending Queries Must Respect Delegation
+
+Whenever the package needs to answer operational questions such as:
+
+- which approvals are awaiting a user's action
+- which step instances should appear in a pending approvals widget or table
+- whether a user can act on the current waiting step
+
+delegation must be treated as equivalent to direct assignment.
+
+Do not filter pending work using only `assigned_approver_ids`. A delegated approver must see and act on the same pending work as the original approver.
+
+Use the model-level helpers instead of reimplementing the logic in widgets, resources, or actions:
+
+- `Approval::awaitingUserAction($userId)`
+- `ApprovalStepInstance::assignedTo($userId)`
+- `ApprovalStepInstance::isAssignedTo($userId)`
 
 ### Lifecycle Callbacks over Observers
 
@@ -278,6 +317,8 @@ The `FilamentActionApprovalsPlugin` supports fluent configuration per panel:
 ```php
 FilamentActionApprovalsPlugin::make()
     ->flowResource()                    // Enable/disable the flow CRUD resource
+    ->approvalResource()                // Enable/disable the operational approvals resource
+    ->dashboard()                       // Enable/disable the opt-in approvals dashboard page
     ->widgets()                         // Enable/disable dashboard widgets
     ->resolvers([...])                  // Override resolvers for this panel
     ->userModel(User::class)            // Override user model for this panel
@@ -330,9 +371,22 @@ All five actions are in `src/Actions/`:
 
 **Usage patterns:**
 
-1. **All at once:** `...static::getResource()::getApprovalHeaderActions()` — adds all 5 actions
+1. **All at once:** `...static::getResource()::getApprovalHeaderActions()` — adds one `ActionGroup` labeled `Aprovações` containing all approval actions
 2. **Individual:** `ApproveAction::make()`, `RejectAction::make()`, etc. — pick only what you need
 3. **Per-action submit:** `SubmitForApprovalAction::make('name')->actionKey('key')` — locked to specific action
+
+### Contextual Approval Navigation
+
+`ListApprovalsAction` is the reusable entry point for opening a slide-over table already filtered to a model type or a specific approvable record.
+
+Use cases:
+
+- Resource list page header → all approvals for that resource model
+- Relation manager or nested resource header → approvals for the current owner record
+
+The action renders a contextual table in a slide-over using `approvableType` and optional `approvableId`. It is meant for approvable model resources and contextual parent screens.
+
+Do not add `ListApprovalsAction` to `ApprovalsRelationManager`. That relation manager already manages approval records directly, so the contextual action would be redundant there.
 
 ### ApprovalStatusColumn
 
@@ -357,6 +411,7 @@ ApprovalStatusSection::make()
 Shows approval history for the record with a slide-over detail view. Each approval row opens a slide-over containing:
 
 - Approval info (flow, status, submitter, dates)
+- Grouped operational approval actions at the top of the infolist when available
 - Step progress (approver names, received/required counts)
 - Audit trail (all actions with timestamps and actors)
 
@@ -365,7 +420,19 @@ Add it to your resource's `getRelations()`.
 ### Widgets
 
 - `PendingApprovalsWidget` — table of approvals awaiting the current user's action
-- `ApprovalAnalyticsWidget` — stats overview (pending, approved, rejected, overdue)
+- `ApprovalAnalyticsWidget` — stats overview (pending, approved, rejected, overdue, average approval time)
+
+### Dashboard Page
+
+`ApprovalsDashboard` is a custom dashboard page that is **disabled by default** and must be enabled explicitly through the plugin or config.
+
+Rules:
+
+- Use dashboard page filters via `HasFiltersAction` + `FilterAction`
+- Keep the dashboard operational and global, not per-resource
+- Widgets on the dashboard must respect `InteractsWithPageFilters`
+- Prefer query helpers/support classes for period handling instead of duplicating date-range logic in each widget
+- The workbench must expose the dashboard whenever the feature is implemented so maintainers can validate it manually
 
 ## Filament v5 Component Patterns
 

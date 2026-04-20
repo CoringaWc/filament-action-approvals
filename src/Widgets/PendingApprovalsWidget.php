@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace CoringaWc\FilamentActionApprovals\Widgets;
 
-use CoringaWc\FilamentActionApprovals\Enums\StepInstanceStatus;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Support\ApprovableModelLabel;
@@ -13,6 +12,7 @@ use Filament\Facades\Filament;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget;
+use Illuminate\Contracts\Support\Htmlable;
 
 class PendingApprovalsWidget extends TableWidget
 {
@@ -20,7 +20,7 @@ class PendingApprovalsWidget extends TableWidget
 
     protected int|string|array $columnSpan = 'full';
 
-    public static function getHeading(): ?string
+    protected function getTableHeading(): string|Htmlable|null
     {
         return __('filament-action-approvals::approval.widgets.pending_heading');
     }
@@ -30,8 +30,8 @@ class PendingApprovalsWidget extends TableWidget
         return $table
             ->query(
                 ApprovalStepInstance::query()
-                    ->where('status', StepInstanceStatus::Waiting)
-                    ->whereJsonContains('assigned_approver_ids', auth()->id())
+                    ->waiting()
+                    ->assignedTo(auth()->id())
                     ->with(['approval.approvable', 'step'])
                     ->latest('activated_at')
             )
