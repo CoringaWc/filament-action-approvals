@@ -11,7 +11,6 @@ use CoringaWc\FilamentActionApprovals\Actions\RejectAction;
 use CoringaWc\FilamentActionApprovals\Actions\SubmitForApprovalAction;
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
-use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Support\Enums\Width;
@@ -75,25 +74,9 @@ class ApprovalActionGroup
 
     protected static function canSubmitForApproval(Model $record): bool
     {
-        if (! method_exists($record, 'canBeSubmittedForApproval')) {
-            return false;
-        }
-
-        if (! $record->canBeSubmittedForApproval()) {
-            return false;
-        }
-
-        $flows = ApprovalFlow::forModel($record)->get();
-
-        if ($flows->isEmpty()) {
-            return false;
-        }
-
-        $hasGenericFlows = $flows->whereNull('action_key')->isNotEmpty();
-        $hasSpecificFlows = $flows->whereNotNull('action_key')->isNotEmpty();
-        $canResolveSpecificActions = ApprovableActionLabel::hasOptionsFor($record);
-
-        return $hasGenericFlows || (! $hasSpecificFlows) || $canResolveSpecificActions;
+        return ! SubmitForApprovalAction::make()
+            ->record($record)
+            ->isHidden();
     }
 
     protected static function resolveCurrentApproval(Model $record): ?Approval

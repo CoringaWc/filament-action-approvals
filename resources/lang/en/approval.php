@@ -131,6 +131,7 @@ return [
 
         // Success messages
         'submitted_success' => 'Submitted for approval',
+        'submission_not_allowed' => 'You are not allowed to submit this record for approval.',
         'approved_success' => 'Approved',
         'rejected_success' => 'Rejected',
         'comment_success' => 'Comment added',

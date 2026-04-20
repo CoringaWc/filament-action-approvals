@@ -12,7 +12,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PurchaseOrder extends Model
 {
-    use HasApprovals;
+    use HasApprovals {
+        canSubmitForApproval as protected canSubmitForApprovalThroughFlow;
+    }
     use HasFactory;
 
     protected $guarded = [];
@@ -33,6 +35,21 @@ class PurchaseOrder extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function canSubmitForApproval(?string $actionKey = null, int|string|null $userId = null): bool
+    {
+        $resolvedUserId = $this->normalizeUserId($userId ?? auth()->id());
+
+        if ($resolvedUserId === null) {
+            return false;
+        }
+
+        if ($this->normalizeUserId($this->user_id) === $resolvedUserId) {
+            return true;
+        }
+
+        return $this->canSubmitForApprovalThroughFlow($actionKey, $resolvedUserId);
+    }
+
     /**
      * Called when the full approval chain completes successfully.
      */
@@ -47,5 +64,18 @@ class PurchaseOrder extends Model
     public function onApprovalRejected(Approval $approval): void
     {
         $this->update(['status' => 'rejected']);
+    }
+
+    protected function normalizeUserId(int|string|null $userId): int|string|null
+    {
+        if ($userId === null) {
+            return null;
+        }
+
+        if (is_string($userId) && ctype_digit($userId)) {
+            return (int) $userId;
+        }
+
+        return $userId;
     }
 }

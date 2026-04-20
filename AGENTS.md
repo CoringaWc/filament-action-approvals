@@ -134,10 +134,10 @@ Events (`ApprovalSubmitted`, `ApprovalCompleted`, etc.) are fired for cross-cutt
 
 Two methods on the approvable model control submission:
 
-- `allowsApprovalResubmission(): bool` — whether the model can be resubmitted after a completed approval (default: `true`)
-- `canSubmitForApproval(?int|string $userId): bool` — whether a specific user can submit (default: `true`)
+- `allowsApprovalResubmission(): bool` — whether the model can be resubmitted after a completed approval (default: blocked after `approved` and `cancelled`, allowed after `rejected`)
+- `canSubmitForApproval(?string $actionKey = null, ?int|string $userId = null): bool` — whether a specific user can submit, optionally scoped to a specific approvable action (default: matching flow approvers only)
 
-These are combined in `canBeSubmittedForApproval()` which also checks for pending approvals. Override these methods on the model for custom policies.
+These are combined in `canBeSubmittedForApproval(?string $actionKey = null, ?int|string $userId = null)` which also checks for pending approvals. Override these methods on the model for custom policies.
 
 ### Approvable Actions Pattern
 

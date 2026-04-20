@@ -147,7 +147,7 @@ class ApprovalInfolist
                         ->label(__('filament-action-approvals::approval.infolist.action'))
                         ->state(fn (Approval $record): string => ApprovableActionLabel::resolve(
                             $record->approvable_type,
-                            $record->flow?->action_key,
+                            $record->submittedActionKey(),
                         )),
                     TextEntry::make('submitted_by_display')
                         ->label(__('filament-action-approvals::approval.infolist.submitted_by'))
@@ -207,10 +207,13 @@ class ApprovalInfolist
             ->modalSubmitAction(false)
             ->modalCancelActionLabel(__('filament-action-approvals::approval.relation_manager.close'))
             ->modalHeading(function (Approval $record): string {
-                $flow = $record->getRelationValue('flow');
+                $actionLabel = ApprovableActionLabel::resolve(
+                    $record->approvable_type,
+                    $record->submittedActionKey(),
+                );
 
                 return __('filament-action-approvals::approval.relation_manager.approval_heading', [
-                    'flow' => $flow->name
+                    'flow' => $actionLabel
                         ?? __('filament-action-approvals::approval.relation_manager.not_available'),
                 ]);
             });

@@ -188,43 +188,49 @@ trait HasApprovals
     // Submission policy
     //
     // Override these methods to control who can submit and whether
-    // re-submission is allowed after approval/rejection.
+    // re-submission is allowed after a completed approval.
     // ──────────────────────────────────────────────────────────────
 
     /**
-     * Whether re-submission is allowed after approval or rejection.
+     * Whether re-submission is allowed after a completed approval.
      *
-     * Override to return false for one-time-only approval models.
-     * Default: true (re-submission allowed).
+     * Override to return false for one-time-only approval models, or implement
+     * a custom rule based on the latest approval status.
+     * Default: approved and cancelled approvals cannot be resubmitted.
      */
     public function allowsApprovalResubmission(): bool
     {
-        return true;
+        $latest = $this->latestApproval();
+
+        return ! $latest || ! in_array($latest->status, [ApprovalStatus::Approved, ApprovalStatus::Cancelled], true);
     }
 
     /**
      * Whether the given user is authorized to submit this model for approval.
      *
      * Override to add custom authorization logic (e.g. only the creator,
-     * only users with a specific role, etc.).
-     * Default: any authenticated user can submit.
+     * only users with a specific role, or only for a specific approvable action).
+     * Default: only users resolved as approvers in a matching submission flow can submit.
      */
-    public function canSubmitForApproval(int|string|null $userId = null): bool
+    public function canSubmitForApproval(?string $actionKey = null, int|string|null $userId = null): bool
     {
-        return true;
+        $resolvedUserId = $this->normalizeSubmissionPolicyUserId($userId ?? auth()->id());
+
+        if ($resolvedUserId === null) {
+            return false;
+        }
+
+        return ApprovalFlow::getSubmissionFlowsForModel($this, $actionKey)
+            ->contains(fn (ApprovalFlow $flow): bool => $this->flowIncludesSubmissionApprover($flow, $resolvedUserId));
     }
 
     /**
      * Check if the submit action should be available for this record.
      * Combines pending check, resubmission policy, and authorization.
      */
-    public function canBeSubmittedForApproval(int|string|null $userId = null): bool
+    public function canBeSubmittedForApproval(?string $actionKey = null, int|string|null $userId = null): bool
     {
-        $resolvedUserId = $userId ?? auth()->id();
-
-        if (is_string($resolvedUserId) && ctype_digit($resolvedUserId)) {
-            $resolvedUserId = (int) $resolvedUserId;
-        }
+        $resolvedUserId = $this->normalizeSubmissionPolicyUserId($userId ?? auth()->id());
 
         // Already pending — can't submit again
         if ($this->isPendingApproval()) {
@@ -235,14 +241,43 @@ trait HasApprovals
         if (! $this->allowsApprovalResubmission()) {
             $latest = $this->latestApproval();
 
-            // If there's a completed approval (approved/rejected), block resubmission
-            if ($latest && in_array($latest->status, [ApprovalStatus::Approved, ApprovalStatus::Rejected])) {
+            // If there's a completed approval that the model does not allow to restart, block resubmission.
+            if ($latest && in_array($latest->status, [ApprovalStatus::Approved, ApprovalStatus::Rejected, ApprovalStatus::Cancelled], true)) {
                 return false;
             }
         }
 
         // Check user authorization
-        return $this->canSubmitForApproval($resolvedUserId);
+        return $this->canSubmitForApproval($actionKey, $resolvedUserId);
+    }
+
+    protected function flowIncludesSubmissionApprover(ApprovalFlow $flow, int|string $userId): bool
+    {
+        foreach ($flow->steps as $step) {
+            $approverIds = array_map(
+                fn (int|string $approverId): int|string => $this->normalizeSubmissionPolicyUserId($approverId) ?? $approverId,
+                $step->resolveApproverIds($this),
+            );
+
+            if (in_array($userId, $approverIds, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    protected function normalizeSubmissionPolicyUserId(int|string|null $userId): int|string|null
+    {
+        if ($userId === null) {
+            return null;
+        }
+
+        if (is_string($userId) && ctype_digit($userId)) {
+            return (int) $userId;
+        }
+
+        return $userId;
     }
 
     // ──────────────────────────────────────────────────────────────

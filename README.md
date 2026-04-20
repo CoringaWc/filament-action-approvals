@@ -395,7 +395,7 @@ Each action manages its own visibility automatically:
 
 | Action                    | Visible When                                               |
 | ------------------------- | ---------------------------------------------------------- |
-| `SubmitForApprovalAction` | Record can be submitted (no pending approval, flows exist) |
+| `SubmitForApprovalAction` | Record can be submitted for the current action context (no pending approval, flows exist, model policy allows it) |
 | `ApproveAction`           | User is an assigned approver and hasn't acted yet          |
 | `RejectAction`            | User is an assigned approver and hasn't acted yet          |
 | `CommentAction`           | A pending approval exists and user can act on it           |
@@ -680,27 +680,49 @@ Override these methods on your model to react to approval events:
 
 ## Resubmission Policy
 
-Control whether a model can be resubmitted after approval or rejection:
+Control whether a model can be resubmitted after a completed approval:
 
 ```php
 class Expense extends Model
 {
-    use HasApprovals;
+    use HasApprovals {
+        canSubmitForApproval as protected canSubmitForApprovalThroughFlow;
+    }
 
-    // Block resubmission after the expense is approved
+    // By default, approved and cancelled approvals cannot be resubmitted.
+    // Override when your domain should also block or allow other outcomes.
     public function allowsApprovalResubmission(): bool
     {
         $latest = $this->latestApproval();
-        return !$latest || $latest->status !== ApprovalStatus::Approved;
+
+        return ! $latest || $latest->status === ApprovalStatus::Rejected;
     }
 
-    // Restrict who can submit
-    public function canSubmitForApproval(int|string|null $userId = null): bool
+    // Add project-specific submit rules on top of the default flow-approver policy
+    public function canSubmitForApproval(?string $actionKey = null, int|string|null $userId = null): bool
     {
-        return $this->user_id === ($userId ?? auth()->id());
+        return $this->user_id === ($userId ?? auth()->id())
+            || $this->canSubmitForApprovalThroughFlow($actionKey, $userId);
     }
 }
 ```
+
+When you need different submit policies per approvable action, inspect the first parameter:
+
+```php
+public function canSubmitForApproval(?string $actionKey = null, int|string|null $userId = null): bool
+{
+    return match ($actionKey) {
+        'submit' => $this->user_id === ($userId ?? auth()->id())
+            || $this->canSubmitForApprovalThroughFlow($actionKey, $userId),
+        'cancel' => auth()->user()?->can('cancelPurchaseOrders') ?? false,
+        default => false,
+    };
+}
+```
+
+If you do not override `canSubmitForApproval()`, the package default allows submission only for users resolved as approvers in a matching approval flow.
+If you do not override `allowsApprovalResubmission()`, the package default blocks a new submission after the latest approval ends as `approved` or `cancelled`, while still allowing retries after `rejected`.
 
 ## SLA Enforcement
 

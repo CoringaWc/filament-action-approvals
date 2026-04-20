@@ -76,12 +76,12 @@ class Expense extends Model
     }
 
     /**
-     * Only allow resubmission if previously rejected (not if approved).
+     * Only allow resubmission when there is no previous approval or the latest one was rejected.
      */
     public function allowsApprovalResubmission(): bool
     {
         $latest = $this->latestApproval();
 
-        return ! $latest || $latest->status !== ApprovalStatus::Approved;
+        return ! $latest || $latest->status === ApprovalStatus::Rejected;
     }
 }

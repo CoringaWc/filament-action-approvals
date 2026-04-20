@@ -7,6 +7,7 @@ namespace CoringaWc\FilamentActionApprovals\Infolists;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalAction;
+use CoringaWc\FilamentActionApprovals\Support\ApprovableActionLabel;
 use CoringaWc\FilamentActionApprovals\Support\DateDisplay;
 use CoringaWc\FilamentActionApprovals\Support\UserDisplayName;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -29,6 +30,14 @@ class ApprovalStatusSection
                 TextEntry::make('latestApprovalFlowName')
                     ->label(__('filament-action-approvals::approval.infolist.flow'))
                     ->state(fn ($record) => $record->latestApproval()?->flow?->name)
+                    ->placeholder(__('filament-action-approvals::approval.infolist.not_available'))
+                    ->columnSpan(1),
+                TextEntry::make('latestApprovalAction')
+                    ->label(__('filament-action-approvals::approval.infolist.action'))
+                    ->state(fn ($record): string => ApprovableActionLabel::resolve(
+                        $record->getMorphClass(),
+                        $record->latestApproval()?->submittedActionKey(),
+                    ))
                     ->placeholder(__('filament-action-approvals::approval.infolist.not_available'))
                     ->columnSpan(1),
                 TextEntry::make('latestApprovalSubmittedBy')

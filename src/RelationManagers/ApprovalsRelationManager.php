@@ -6,6 +6,7 @@ namespace CoringaWc\FilamentActionApprovals\RelationManagers;
 
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Resources\Approvals\Schemas\ApprovalInfolist;
+use CoringaWc\FilamentActionApprovals\Support\ApprovableActionLabel;
 use CoringaWc\FilamentActionApprovals\Support\DateDisplay;
 use CoringaWc\FilamentActionApprovals\Support\UserDisplayName;
 use Filament\Actions\ViewAction;
@@ -34,8 +35,12 @@ class ApprovalsRelationManager extends RelationManager
     {
         return $table
             ->columns([
-                TextColumn::make('flow.name')
-                    ->label(__('filament-action-approvals::approval.relation_manager.flow')),
+                TextColumn::make('action_key')
+                    ->label(__('filament-action-approvals::approval.approval_table.action'))
+                    ->state(fn (Approval $record): string => ApprovableActionLabel::resolve(
+                        $record->approvable_type,
+                        $record->submittedActionKey(),
+                    )),
                 TextColumn::make('status')
                     ->label(__('filament-action-approvals::approval.fields.status'))
                     ->badge(),

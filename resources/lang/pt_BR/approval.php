@@ -131,6 +131,7 @@ return [
 
         // Mensagens de sucesso
         'submitted_success' => 'Submetido para aprovação',
+        'submission_not_allowed' => 'Você não tem permissão para submeter este registro para aprovação.',
         'approved_success' => 'Aprovado',
         'rejected_success' => 'Rejeitado',
         'comment_success' => 'Comentário adicionado',

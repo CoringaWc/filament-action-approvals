@@ -60,7 +60,7 @@ trait HasApprovableActions
 
     protected function afterApprovalApproved(Approval $approval): void
     {
-        $actionKey = $approval->flow?->action_key;
+        $actionKey = $approval->submittedActionKey();
 
         if (blank($actionKey)) {
             return;

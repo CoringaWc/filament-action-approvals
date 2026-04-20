@@ -14,6 +14,7 @@ use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 
 class SubmitForApprovalAction extends Action
 {
@@ -55,40 +56,11 @@ class SubmitForApprovalAction extends Action
             ->label(__('filament-action-approvals::approval.actions.submit'))
             ->icon(Heroicon::OutlinedPaperAirplane)
             ->color('info')
+            ->authorize(function (self $action): bool {
+                return $action->canRenderForRecord($action->resolveRecord());
+            })
             ->visible(function (self $action): bool {
-                $record = $action->resolveRecord();
-
-                if (! $record || ! method_exists($record, 'canBeSubmittedForApproval')) {
-                    return false;
-                }
-
-                if (! $record->canBeSubmittedForApproval()) {
-                    return false;
-                }
-
-                $flows = ApprovalFlow::forModel($record)->get();
-
-                if ($flows->isEmpty()) {
-                    return false;
-                }
-
-                // When locked to a specific action key, only show if there are matching flows
-                // and the action_key has NOT been completed yet (D4-A: hide entirely)
-                if ($action->lockedActionKey !== null) {
-                    $completedKeys = Approval::completedActionKeysFor($record);
-
-                    if (in_array($action->lockedActionKey, $completedKeys, true)) {
-                        return false;
-                    }
-
-                    return ApprovalFlow::filterSubmissionFlows($flows, $action->lockedActionKey)->isNotEmpty();
-                }
-
-                $hasGenericFlows = $flows->whereNull('action_key')->isNotEmpty();
-                $hasSpecificFlows = $flows->whereNotNull('action_key')->isNotEmpty();
-                $canResolveSpecificActions = ApprovableActionLabel::hasOptionsFor($record);
-
-                return $hasGenericFlows || (! $hasSpecificFlows) || $canResolveSpecificActions;
+                return $action->canRenderForRecord($action->resolveRecord());
             })
             ->schema(function (self $action): array {
                 $record = $action->resolveRecord();
@@ -101,7 +73,7 @@ class SubmitForApprovalAction extends Action
 
                 // When locked to a specific action key, skip the action selector entirely
                 if ($action->lockedActionKey !== null) {
-                    $matchingFlows = ApprovalFlow::filterSubmissionFlows($flows, $action->lockedActionKey);
+                    $matchingFlows = $action->getAvailableFlowsForActionKey($record, $flows, $action->lockedActionKey);
 
                     if ($matchingFlows->count() <= 1) {
                         return [];
@@ -115,23 +87,10 @@ class SubmitForApprovalAction extends Action
                     ];
                 }
 
-                $actionOptions = ApprovableActionLabel::optionsFor($record);
-                $hasGenericFlows = $flows->whereNull('action_key')->isNotEmpty();
+                $actionOptions = $action->getAvailableActionOptions($record, excludeCompleted: true);
+                $hasGenericFlows = $action->getAvailableFlowsForActionKey($record, $flows)->isNotEmpty();
                 $hasSpecificFlows = $flows->whereNotNull('action_key')->isNotEmpty();
                 $shouldAskForAction = ($actionOptions !== []) && ($hasSpecificFlows || (! $hasGenericFlows));
-
-                // Filter out action_keys that already have completed approvals
-                if ($shouldAskForAction && method_exists($record, 'latestApproval')) {
-                    $completedKeys = Approval::completedActionKeysFor($record);
-
-                    if ($completedKeys !== []) {
-                        $actionOptions = array_diff_key($actionOptions, array_flip($completedKeys));
-
-                        if ($actionOptions === []) {
-                            return [];
-                        }
-                    }
-                }
 
                 if ((! $shouldAskForAction) && ($flows->count() <= 1)) {
                     return [];
@@ -149,16 +108,16 @@ class SubmitForApprovalAction extends Action
                         : null,
                     Select::make('approval_flow_id')
                         ->label(__('filament-action-approvals::approval.actions.approval_flow'))
-                        ->options(function (Get $get) use ($flows): array {
-                            return ApprovalFlow::filterSubmissionFlows($flows, $get('action_key'))
+                        ->options(function (Get $get) use ($action, $flows, $record): array {
+                            return $action->getAvailableFlowsForActionKey($record, $flows, $get('action_key'))
                                 ->pluck('name', 'id')
                                 ->all();
                         })
-                        ->visible(function (Get $get) use ($flows): bool {
-                            return ApprovalFlow::filterSubmissionFlows($flows, $get('action_key'))->count() > 1;
+                        ->visible(function (Get $get) use ($action, $flows, $record): bool {
+                            return $action->getAvailableFlowsForActionKey($record, $flows, $get('action_key'))->count() > 1;
                         })
-                        ->required(function (Get $get) use ($flows): bool {
-                            return ApprovalFlow::filterSubmissionFlows($flows, $get('action_key'))->count() > 1;
+                        ->required(function (Get $get) use ($action, $flows, $record): bool {
+                            return $action->getAvailableFlowsForActionKey($record, $flows, $get('action_key'))->count() > 1;
                         }),
                 ]));
             })
@@ -171,6 +130,15 @@ class SubmitForApprovalAction extends Action
 
                 $actionKey = $action->lockedActionKey ?? ($data['action_key'] ?? null);
                 $flowId = $data['approval_flow_id'] ?? null;
+
+                if (! $action->recordCanBeSubmittedForApproval($record, $actionKey)) {
+                    Notification::make()
+                        ->title(__('filament-action-approvals::approval.actions.submission_not_allowed'))
+                        ->danger()
+                        ->send();
+
+                    return;
+                }
 
                 $flow = (is_int($flowId) || is_string($flowId))
                     ? ApprovalFlow::query()->find($flowId)
@@ -194,6 +162,79 @@ class SubmitForApprovalAction extends Action
         $record = $this->getRecord();
 
         return $record instanceof Model ? $record : null;
+    }
+
+    protected function canRenderForRecord(?Model $record): bool
+    {
+        if (! $record || ! method_exists($record, 'canBeSubmittedForApproval')) {
+            return false;
+        }
+
+        $flows = ApprovalFlow::forModel($record)->get();
+
+        if ($flows->isEmpty()) {
+            return false;
+        }
+
+        if ($this->lockedActionKey !== null) {
+            return $this->getAvailableFlowsForActionKey($record, $flows, $this->lockedActionKey)->isNotEmpty();
+        }
+
+        if ($this->getAvailableFlowsForActionKey($record, $flows)->isNotEmpty()) {
+            return true;
+        }
+
+        return $this->getAvailableActionOptions($record, excludeCompleted: true) !== [];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function getAvailableActionOptions(Model $record, bool $excludeCompleted = false): array
+    {
+        if (! method_exists($record, 'canBeSubmittedForApproval')) {
+            return [];
+        }
+
+        $completedKeys = $excludeCompleted ? Approval::completedActionKeysFor($record) : [];
+
+        return array_filter(
+            ApprovableActionLabel::optionsFor($record),
+            function (string $_label, string $actionKey) use ($completedKeys, $record): bool {
+                if (in_array($actionKey, $completedKeys, true)) {
+                    return false;
+                }
+
+                return $this->recordCanBeSubmittedForApproval($record, $actionKey);
+            },
+            ARRAY_FILTER_USE_BOTH,
+        );
+    }
+
+    /**
+     * @param  Collection<int, ApprovalFlow>  $flows
+     * @return Collection<int, ApprovalFlow>
+     */
+    protected function getAvailableFlowsForActionKey(Model $record, Collection $flows, ?string $actionKey = null): Collection
+    {
+        if (! $this->recordCanBeSubmittedForApproval($record, $actionKey)) {
+            return collect();
+        }
+
+        if ($actionKey !== null && in_array($actionKey, Approval::completedActionKeysFor($record), true)) {
+            return collect();
+        }
+
+        return ApprovalFlow::filterSubmissionFlows($flows, $actionKey);
+    }
+
+    protected function recordCanBeSubmittedForApproval(Model $record, ?string $actionKey = null): bool
+    {
+        if (! method_exists($record, 'canBeSubmittedForApproval')) {
+            return false;
+        }
+
+        return $record->canBeSubmittedForApproval($actionKey);
     }
 
     protected function dispatchApprovalUpdated(): void

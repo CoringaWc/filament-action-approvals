@@ -246,6 +246,38 @@ class Approval extends Model
         return $this->currentStepInstance()?->canBeDelegatedBy($userId) ?? false;
     }
 
+    public function submittedActionKey(): ?string
+    {
+        $actionKey = data_get($this->metadata, 'action_key');
+
+        if (is_string($actionKey) && filled($actionKey)) {
+            return $actionKey;
+        }
+
+        $submittedActionKey = $this->relationLoaded('actions')
+            ? data_get(
+                $this->actions->firstWhere('type', ActionType::Submitted),
+                'metadata.action_key',
+            )
+            : data_get(
+                $this->actions()
+                    ->where('type', ActionType::Submitted)
+                    ->latest()
+                    ->first(),
+                'metadata.action_key',
+            );
+
+        if (is_string($submittedActionKey) && filled($submittedActionKey)) {
+            return $submittedActionKey;
+        }
+
+        $flowActionKey = $this->flow?->action_key;
+
+        return is_string($flowActionKey) && filled($flowActionKey)
+            ? $flowActionKey
+            : null;
+    }
+
     /**
      * Get the rejection reason (comment) from the latest rejection action.
      */
@@ -279,9 +311,7 @@ class Approval extends Model
                 ->where('approvable_id', $model->getKey())
                 ->whereIn('status', [ApprovalStatus::Approved, ApprovalStatus::Rejected])
                 ->get()
-                ->pluck('flow')
-                ->filter()
-                ->pluck('action_key')
+                ->map(fn (Approval $approval): ?string => $approval->submittedActionKey())
                 ->filter()
                 ->unique()
                 ->map(fn (mixed $key): string => (string) $key)

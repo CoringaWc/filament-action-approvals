@@ -80,7 +80,7 @@ class ApprovalsTable
                 ->label(__('filament-action-approvals::approval.approval_table.action'))
                 ->state(fn (Approval $record): string => ApprovableActionLabel::resolve(
                     $record->approvable_type,
-                    $record->flow?->action_key,
+                    $record->submittedActionKey(),
                 )),
             TextColumn::make('current_step')
                 ->label(__('filament-action-approvals::approval.approval_table.current_step'))

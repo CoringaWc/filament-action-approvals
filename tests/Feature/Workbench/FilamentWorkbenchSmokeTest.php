@@ -7,6 +7,7 @@ use CoringaWc\FilamentActionApprovals\ApproverResolvers\UserResolver;
 use CoringaWc\FilamentActionApprovals\Enums\StepType;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
 use CoringaWc\FilamentActionApprovals\Pages\ApprovalsDashboard;
+use CoringaWc\FilamentActionApprovals\RelationManagers\ApprovalsRelationManager;
 use CoringaWc\FilamentActionApprovals\Resources\ApprovalFlows\ApprovalFlowResource;
 use CoringaWc\FilamentActionApprovals\Resources\Approvals\ApprovalResource;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
@@ -281,6 +282,42 @@ it('can render approval resource with contextual record scope in the workbench',
         ]), false)
         ->assertSeeText($visibleLabel, false)
         ->assertDontSeeText($hiddenLabel, false);
+});
+
+it('shows the submitted action instead of the flow name in the approvals relation manager', function (): void {
+    /** @var TestCase $test */
+    $test = $this;
+
+    $test->seed(DatabaseSeeder::class);
+
+    $admin = User::query()->where('email', 'admin@filament-action-approvals.test')->firstOrFail();
+
+    $test->actingAs($admin);
+
+    $flow = ApprovalFlow::create([
+        'name' => 'Relation Manager Flow Name',
+        'approvable_type' => (new PurchaseOrder)->getMorphClass(),
+        'is_active' => true,
+    ]);
+    $flow->steps()->create([
+        'name' => 'Step 1',
+        'order' => 1,
+        'type' => StepType::Single,
+        'approver_resolver' => UserResolver::class,
+        'approver_config' => ['user_ids' => [$admin->getKey()]],
+        'required_approvals' => 1,
+    ]);
+
+    $purchaseOrder = PurchaseOrder::factory()->for($admin, 'user')->create();
+
+    app(ApprovalEngine::class)->submit($purchaseOrder, $flow, $admin->getKey(), 'submit');
+
+    Livewire::test(ApprovalsRelationManager::class, [
+        'ownerRecord' => $purchaseOrder,
+        'pageClass' => EditPurchaseOrder::class,
+    ])
+        ->assertSeeText(__('workbench::workbench.approval_actions.purchase_orders.submit'), false)
+        ->assertDontSeeText('Relation Manager Flow Name', false);
 });
 
 it('can render user, invoice and expense resources in pt_BR', function (): void {

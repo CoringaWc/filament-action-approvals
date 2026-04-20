@@ -40,7 +40,7 @@ class ApprovalEngine
             throw (new ModelNotFoundException)->setModel(ApprovalFlow::class);
         }
 
-        return DB::transaction(function () use ($approvable, $flow, $submittedBy) {
+        return DB::transaction(function () use ($approvable, $flow, $submittedBy, $actionKey) {
             $approval = Approval::create([
                 'approval_flow_id' => $flow->getKey(),
                 'approvable_type' => $approvable->getMorphClass(),
@@ -48,6 +48,7 @@ class ApprovalEngine
                 'status' => ApprovalStatus::Pending,
                 'submitted_by' => $submittedBy,
                 'submitted_at' => now(),
+                'metadata' => filled($actionKey) ? ['action_key' => $actionKey] : null,
             ]);
 
             foreach ($flow->steps as $step) {
@@ -67,6 +68,7 @@ class ApprovalEngine
             $approval->actions()->create([
                 'user_id' => $submittedBy,
                 'type' => ActionType::Submitted,
+                'metadata' => filled($actionKey) ? ['action_key' => $actionKey] : null,
             ]);
 
             $this->activateNextStep($approval);
