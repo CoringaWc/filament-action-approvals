@@ -50,7 +50,7 @@ trait HasStateApprovals
         string $stateAttribute,
         string $toStateClass,
         ?Closure $onExecute = null,
-        ?int $submittedBy = null,
+        int|string|null $submittedBy = null,
     ): ApprovalActionResult {
         $currentState = $this->resolveCurrentState($stateAttribute);
         $actionKey = static::stateApprovalActionKey($currentState::class, $toStateClass, $stateAttribute);

@@ -17,7 +17,7 @@ class UserResolver implements ApproverResolver
 {
     /**
      * @param  array{user_ids?: list<int|string>}  $config
-     * @return list<int>
+     * @return list<int|string>
      */
     public function resolve(array $config, Model $approvable): array
     {
@@ -30,9 +30,8 @@ class UserResolver implements ApproverResolver
                 continue;
             }
 
-            if (ctype_digit($userId)) {
-                $userIds[] = (int) $userId;
-            }
+            // String userId: normalize numeric strings to int, keep UUID strings as-is
+            $userIds[] = ctype_digit($userId) ? (int) $userId : $userId;
         }
 
         return $userIds;

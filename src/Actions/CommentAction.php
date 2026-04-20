@@ -32,7 +32,7 @@ class CommentAction extends Action
             ->visible(function (): bool {
                 $userId = auth()->id();
 
-                if (! is_int($userId)) {
+                if ($userId === null) {
                     return false;
                 }
 
@@ -61,7 +61,7 @@ class CommentAction extends Action
                 $stepInstance = $approval?->currentStepInstance();
                 $userId = auth()->id();
 
-                if (! $approval || ! is_int($userId)) {
+                if (! $approval || $userId === null) {
                     return;
                 }
 

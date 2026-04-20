@@ -32,7 +32,7 @@ class ApproveAction extends Action
             ->visible(function (): bool {
                 $userId = auth()->id();
 
-                if (! is_int($userId)) {
+                if ($userId === null) {
                     return false;
                 }
 
@@ -64,7 +64,7 @@ class ApproveAction extends Action
                 $stepInstance = $this->resolveCurrentStepInstance();
                 $userId = auth()->id();
 
-                if (! $stepInstance || ! is_int($userId)) {
+                if (! $stepInstance || $userId === null) {
                     return;
                 }
 

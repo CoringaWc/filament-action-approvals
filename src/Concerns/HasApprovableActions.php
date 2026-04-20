@@ -22,7 +22,7 @@ trait HasApprovableActions
     public function executeWithApproval(
         string $actionKey,
         ?Closure $onExecute = null,
-        ?int $submittedBy = null,
+        int|string|null $submittedBy = null,
     ): ApprovalActionResult {
         $flow = $this->resolveApprovalFlow($actionKey);
 

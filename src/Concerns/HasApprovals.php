@@ -49,7 +49,7 @@ trait HasApprovals
         return $this->latestApproval()?->status;
     }
 
-    public function submitForApproval(?ApprovalFlow $flow = null, ?int $submittedBy = null, ?string $actionKey = null): Approval
+    public function submitForApproval(?ApprovalFlow $flow = null, int|string|null $submittedBy = null, ?string $actionKey = null): Approval
     {
         return app(ApprovalEngine::class)->submit($this, $flow, $submittedBy, $actionKey);
     }
@@ -209,7 +209,7 @@ trait HasApprovals
      * only users with a specific role, etc.).
      * Default: any authenticated user can submit.
      */
-    public function canSubmitForApproval(?int $userId = null): bool
+    public function canSubmitForApproval(int|string|null $userId = null): bool
     {
         return true;
     }
@@ -218,7 +218,7 @@ trait HasApprovals
      * Check if the submit action should be available for this record.
      * Combines pending check, resubmission policy, and authorization.
      */
-    public function canBeSubmittedForApproval(?int $userId = null): bool
+    public function canBeSubmittedForApproval(int|string|null $userId = null): bool
     {
         $resolvedUserId = $userId ?? auth()->id();
 
@@ -242,7 +242,7 @@ trait HasApprovals
         }
 
         // Check user authorization
-        return $this->canSubmitForApproval(is_int($resolvedUserId) ? $resolvedUserId : null);
+        return $this->canSubmitForApproval($resolvedUserId);
     }
 
     // ──────────────────────────────────────────────────────────────
@@ -286,7 +286,7 @@ trait HasApprovals
     /**
      * Called when an approver delegates to another user.
      */
-    public function onApprovalDelegated(ApprovalStepInstance $stepInstance, int $fromUserId, int $toUserId): void {}
+    public function onApprovalDelegated(ApprovalStepInstance $stepInstance, int|string $fromUserId, int|string $toUserId): void {}
 
     /**
      * Called when an individual step is completed (approved).

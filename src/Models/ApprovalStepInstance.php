@@ -21,7 +21,7 @@ use Illuminate\Support\Carbon;
  * @property StepInstanceStatus $status
  * @property int $required_approvals
  * @property int $received_approvals
- * @property list<int> $assigned_approver_ids
+ * @property list<int|string> $assigned_approver_ids
  * @property Carbon|null $activated_at
  * @property Carbon|null $sla_deadline
  * @property bool $sla_warning_sent
@@ -99,7 +99,7 @@ class ApprovalStepInstance extends Model
         return $this->hasMany(ApprovalDelegation::class);
     }
 
-    public function canUserAct(int $userId): bool
+    public function canUserAct(int|string $userId): bool
     {
         if (in_array($userId, $this->assigned_approver_ids)) {
             return true;
@@ -110,7 +110,7 @@ class ApprovalStepInstance extends Model
             ->exists();
     }
 
-    public function hasUserActed(int $userId): bool
+    public function hasUserActed(int|string $userId): bool
     {
         return $this->actions()
             ->where('user_id', $userId)

@@ -16,8 +16,8 @@ class ApprovalDelegated implements ShouldBroadcast
 
     public function __construct(
         public readonly ApprovalStepInstance $stepInstance,
-        public readonly int $fromUserId,
-        public readonly int $toUserId,
+        public readonly int|string $fromUserId,
+        public readonly int|string $toUserId,
     ) {}
 
     protected function broadcastConfigKey(): string

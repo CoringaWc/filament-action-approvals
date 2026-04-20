@@ -12,7 +12,7 @@ use Filament\Support\Icons\Heroicon;
 
 class ApprovalRequestedNotification
 {
-    public static function send(ApprovalStepInstance $stepInstance, int $userId): void
+    public static function send(ApprovalStepInstance $stepInstance, int|string $userId): void
     {
         if (! config('filament-action-approvals.notifications.database', true)) {
             return;

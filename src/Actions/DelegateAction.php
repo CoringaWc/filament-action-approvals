@@ -40,7 +40,7 @@ class DelegateAction extends Action
             ->visible(function (): bool {
                 $userId = auth()->id();
 
-                if (! is_int($userId)) {
+                if ($userId === null) {
                     return false;
                 }
 
@@ -107,11 +107,12 @@ class DelegateAction extends Action
                 $userId = auth()->id();
                 $delegateToUserId = $data['to_user_id'] ?? null;
 
+                // Cast numeric string to int for integer primary key users
                 if (is_string($delegateToUserId) && ctype_digit($delegateToUserId)) {
                     $delegateToUserId = (int) $delegateToUserId;
                 }
 
-                if (! $stepInstance || ! is_int($userId) || ! is_int($delegateToUserId)) {
+                if (! $stepInstance || $userId === null || $delegateToUserId === null) {
                     return;
                 }
 

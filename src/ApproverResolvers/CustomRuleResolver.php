@@ -16,7 +16,7 @@ class CustomRuleResolver implements ApproverResolver
 {
     /**
      * @param  array{custom_rule?: string}  $config
-     * @return list<int>
+     * @return list<int|string>
      */
     public function resolve(array $config, Model $approvable): array
     {
@@ -42,8 +42,8 @@ class CustomRuleResolver implements ApproverResolver
                 continue;
             }
 
-            if (is_string($userId) && ctype_digit($userId)) {
-                $userIds[] = (int) $userId;
+            if (is_string($userId)) {
+                $userIds[] = ctype_digit($userId) ? (int) $userId : $userId;
             }
         }
 

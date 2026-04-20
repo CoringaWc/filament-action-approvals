@@ -142,7 +142,9 @@ return [
         'approved_body' => ':model #:id تمت الموافقة عليه.',
         'rejected_title' => 'تم رفض الموافقة',
         'rejected_body' => ':model #:id تم رفضه.',
-        'escalated_title' => 'تصعيد الموافقة',
+        'cancelled_title' => 'تم إلغاء الموافقة',
+        'cancelled_body' => 'تم إلغاء موافقة :model #:id.',
+        'escalated_title' => 'انتهاء مهلة الموافقة',
         'escalated_body' => ':model #:id تجاوز المهلة المحددة.',
         'sla_warning_title' => 'تنبيه: اقتراب موعد الموافقة',
         'sla_warning_body' => ':model #:id موعد الموافقة :deadline.',
@@ -203,6 +205,7 @@ return [
         'system' => 'النظام',
         'date' => 'التاريخ',
         'no_approval' => 'لا توجد موافقة',
+        'not_available' => 'غير متاح',
         'rejection_reason' => 'سبب الرفض',
     ],
 

@@ -17,7 +17,7 @@ class RoleResolver implements ApproverResolver
 {
     /**
      * @param  array{role?: string|list<string>}  $config
-     * @return list<int>
+     * @return list<int|string>
      */
     public function resolve(array $config, Model $approvable): array
     {
@@ -41,10 +41,12 @@ class RoleResolver implements ApproverResolver
             }
         }
 
-        /** @var list<int> $userIds */
+        /** @var list<int|string> $userIds */
         $userIds = $query
             ->pluck($query->getModel()->getKeyName())
-            ->map(fn (mixed $userId): int => (int) $userId)
+            ->map(function (mixed $userId): int|string {
+                return is_string($userId) && ! ctype_digit($userId) ? $userId : (int) $userId;
+            })
             ->all();
 
         return $userIds;

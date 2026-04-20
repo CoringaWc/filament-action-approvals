@@ -195,7 +195,7 @@ class FilamentActionApprovalsPlugin implements Plugin
      * Super admins can see and act on all approval actions regardless
      * of being an assigned approver. Controlled via config.
      */
-    public static function isSuperAdmin(?int $userId = null): bool
+    public static function isSuperAdmin(int|string|null $userId = null): bool
     {
         if (! config('filament-action-approvals.super_admin.enabled', false)) {
             return false;
@@ -203,7 +203,7 @@ class FilamentActionApprovalsPlugin implements Plugin
 
         $userId ??= auth()->id();
 
-        if (! is_int($userId)) {
+        if ($userId === null) {
             return false;
         }
 
