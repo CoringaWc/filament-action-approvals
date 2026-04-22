@@ -7,13 +7,14 @@ namespace CoringaWc\FilamentActionApprovals\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
 
 /**
  * @property string $name
  * @property string|null $description
- * @property class-string<Model>|null $approvable_type
+ * @property string|null $approvable_type
  * @property string|null $action_key
  * @property bool $is_active
  * @property array<string, mixed>|null $metadata
@@ -23,6 +24,13 @@ use Illuminate\Support\Collection;
 class ApprovalFlow extends Model
 {
     use SoftDeletes;
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $flow): void {
+            $flow->approvable_type = static::normalizeApprovableType($flow->approvable_type);
+        });
+    }
 
     protected $fillable = [
         'name',
@@ -63,10 +71,12 @@ class ApprovalFlow extends Model
      */
     public function scopeForModel(Builder $query, Model $model): Builder
     {
+        $morphTypes = static::resolveMatchingApprovableTypes($model);
+
         $query
             ->where('is_active', true)
-            ->where(function (Builder $q) use ($model) {
-                $q->where('approvable_type', $model->getMorphClass())
+            ->where(function (Builder $q) use ($morphTypes) {
+                $q->whereIn('approvable_type', $morphTypes)
                     ->orWhereNull('approvable_type');
             });
 
@@ -122,5 +132,41 @@ class ApprovalFlow extends Model
     public static function findSubmissionFlowForModel(Model $model, ?string $actionKey = null): ?self
     {
         return static::getSubmissionFlowsForModel($model, $actionKey)->first();
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected static function resolveMatchingApprovableTypes(Model $model): array
+    {
+        $morphClass = $model->getMorphClass();
+        $modelClass = $model::class;
+
+        if ($morphClass === $modelClass) {
+            return [$modelClass];
+        }
+
+        return [$morphClass, $modelClass];
+    }
+
+    protected static function normalizeApprovableType(?string $approvableType): ?string
+    {
+        if (blank($approvableType) || ! class_exists($approvableType)) {
+            return $approvableType;
+        }
+
+        $model = new $approvableType;
+
+        if (! $model instanceof Model) {
+            return $approvableType;
+        }
+
+        $morphedModelClass = Relation::getMorphedModel($approvableType);
+
+        if (is_string($morphedModelClass) && $morphedModelClass === $approvableType) {
+            return $approvableType;
+        }
+
+        return $model->getMorphClass();
     }
 }
