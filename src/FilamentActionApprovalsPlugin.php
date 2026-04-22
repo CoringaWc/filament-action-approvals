@@ -185,8 +185,17 @@ class FilamentActionApprovalsPlugin implements Plugin
 
     protected function hasWidgets(): bool
     {
-        return $this->hasWidgets
-            ?? (bool) config('filament-action-approvals.widgets.enabled', true);
+        if ($this->hasWidgets !== null) {
+            return $this->hasWidgets;
+        }
+
+        $configuredWidgets = config('filament-action-approvals.widgets.enabled');
+
+        if (is_bool($configuredWidgets)) {
+            return $configuredWidgets;
+        }
+
+        return ! $this->hasDashboardPage();
     }
 
     /**

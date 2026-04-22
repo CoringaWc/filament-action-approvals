@@ -319,11 +319,13 @@ FilamentActionApprovalsPlugin::make()
     ->flowResource()                    // Enable/disable the flow CRUD resource
     ->approvalResource()                // Enable/disable the operational approvals resource
     ->dashboard()                       // Enable/disable the opt-in approvals dashboard page
-    ->widgets()                         // Enable/disable dashboard widgets
+    ->widgets()                         // Enable/disable global panel dashboard widgets
     ->resolvers([...])                  // Override resolvers for this panel
     ->userModel(User::class)            // Override user model for this panel
     ->navigationGroup('Workflow')       // Override navigation group label
 ```
+
+When the dedicated `ApprovalsDashboard` page is enabled, global panel widgets are suppressed by default unless `->widgets()` (or `widgets.enabled`) explicitly turns them on. This keeps the approvals dashboard independent from the panel's primary dashboard.
 
 Static resolution methods prefer plugin config (panel-specific) over config file (global):
 
@@ -431,6 +433,7 @@ Rules:
 - Use dashboard page filters via `HasFiltersAction` + `FilterAction`
 - Keep the dashboard operational and global, not per-resource
 - Widgets on the dashboard must respect `InteractsWithPageFilters`
+- Do not implicitly inject the package's global panel widgets into the main dashboard when this dedicated dashboard is enabled
 - Prefer query helpers/support classes for period handling instead of duplicating date-range logic in each widget
 - The workbench must expose the dashboard whenever the feature is implemented so maintainers can validate it manually
 

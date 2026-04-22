@@ -176,7 +176,7 @@ public function panel(Panel $panel): Panel
                 ->flowResource()      // Enable the ApprovalFlow CRUD resource (default: true)
                 ->approvalResource()  // Enable the operational ApprovalResource (default: true)
                 ->dashboard()         // Enable the ApprovalsDashboard page (default: false / opt-in)
-                ->widgets()           // Enable dashboard widgets (default: true)
+                ->widgets()           // Enable global panel widgets explicitly when also using the dedicated dashboard
                 ->navigationGroup('Workflow'),  // Override navigation group
         ]);
 }
@@ -193,6 +193,8 @@ public function panel(Panel $panel): Panel
 | `resolvers(array $resolvers)`            | Override approver resolvers for this panel            |
 | `userModel(string $model)`               | Override the user model for this panel                |
 | `navigationGroup(string $group)`         | Override the navigation group label                   |
+
+If the dedicated `ApprovalsDashboard` page is enabled, global panel widgets are suppressed by default so the package dashboard stays independent from the panel's primary dashboard. Call `->widgets()` explicitly if you want both.
 
 ### Contextual approvals navigation
 
@@ -231,6 +233,8 @@ FilamentActionApprovalsPlugin::make()
 ```
 
 The dashboard includes quick period actions (`5d`, `15d`, `30d`, `All`), an advanced filter slideover, status distribution, bottleneck visibility, stale pending approvals, and filtered analytics.
+
+When this dedicated dashboard is enabled, the package no longer injects its global widgets into the panel's main dashboard unless you opt in with `->widgets()`.
 
 ## Usage
 
@@ -393,13 +397,13 @@ class ViewInvoice extends ViewRecord
 
 Each action manages its own visibility automatically:
 
-| Action                    | Visible When                                               |
-| ------------------------- | ---------------------------------------------------------- |
+| Action                    | Visible When                                                                                                      |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `SubmitForApprovalAction` | Record can be submitted for the current action context (no pending approval, flows exist, model policy allows it) |
-| `ApproveAction`           | User is an assigned approver and hasn't acted yet          |
-| `RejectAction`            | User is an assigned approver and hasn't acted yet          |
-| `CommentAction`           | A pending approval exists and user can act on it           |
-| `DelegateAction`          | User is an assigned approver (original, not delegate)      |
+| `ApproveAction`           | User is an assigned approver and hasn't acted yet                                                                 |
+| `RejectAction`            | User is an assigned approver and hasn't acted yet                                                                 |
+| `CommentAction`           | A pending approval exists and user can act on it                                                                  |
+| `DelegateAction`          | User is an assigned approver (original, not delegate)                                                             |
 
 #### Per-Action Submit Buttons
 

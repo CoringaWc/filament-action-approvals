@@ -36,7 +36,28 @@ it('keeps comment and delegate disabled in the package default config', function
     $config = require __DIR__.'/../../config/filament-action-approvals.php';
 
     expect($config['actions']['comment'])->toBeFalse()
-        ->and($config['actions']['delegate'])->toBeFalse();
+        ->and($config['actions']['delegate'])->toBeFalse()
+        ->and($config['widgets']['enabled'])->toBeNull();
+});
+
+it('keeps global panel widgets disabled by default when the dedicated dashboard is enabled', function (): void {
+    config()->set('filament-action-approvals.widgets.enabled', null);
+
+    $plugin = (new FilamentActionApprovalsPlugin)->dashboard();
+
+    $method = new ReflectionMethod($plugin, 'hasWidgets');
+
+    expect($method->invoke($plugin))->toBeFalse();
+});
+
+it('still allows explicitly enabling global panel widgets alongside the dedicated dashboard', function (): void {
+    $plugin = (new FilamentActionApprovalsPlugin)
+        ->dashboard()
+        ->widgets();
+
+    $method = new ReflectionMethod($plugin, 'hasWidgets');
+
+    expect($method->invoke($plugin))->toBeTrue();
 });
 
 it('resolves user model from plugin', function (): void {

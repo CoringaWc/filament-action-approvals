@@ -220,6 +220,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Panel Dashboard Widgets
+    |--------------------------------------------------------------------------
+    | These widgets are registered on the panel's primary dashboard via
+    | Panel::widgets(). When null, the package keeps them enabled only when the
+    | dedicated ApprovalsDashboard page is disabled, avoiding a merged dashboard
+    | experience by default.
+    */
+    'widgets' => [
+        'enabled' => null,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Database Table Prefix
     |--------------------------------------------------------------------------
     | Prefix for all package tables.
