@@ -8,12 +8,25 @@ use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
 use CoringaWc\FilamentActionApprovals\Support\ApprovableActionLabel;
 use CoringaWc\FilamentActionApprovals\Support\ApprovableModelLabel;
 use CoringaWc\FilamentActionApprovals\Support\DateDisplay;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\EditAction;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
 class ApprovalFlowsTable
 {
+    /**
+     * @return array<int, EditAction|DeleteAction>
+     */
+    protected static function recordActions(): array
+    {
+        return [
+            EditAction::make(),
+            DeleteAction::make(),
+        ];
+    }
+
     /**
      * @return array<int, TextColumn|IconColumn>
      */
@@ -49,6 +62,8 @@ class ApprovalFlowsTable
 
     public static function configure(Table $table): Table
     {
-        return $table->columns(static::columns());
+        return $table
+            ->columns(static::columns())
+            ->recordActions(static::recordActions());
     }
 }
