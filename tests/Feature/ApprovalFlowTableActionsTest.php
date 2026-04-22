@@ -27,7 +27,7 @@ it('shows edit and delete table actions for approval flows', function (): void {
 
     $flow = ApprovalFlow::create([
         'name' => 'Flow With Actions',
-        'approvable_type' => (new PurchaseOrder)->getMorphClass(),
+        'approvable_type' => (new PurchaseOrder())->getMorphClass(),
         'is_active' => true,
     ]);
 
