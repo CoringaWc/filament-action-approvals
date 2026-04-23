@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace CoringaWc\FilamentActionApprovals\Notifications;
 
+use CoringaWc\FilamentActionApprovals\Enums\ApprovalNotificationEvent;
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
-use CoringaWc\FilamentActionApprovals\Support\ApprovableModelLabel;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalNotificationContext;
 use Filament\Notifications\Notification;
 use Filament\Support\Icons\Heroicon;
 
@@ -25,15 +26,19 @@ class ApprovalEscalatedNotification
             return;
         }
 
-        $approvable = $stepInstance->approval->approvable;
-        $modelLabel = ApprovableModelLabel::resolve($approvable);
-        $approvableKey = $approvable?->getKey() ?? __('filament-action-approvals::approval.relation_manager.not_available');
-
-        Notification::make()
+        $approval = $stepInstance->approval;
+        $notification = Notification::make()
             ->title(__('filament-action-approvals::approval.notifications.escalated_title'))
-            ->body(__('filament-action-approvals::approval.notifications.escalated_body', ['model' => $modelLabel, 'id' => $approvableKey]))
+            ->body(__('filament-action-approvals::approval.notifications.escalated_body', ApprovalNotificationContext::bodyParameters($approval, ApprovalNotificationEvent::Escalated)))
             ->icon(Heroicon::OutlinedExclamationTriangle)
-            ->danger()
-            ->sendToDatabase($recipient, config('filament-action-approvals.notifications.broadcast', false));
+            ->danger();
+
+        $notificationAction = ApprovalNotificationContext::resolveAction($approval, ApprovalNotificationEvent::Escalated);
+
+        if ($notificationAction) {
+            $notification->actions([$notificationAction]);
+        }
+
+        $notification->sendToDatabase($recipient, config('filament-action-approvals.notifications.broadcast', false));
     }
 }

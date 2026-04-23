@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Workbench\App\Models;
 
 use CoringaWc\FilamentActionApprovals\Concerns\HasApprovals;
+use CoringaWc\FilamentActionApprovals\Enums\ApprovalNotificationEvent;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalNotificationAction;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -64,6 +66,23 @@ class PurchaseOrder extends Model
     public function onApprovalRejected(Approval $approval): void
     {
         $this->update(['status' => 'rejected']);
+    }
+
+    public function getApprovalNotificationRecordLabel(Approval $approval, ApprovalNotificationEvent $event): ?string
+    {
+        return sprintf('PO-%s', (string) $this->getKey());
+    }
+
+    public function getApprovalNotificationAction(Approval $approval, ApprovalNotificationEvent $event): ?ApprovalNotificationAction
+    {
+        if ($event !== ApprovalNotificationEvent::Rejected) {
+            return null;
+        }
+
+        return new ApprovalNotificationAction(
+            url: sprintf('/admin/purchase-orders/%s', (string) $this->getKey()),
+            label: 'View purchase order',
+        );
     }
 
     protected function normalizeUserId(int|string|null $userId): int|string|null

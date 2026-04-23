@@ -157,6 +157,7 @@ return [
         'escalated_body' => ':model #:id ultrapassou o prazo definido.',
         'sla_warning_title' => 'Prazo de aprovação próximo do vencimento',
         'sla_warning_body' => ':model #:id precisa ser aprovado até :deadline.',
+        'view_record' => 'Ver registro',
     ],
 
     // Widgets

@@ -157,6 +157,7 @@ return [
         'escalated_body' => ':model #:id has passed its configured deadline.',
         'sla_warning_title' => 'Approval deadline is approaching',
         'sla_warning_body' => ':model #:id must be approved by :deadline.',
+        'view_record' => 'View record',
     ],
 
     // Widgets

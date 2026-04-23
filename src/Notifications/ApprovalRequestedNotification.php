@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace CoringaWc\FilamentActionApprovals\Notifications;
 
+use CoringaWc\FilamentActionApprovals\Enums\ApprovalNotificationEvent;
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
-use CoringaWc\FilamentActionApprovals\Support\ApprovableModelLabel;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalNotificationContext;
 use Filament\Notifications\Notification;
 use Filament\Support\Icons\Heroicon;
 
@@ -25,17 +26,22 @@ class ApprovalRequestedNotification
             return;
         }
 
-        $approvable = $stepInstance->approval->approvable;
+        $approval = $stepInstance->approval;
         $step = $stepInstance->step;
-        $modelLabel = ApprovableModelLabel::resolve($approvable);
-        $approvableKey = $approvable?->getKey() ?? __('filament-action-approvals::approval.relation_manager.not_available');
         $stepName = $step ? $step->name : __('filament-action-approvals::approval.relation_manager.not_available');
 
-        Notification::make()
+        $notification = Notification::make()
             ->title(__('filament-action-approvals::approval.notifications.requested_title', ['step' => $stepName]))
-            ->body(__('filament-action-approvals::approval.notifications.requested_body', ['model' => $modelLabel, 'id' => $approvableKey]))
+            ->body(__('filament-action-approvals::approval.notifications.requested_body', ApprovalNotificationContext::bodyParameters($approval, ApprovalNotificationEvent::Requested)))
             ->icon(Heroicon::OutlinedClipboardDocumentCheck)
-            ->warning()
-            ->sendToDatabase($recipient, config('filament-action-approvals.notifications.broadcast', false));
+            ->warning();
+
+        $notificationAction = ApprovalNotificationContext::resolveAction($approval, ApprovalNotificationEvent::Requested);
+
+        if ($notificationAction) {
+            $notification->actions([$notificationAction]);
+        }
+
+        $notification->sendToDatabase($recipient, config('filament-action-approvals.notifications.broadcast', false));
     }
 }

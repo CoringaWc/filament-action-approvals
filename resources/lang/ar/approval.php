@@ -148,6 +148,7 @@ return [
         'escalated_body' => ':model #:id تجاوز المهلة المحددة.',
         'sla_warning_title' => 'تنبيه: اقتراب موعد الموافقة',
         'sla_warning_body' => ':model #:id موعد الموافقة :deadline.',
+        'view_record' => 'عرض السجل',
     ],
 
     // Widgets
