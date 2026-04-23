@@ -5,16 +5,21 @@ declare(strict_types=1);
 use CoringaWc\FilamentActionApprovals\ApproverResolvers\CustomRuleResolver;
 use CoringaWc\FilamentActionApprovals\ApproverResolvers\RoleResolver;
 use CoringaWc\FilamentActionApprovals\Concerns\HasApprovals;
+use Filament\Forms\Components\Select;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Spatie\Permission\Models\Role;
 use Workbench\App\Models\Expense;
 use Workbench\App\Models\PurchaseOrder;
+use Workbench\App\Models\User;
 
 // ─── RoleResolver ─────────────────────────────────────────────
 
 it('resolves users by single role string (backward compatible)', function (): void {
     Role::findOrCreate('manager', 'web');
-    $manager = $this->createUser();
+    $manager = User::factory()->create();
     $manager->assignRole('manager');
 
     $resolver = new RoleResolver;
@@ -28,10 +33,10 @@ it('resolves users by single role string (backward compatible)', function (): vo
 it('resolves users by multi-select role array', function (): void {
     Role::findOrCreate('manager', 'web');
     Role::findOrCreate('director', 'web');
-    $manager = $this->createUser();
+    $manager = User::factory()->create();
     $manager->assignRole('manager');
 
-    $director = $this->createUser();
+    $director = User::factory()->create();
     $director->assignRole('director');
 
     $resolver = new RoleResolver;
@@ -61,7 +66,7 @@ it('returns empty for empty role array', function (): void {
 it('does not return duplicate user IDs across roles', function (): void {
     Role::findOrCreate('manager', 'web');
     Role::findOrCreate('director', 'web');
-    $user = $this->createUser();
+    $user = User::factory()->create();
     $user->assignRole('manager');
     $user->assignRole('director');
 
@@ -72,6 +77,46 @@ it('does not return duplicate user IDs across roles', function (): void {
 
     expect($userIds)->toContain($user->getKey())
         ->and(array_unique($userIds))->toHaveCount(count($userIds));
+});
+
+it('limits role select options to the current panel when the roles table supports panel scoping', function (): void {
+    Schema::table('roles', function (Blueprint $table): void {
+        $table->string('panel')->nullable();
+    });
+
+    DB::table('roles')->insert([
+        ['name' => 'Admin Role', 'guard_name' => 'web', 'panel' => 'admin'],
+        ['name' => 'App Role', 'guard_name' => 'web', 'panel' => 'app'],
+    ]);
+
+    $fields = RoleResolver::configSchema();
+    /** @var Select $select */
+    $select = $fields[0];
+    $options = $select->getOptions();
+
+    expect($options)->toHaveKey('Admin Role');
+    expect(array_key_exists('App Role', $options))->toBeFalse();
+});
+
+it('can disable role panel scoping through config', function (): void {
+    config()->set('filament-action-approvals.roles.limit_to_current_panel', false);
+
+    Schema::table('roles', function (Blueprint $table): void {
+        $table->string('panel')->nullable();
+    });
+
+    DB::table('roles')->insert([
+        ['name' => 'Admin Role', 'guard_name' => 'web', 'panel' => 'admin'],
+        ['name' => 'App Role', 'guard_name' => 'web', 'panel' => 'app'],
+    ]);
+
+    $fields = RoleResolver::configSchema();
+    /** @var Select $select */
+    $select = $fields[0];
+    $options = $select->getOptions();
+
+    expect($options)->toHaveKey('Admin Role');
+    expect($options)->toHaveKey('App Role');
 });
 
 // ─── CustomRuleResolver ───────────────────────────────────────
@@ -89,8 +134,8 @@ it('reports unavailable when no model class is provided', function (): void {
 });
 
 it('resolves users from model custom rule', function (): void {
-    $manager = $this->createUser();
-    $user = $this->createUser();
+    $manager = User::factory()->create();
+    $user = User::factory()->create();
 
     // Temporarily override the Expense custom rules to use a deterministic closure
     $expense = Expense::factory()->create(['user_id' => $user->getKey()]);
@@ -108,6 +153,7 @@ it('resolves users from model custom rule', function (): void {
 
         public static int $testManagerId = 0;
 
+        /** @return array<string, callable(self): array<int, int>> */
         public static function approvalCustomRules(): array
         {
             return [
@@ -119,7 +165,11 @@ it('resolves users from model custom rule', function (): void {
     };
 
     $testModel::$testManagerId = $manager->getKey();
-    $instance = $testModel::query()->find($expense->getKey());
+    $instance = $testModel::query()->findOrFail($expense->getKey());
+
+    if (! $instance instanceof Model) {
+        throw new RuntimeException('Expected a model instance for the custom rule test.');
+    }
 
     $resolver = new CustomRuleResolver;
     $userIds = $resolver->resolve(['custom_rule' => 'test_rule'], $instance);
@@ -128,8 +178,8 @@ it('resolves users from model custom rule', function (): void {
 });
 
 it('returns list of int from custom rule closure', function (): void {
-    $user1 = $this->createUser();
-    $user2 = $this->createUser();
+    $user1 = User::factory()->create();
+    $user2 = User::factory()->create();
     $expense = Expense::factory()->create(['user_id' => $user1->getKey()]);
 
     // Create a model class with a deterministic rule returning multiple IDs
@@ -144,6 +194,7 @@ it('returns list of int from custom rule closure', function (): void {
         /** @var list<int> */
         public static array $returnIds = [];
 
+        /** @return array<string, callable(self): list<int>> */
         public static function approvalCustomRules(): array
         {
             return [
@@ -155,7 +206,11 @@ it('returns list of int from custom rule closure', function (): void {
     };
 
     $testModel::$returnIds = [$user1->getKey(), $user2->getKey()];
-    $instance = $testModel::query()->find($expense->getKey());
+    $instance = $testModel::query()->findOrFail($expense->getKey());
+
+    if (! $instance instanceof Model) {
+        throw new RuntimeException('Expected a model instance for the multi user custom rule test.');
+    }
 
     $resolver = new CustomRuleResolver;
     $userIds = $resolver->resolve(['custom_rule' => 'multi_user'], $instance);

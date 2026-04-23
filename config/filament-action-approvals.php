@@ -27,6 +27,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Roles
+    |--------------------------------------------------------------------------
+    | limit_to_current_panel: When true, the RoleResolver select only lists
+    | roles that belong to the current Filament panel, when the roles table
+    | supports a "panel" column.
+    */
+    'roles' => [
+        'limit_to_current_panel' => true,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Multi-Tenancy
     |--------------------------------------------------------------------------
     | Enable multi-tenancy to scope approval flows and approvers per tenant.

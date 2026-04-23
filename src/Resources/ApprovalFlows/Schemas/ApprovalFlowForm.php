@@ -10,6 +10,7 @@ use CoringaWc\FilamentActionApprovals\Enums\EscalationAction;
 use CoringaWc\FilamentActionApprovals\Enums\StepType;
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Support\ApprovableActionLabel;
+use CoringaWc\FilamentActionApprovals\Support\ApprovableModelLabel;
 use CoringaWc\FilamentActionApprovals\Support\FormFieldHint;
 use CoringaWc\FilamentActionApprovals\Support\TranslatableSelect;
 use Filament\Facades\Filament;
@@ -23,6 +24,8 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\Relation;
 
 class ApprovalFlowForm
 {
@@ -51,6 +54,9 @@ class ApprovalFlowForm
                             Select::make('approvable_type')
                                 ->label(__('filament-action-approvals::approval.flow.applies_to'))
                                 ->options(fn (): array => static::getApprovableModels())
+                                ->getOptionLabelUsing(fn (mixed $value): string => is_string($value) && filled($value)
+                                    ? ApprovableModelLabel::resolve($value)
+                                    : __('filament-action-approvals::approval.flow.any_model'))
                                 ->placeholder(__('filament-action-approvals::approval.flow.any_model'))
                                 ->searchable()
                                 ->live()
@@ -222,7 +228,11 @@ class ApprovalFlowForm
     protected static function getFilteredResolverOptions(array $resolvers, ?string $modelClass): array
     {
         if (($modelClass !== null) && (! class_exists($modelClass))) {
-            $modelClass = null;
+            $modelClass = Relation::getMorphedModel($modelClass);
+
+            if (! is_string($modelClass) || ! class_exists($modelClass)) {
+                $modelClass = null;
+            }
         }
 
         /** @var class-string|null $modelClass */
@@ -299,7 +309,10 @@ class ApprovalFlowForm
             $modelClass = $resource::getModel();
 
             if (in_array(HasApprovals::class, class_uses_recursive($modelClass))) {
-                $models[$modelClass] = $resource::getModelLabel();
+                /** @var Model $model */
+                $model = new $modelClass;
+
+                $models[$model->getMorphClass()] = ApprovableModelLabel::resolve($model);
             }
         }
 

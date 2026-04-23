@@ -8,15 +8,17 @@ use CoringaWc\FilamentActionApprovals\Contracts\ApproverResolver;
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Support\FormFieldHint;
 use CoringaWc\FilamentActionApprovals\Support\TranslatableSelect;
+use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Filament\Schemas\Components\Component;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Schema;
 use Spatie\Permission\Models\Role;
 
 class RoleResolver implements ApproverResolver
 {
     /**
-     * @param  array{role?: string|list<string>}  $config
+     * @param  array{role?: string|list<string>|null}  $config
      * @return list<int|string>
      */
     public function resolve(array $config, Model $approvable): array
@@ -78,6 +80,16 @@ class RoleResolver implements ApproverResolver
                             $query = Role::query();
 
                             $excludedRoles = FilamentActionApprovalsPlugin::superAdminRoles();
+
+                            $currentPanel = Filament::getCurrentPanel()?->getId();
+
+                            if (
+                                config('filament-action-approvals.roles.limit_to_current_panel', true)
+                                && filled($currentPanel)
+                                && Schema::hasColumn($query->getModel()->getTable(), 'panel')
+                            ) {
+                                $query->where('panel', $currentPanel);
+                            }
 
                             if ($excludedRoles !== []) {
                                 $query->whereNotIn('name', $excludedRoles);

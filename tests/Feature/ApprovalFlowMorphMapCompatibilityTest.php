@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use CoringaWc\FilamentActionApprovals\ApproverResolvers\UserResolver;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
+use CoringaWc\FilamentActionApprovals\Resources\ApprovalFlows\Schemas\ApprovalFlowForm;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Workbench\App\Models\Invoice;
@@ -92,4 +93,19 @@ it('resolves legacy fqcn flows even when the model now uses a morph alias', func
     $invoice->refresh();
 
     expect($invoice->isSent())->toBeTrue();
+});
+
+it('uses the morph alias as the select option value for approvable models', function (): void {
+    Relation::morphMap([
+        'invoice_alias' => Invoice::class,
+    ]);
+
+    $method = new ReflectionMethod(ApprovalFlowForm::class, 'getApprovableModels');
+    $method->setAccessible(true);
+
+    /** @var array<string, string> $options */
+    $options = $method->invoke(null);
+
+    expect($options)->toHaveKey('invoice_alias');
+    expect(array_key_exists(Invoice::class, $options))->toBeFalse();
 });
