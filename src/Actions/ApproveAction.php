@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CoringaWc\FilamentActionApprovals\Actions;
 
+use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
@@ -29,7 +30,7 @@ class ApproveAction extends Action
             ->icon(Heroicon::OutlinedCheckCircle)
             ->color('success')
             ->visible(function (self $action): bool {
-                $userId = auth()->id();
+                $userId = FilamentActionApprovalsPlugin::resolveAuthenticatedUserId();
 
                 if ($userId === null) {
                     return false;
@@ -50,7 +51,7 @@ class ApproveAction extends Action
             ])
             ->action(function (self $action, array $data): void {
                 $stepInstance = $action->resolveCurrentStepInstance();
-                $userId = auth()->id();
+                $userId = FilamentActionApprovalsPlugin::resolveAuthenticatedUserId();
 
                 if (! $stepInstance || $userId === null) {
                     return;

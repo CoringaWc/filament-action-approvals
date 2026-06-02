@@ -58,6 +58,7 @@ abstract class TestCase extends Orchestra
 
         $this->app['session.store']->start();
         $this->app['view']->share('errors', new ViewErrorBag);
+        $this->loadMigrationsFrom(dirname(__DIR__).'/database/migrations');
 
         Filament::setCurrentPanel('admin');
         Filament::bootCurrentPanel();

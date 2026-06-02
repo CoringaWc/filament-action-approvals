@@ -12,6 +12,7 @@ use CoringaWc\FilamentActionApprovals\Widgets\ApprovalAnalyticsWidget;
 use CoringaWc\FilamentActionApprovals\Widgets\PendingApprovalsWidget;
 use Filament\Clusters\Cluster;
 use Filament\Contracts\Plugin;
+use Filament\Facades\Filament;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Model;
 
@@ -268,7 +269,7 @@ class FilamentActionApprovalsPlugin implements Plugin
             return false;
         }
 
-        $userId ??= auth()->id();
+        $userId ??= static::resolveAuthenticatedUserId();
 
         if ($userId === null) {
             return false;
@@ -306,6 +307,32 @@ class FilamentActionApprovalsPlugin implements Plugin
         }
 
         return false;
+    }
+
+    public static function resolveAuthenticatedUserId(): int|string|null
+    {
+        $guard = static::resolveAuthGuard();
+
+        if ($guard !== null) {
+            $userId = auth()->guard($guard)->id();
+
+            if (is_int($userId) || is_string($userId)) {
+                return $userId;
+            }
+        }
+
+        $userId = auth()->id();
+
+        return is_int($userId) || is_string($userId) ? $userId : null;
+    }
+
+    public static function resolveAuthGuard(): ?string
+    {
+        try {
+            return Filament::getAuthGuard();
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**
