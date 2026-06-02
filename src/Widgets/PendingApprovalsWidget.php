@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CoringaWc\FilamentActionApprovals\Widgets;
 
+use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Support\ApprovableModelLabel;
@@ -31,7 +32,7 @@ class PendingApprovalsWidget extends TableWidget
             ->query(
                 ApprovalStepInstance::query()
                     ->waiting()
-                    ->assignedTo(auth()->id())
+                    ->assignedTo(FilamentActionApprovalsPlugin::resolveAuthenticatedUserId())
                     ->with(['approval.approvable', 'step'])
                     ->latest('activated_at')
             )

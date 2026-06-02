@@ -45,7 +45,7 @@ class ApprovalActionGroup
             return true;
         }
 
-        $userId = auth()->id();
+        $userId = FilamentActionApprovalsPlugin::resolveAuthenticatedUserId();
         $approval = static::resolveCurrentApproval($record);
 
         if ($userId === null || ! $approval instanceof Approval) {

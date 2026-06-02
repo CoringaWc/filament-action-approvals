@@ -84,7 +84,7 @@ class ApprovalInfolist
                         ->columnSpanFull()
                         ->alignment(Alignment::End)
                         ->visible(function (Approval $record): bool {
-                            $userId = auth()->id();
+                            $userId = FilamentActionApprovalsPlugin::resolveAuthenticatedUserId();
 
                             if ($userId === null) {
                                 return false;

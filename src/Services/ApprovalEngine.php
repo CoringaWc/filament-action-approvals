@@ -14,6 +14,7 @@ use CoringaWc\FilamentActionApprovals\Events\ApprovalDelegated;
 use CoringaWc\FilamentActionApprovals\Events\ApprovalRejected;
 use CoringaWc\FilamentActionApprovals\Events\ApprovalStepCompleted;
 use CoringaWc\FilamentActionApprovals\Events\ApprovalSubmitted;
+use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
@@ -30,7 +31,7 @@ class ApprovalEngine
     public function submit(Model $approvable, ?ApprovalFlow $flow = null, int|string|null $submittedBy = null, ?string $actionKey = null): Approval
     {
         $flow ??= ApprovalFlow::findSubmissionFlowForModel($approvable, $actionKey);
-        $submittedBy ??= auth()->id();
+        $submittedBy ??= FilamentActionApprovalsPlugin::resolveAuthenticatedUserId();
 
         if (! is_int($submittedBy) && ! is_string($submittedBy)) {
             $submittedBy = null;

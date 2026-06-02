@@ -38,7 +38,7 @@ class DelegateAction extends Action
             ->icon(Heroicon::OutlinedArrowPath)
             ->color('warning')
             ->visible(function (self $action): bool {
-                $userId = auth()->id();
+                $userId = FilamentActionApprovalsPlugin::resolveAuthenticatedUserId();
 
                 if ($userId === null) {
                     return false;
@@ -59,7 +59,7 @@ class DelegateAction extends Action
                         ->searchable()
                         ->options(function () use ($userKeyName, $userModel): array {
                             $users = $userModel::query();
-                            $currentUserId = auth()->id();
+                            $currentUserId = FilamentActionApprovalsPlugin::resolveAuthenticatedUserId();
 
                             if (is_int($currentUserId) || is_string($currentUserId)) {
                                 $users->where($userKeyName, '!=', $currentUserId);
@@ -94,7 +94,7 @@ class DelegateAction extends Action
             ])
             ->action(function (self $action, array $data): void {
                 $stepInstance = $action->resolveCurrentStepInstance();
-                $userId = auth()->id();
+                $userId = FilamentActionApprovalsPlugin::resolveAuthenticatedUserId();
                 $delegateToUserId = $data['to_user_id'] ?? null;
 
                 // Cast numeric string to int for integer primary key users

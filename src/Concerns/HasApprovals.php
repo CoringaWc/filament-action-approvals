@@ -7,6 +7,7 @@ namespace CoringaWc\FilamentActionApprovals\Concerns;
 use CoringaWc\FilamentActionApprovals\Attributes\ApprovableActions;
 use CoringaWc\FilamentActionApprovals\Enums\ActionType;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
+use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalAction;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
@@ -214,7 +215,7 @@ trait HasApprovals
      */
     public function canSubmitForApproval(?string $actionKey = null, int|string|null $userId = null): bool
     {
-        $resolvedUserId = $this->normalizeSubmissionPolicyUserId($userId ?? auth()->id());
+        $resolvedUserId = $this->normalizeSubmissionPolicyUserId($userId ?? FilamentActionApprovalsPlugin::resolveAuthenticatedUserId());
 
         if ($resolvedUserId === null) {
             return false;
@@ -230,7 +231,7 @@ trait HasApprovals
      */
     public function canBeSubmittedForApproval(?string $actionKey = null, int|string|null $userId = null): bool
     {
-        $resolvedUserId = $this->normalizeSubmissionPolicyUserId($userId ?? auth()->id());
+        $resolvedUserId = $this->normalizeSubmissionPolicyUserId($userId ?? FilamentActionApprovalsPlugin::resolveAuthenticatedUserId());
 
         // Already pending — can't submit again
         if ($this->isPendingApproval()) {

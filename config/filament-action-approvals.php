@@ -15,6 +15,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | User Table
+    |--------------------------------------------------------------------------
+    |
+    | Approval actor foreign keys in the publishable migrations target this
+    | table. Publish the migrations and adjust the table/columns before running
+    | them when your Filament panel uses a non-default authenticatable table.
+    |
+    */
+    'user_table' => 'users',
+
+    /*
+    |--------------------------------------------------------------------------
     | Approver Resolvers
     |--------------------------------------------------------------------------
     | Registered resolver classes available in the flow builder UI.

@@ -51,12 +51,14 @@ Action-based approval workflows for [Filament v5](https://filamentphp.com). Defi
 composer require coringawc/filament-action-approvals
 ```
 
-Publish and run the migrations:
+Publish the migrations, review them for your application's authentication model, and then run them:
 
 ```bash
 php artisan vendor:publish --tag="filament-action-approvals-migrations"
 php artisan migrate
 ```
+
+The package does not auto-run its migrations for the consuming application. This is intentional: approval actor columns (`submitted_by`, `approval_actions.user_id`, and delegation user columns) may need to reference `users`, `admins`, or another authenticatable table depending on the Filament panel where the plugin is installed. Publish the migrations first and adjust the foreign key targets before running `php artisan migrate`.
 
 Optionally publish the config file:
 
@@ -72,6 +74,9 @@ The config file (`config/filament-action-approvals.php`) contains:
 return [
     // The user model used for approver relationships
     'user_model' => App\Models\User::class,
+
+    // The table targeted by actor foreign keys in the publishable migrations
+    'user_table' => 'users',
 
     // Registered resolver classes available in the flow builder
     'approver_resolvers' => [
