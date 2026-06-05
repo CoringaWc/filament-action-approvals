@@ -116,6 +116,7 @@ return [
         'reject' => 'Rejeitar',
         'comment' => 'Comentar',
         'delegate' => 'Delegar',
+        'view' => 'Visualizar aprovação',
         'list_approvals' => 'Ver aprovações',
         'clear_context' => 'Limpar contexto',
         'approval_flow' => 'Fluxo de Aprovação',

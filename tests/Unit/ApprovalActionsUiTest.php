@@ -12,6 +12,7 @@ use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use CoringaWc\FilamentActionApprovals\Tests\TestCase;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
+use Filament\Actions\ViewAction;
 use Filament\Support\Icons\Heroicon;
 use Workbench\App\Models\PurchaseOrder;
 use Workbench\App\Models\User;
@@ -124,4 +125,52 @@ it('shows grouped operational actions before any table action is mounted', funct
         'approvalComment',
         'delegate',
     ]);
+});
+
+it('labels the approval resource view record action so it shows text when grouped', function (): void {
+    $actions = ApprovalTableActionsTestTable::getRecordActionsForTesting();
+
+    expect($actions[0])->toBeInstanceOf(ActionGroup::class);
+
+    /** @var ActionGroup $actionGroup */
+    $actionGroup = $actions[0];
+
+    $viewAction = $actionGroup->getFlatActions()['view'] ?? null;
+
+    expect($viewAction)->toBeInstanceOf(Action::class);
+
+    /** @var Action $viewAction */
+    $label = (string) $viewAction->getLabel();
+
+    expect($label)
+        ->toBe(__('filament-action-approvals::approval.actions.view'))
+        ->not->toBe('')
+        ->not->toBe('filament-action-approvals::approval.actions.view');
+});
+
+it('keeps grouped record actions as list items even when the app forces icon buttons globally', function (): void {
+    // Reproduces a consuming app that applies a global `iconButton()` default to ViewAction
+    // (e.g. via AppServiceProvider `ViewAction::configureUsing(...)`). Without an explicit
+    // `grouped()` call, that explicit icon-button view beats the ActionGroup's `defaultView()`,
+    // so the view action would render as an icon with no text inside the dropdown. The grouping
+    // logic must force the grouped view so every record action shows its label.
+    ViewAction::configureUsing(
+        fn (ViewAction $action): ViewAction => $action->iconButton(),
+        function (): void {
+            $actions = ApprovalTableActionsTestTable::getRecordActionsForTesting();
+
+            expect($actions[0])->toBeInstanceOf(ActionGroup::class);
+
+            /** @var ActionGroup $actionGroup */
+            $actionGroup = $actions[0];
+
+            foreach ($actionGroup->getActions() as $action) {
+                expect($action)->toBeInstanceOf(Action::class);
+
+                /** @var Action $action */
+                expect($action->isIconButton())->toBeFalse()
+                    ->and($action->getView())->toBe(Action::GROUPED_VIEW);
+            }
+        },
+    );
 });

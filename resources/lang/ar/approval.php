@@ -114,6 +114,7 @@ return [
         'reject' => 'رفض',
         'comment' => 'تعليق',
         'delegate' => 'تفويض',
+        'view' => 'عرض الموافقة',
 
         'approval_flow' => 'مسار الموافقة',
         'approval_action' => 'الإجراء المطلوب',

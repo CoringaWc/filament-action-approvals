@@ -116,6 +116,7 @@ return [
         'reject' => 'Reject',
         'comment' => 'Comment',
         'delegate' => 'Delegate',
+        'view' => 'View approval',
         'list_approvals' => 'View approvals',
         'clear_context' => 'Clear context',
         'approval_flow' => 'Approval Flow',

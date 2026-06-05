@@ -202,6 +202,7 @@ class ApprovalInfolist
     public static function configureViewAction(ViewAction $action): ViewAction
     {
         return $action
+            ->label(__('filament-action-approvals::approval.actions.view'))
             ->slideOver()
             ->infolist(fn (Schema $schema): Schema => static::configure($schema))
             ->modalSubmitAction(false)

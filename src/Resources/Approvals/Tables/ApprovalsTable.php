@@ -43,7 +43,10 @@ class ApprovalsTable
         }
 
         return [
-            ActionGroup::make($actions)
+            ActionGroup::make(array_map(
+                static fn (Action $action): Action => $action->grouped(),
+                $actions,
+            ))
                 ->icon(Heroicon::EllipsisVertical)
                 ->tooltip(__('filament-action-approvals::approval.approvals')),
         ];
