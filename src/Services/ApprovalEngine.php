@@ -109,6 +109,50 @@ class ApprovalEngine
         });
     }
 
+    /**
+     * Approve every remaining step of an approval on behalf of a privileged
+     * user, recording one Approved action per step and completing the approval.
+     *
+     * Used to let privileged users apply an approvable action directly: the
+     * regular ApprovalCompleted event and onApprovalApproved callback fire once
+     * the final step is approved, so consumers apply the mutation through their
+     * existing completion hooks instead of a separate bypass path.
+     */
+    public function autoApprove(Approval $approval, int|string $userId, ?string $comment = null): void
+    {
+        DB::transaction(function () use ($approval, $userId, $comment): void {
+            $approval->refresh();
+
+            while ($approval->status === ApprovalStatus::Pending) {
+                $stepInstance = $approval->currentStepInstance();
+
+                if (! $stepInstance) {
+                    break;
+                }
+
+                $approval->actions()->create([
+                    'approval_step_instance_id' => $stepInstance->getKey(),
+                    'user_id' => $userId,
+                    'type' => ActionType::Approved,
+                    'comment' => $comment,
+                ]);
+
+                $stepInstance->update([
+                    'received_approvals' => $stepInstance->required_approvals,
+                    'status' => StepInstanceStatus::Approved,
+                    'completed_at' => now(),
+                ]);
+
+                event(new ApprovalStepCompleted($stepInstance));
+                $this->fireModelCallback($approval->approvable, 'onApprovalStepCompleted', $stepInstance);
+
+                $this->activateNextStep($approval->refresh());
+
+                $approval->refresh();
+            }
+        });
+    }
+
     public function reject(ApprovalStepInstance $stepInstance, int|string $userId, ?string $comment = null): void
     {
         DB::transaction(function () use ($stepInstance, $userId, $comment) {

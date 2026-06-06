@@ -257,14 +257,57 @@ class FilamentActionApprovalsPlugin implements Plugin
     }
 
     /**
-     * Check if the given user is a super admin for approval purposes.
+     * Resolve the privileged configuration, merging the deprecated
+     * `super_admin` alias block into the canonical `privileged` block.
      *
-     * Super admins can see and act on all approval actions regardless
-     * of being an assigned approver. Controlled via config.
+     * Resolution rules: `enabled` via OR, `roles` and `user_ids` via union,
+     * `hide_from_selects` via AND. `apply_directly` only reads `privileged`.
+     *
+     * @return array{enabled: bool, roles: list<string>, user_ids: list<int|string>, hide_from_selects: bool, apply_directly: bool}
+     */
+    protected static function privilegedConfig(): array
+    {
+        $prefix = 'filament-action-approvals.';
+
+        $enabled = (bool) config($prefix.'privileged.enabled', false)
+            || (bool) config($prefix.'super_admin.enabled', false);
+
+        /** @var list<string> $roles */
+        $roles = array_values(array_unique(array_merge(
+            (array) config($prefix.'privileged.roles', []),
+            (array) config($prefix.'super_admin.roles', []),
+        )));
+
+        /** @var list<int|string> $userIds */
+        $userIds = array_values(array_unique(array_merge(
+            (array) config($prefix.'privileged.user_ids', []),
+            (array) config($prefix.'super_admin.user_ids', []),
+        ), SORT_REGULAR));
+
+        $hideFromSelects = (bool) config($prefix.'privileged.hide_from_selects', true)
+            && (bool) config($prefix.'super_admin.hide_from_selects', true);
+
+        return [
+            'enabled' => $enabled,
+            'roles' => $roles,
+            'user_ids' => $userIds,
+            'hide_from_selects' => $hideFromSelects,
+            'apply_directly' => (bool) config($prefix.'privileged.bypass.apply_directly', false),
+        ];
+    }
+
+    /**
+     * Check if the given user is a privileged user for approval purposes.
+     *
+     * Privileged users can see and act on all approval actions regardless
+     * of being an assigned approver. Controlled via the `privileged` config
+     * (with the deprecated `super_admin` block merged in as an alias).
      */
     public static function isSuperAdmin(int|string|null $userId = null): bool
     {
-        if (! config('filament-action-approvals.super_admin.enabled', false)) {
+        $config = static::privilegedConfig();
+
+        if (! $config['enabled']) {
             return false;
         }
 
@@ -274,17 +317,11 @@ class FilamentActionApprovalsPlugin implements Plugin
             return false;
         }
 
-        /** @var list<int> $superAdminIds */
-        $superAdminIds = config('filament-action-approvals.super_admin.user_ids', []);
-
-        if (in_array($userId, $superAdminIds, true)) {
+        if (in_array($userId, $config['user_ids'], true)) {
             return true;
         }
 
-        /** @var list<string> $superAdminRoles */
-        $superAdminRoles = config('filament-action-approvals.super_admin.roles', []);
-
-        if ($superAdminRoles === []) {
+        if ($config['roles'] === []) {
             return false;
         }
 
@@ -300,7 +337,7 @@ class FilamentActionApprovalsPlugin implements Plugin
         // Support spatie/laravel-permission if available
         if (method_exists($user, 'hasAnyRole')) {
             /** @var bool $hasRole */
-            $hasRole = $user->hasAnyRole($superAdminRoles);
+            $hasRole = $user->hasAnyRole($config['roles']);
 
             return $hasRole;
         }
@@ -309,20 +346,38 @@ class FilamentActionApprovalsPlugin implements Plugin
     }
 
     /**
-     * Whether super admin users/roles should be hidden from resolver selects.
+     * Determine whether the given user may apply an approvable action directly,
+     * bypassing the regular approval flow.
      *
-     * Only applies when super_admin is enabled AND hide_from_selects is true.
+     * Direct application is gated by the `privileged.bypass.apply_directly`
+     * toggle and, by default, delegates the identity check to
+     * {@see isSuperAdmin()}. Override this method to customize authorization.
      */
-    public static function shouldHideSuperAdminsFromSelects(): bool
+    public static function canApplyDirectly(int|string|null $userId = null): bool
     {
-        return config('filament-action-approvals.super_admin.enabled', false)
-            && config('filament-action-approvals.super_admin.hide_from_selects', true);
+        if (! static::privilegedConfig()['apply_directly']) {
+            return false;
+        }
+
+        return static::isSuperAdmin($userId);
     }
 
     /**
-     * Get the user IDs configured as super admins (for filtering from selects).
+     * Whether privileged users/roles should be hidden from resolver selects.
      *
-     * @return list<int>
+     * Only applies when privileged access is enabled AND hide_from_selects is true.
+     */
+    public static function shouldHideSuperAdminsFromSelects(): bool
+    {
+        $config = static::privilegedConfig();
+
+        return $config['enabled'] && $config['hide_from_selects'];
+    }
+
+    /**
+     * Get the user IDs configured as privileged (for filtering from selects).
+     *
+     * @return list<int|string>
      */
     public static function superAdminUserIds(): array
     {
@@ -330,14 +385,11 @@ class FilamentActionApprovalsPlugin implements Plugin
             return [];
         }
 
-        /** @var list<int> $ids */
-        $ids = config('filament-action-approvals.super_admin.user_ids', []);
-
-        return $ids;
+        return static::privilegedConfig()['user_ids'];
     }
 
     /**
-     * Get the role names configured as super admins (for filtering from selects).
+     * Get the role names configured as privileged (for filtering from selects).
      *
      * @return list<string>
      */
@@ -347,10 +399,7 @@ class FilamentActionApprovalsPlugin implements Plugin
             return [];
         }
 
-        /** @var list<string> $roles */
-        $roles = config('filament-action-approvals.super_admin.roles', []);
-
-        return $roles;
+        return static::privilegedConfig()['roles'];
     }
 
     /**

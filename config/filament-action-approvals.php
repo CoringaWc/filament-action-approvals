@@ -165,16 +165,53 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Super Admin
+    | Privileged Users
     |--------------------------------------------------------------------------
-    | When enabled, users matching the configured roles or IDs can see and
-    | act on all approval actions regardless of being an assigned approver.
+    | Privileged users are trusted actors who can operate above the regular
+    | approval flow. The legacy `super_admin` block below is kept as a
+    | deprecated alias and is merged into this block at resolution time.
     |
     | Works with or without spatie/laravel-permission.
     */
+    'privileged' => [
+        // Master switch for every privileged capability below. When false,
+        // privileged checks return false even if roles or IDs are configured.
+        'enabled' => false,
+
+        // Role names whose users are treated as privileged. Requires
+        // spatie/laravel-permission (resolved via the user's hasAnyRole()).
+        'roles' => ['super_admin'],
+
+        // Explicit user IDs treated as privileged regardless of their roles.
+        'user_ids' => [],
+
+        // Hide privileged users/roles from approver resolver selects so they
+        // are not picked as regular approvers.
+        'hide_from_selects' => true,
+
+        // Bypass capabilities granted to privileged users.
+        'bypass' => [
+            // Allow privileged users to apply an approvable action directly,
+            // creating and auto-completing its approval so the regular
+            // ApprovalCompleted event/onApprovalApproved hooks still fire.
+            'apply_directly' => false,
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Super Admin (Deprecated)
+    |--------------------------------------------------------------------------
+    | Deprecated alias of the `privileged` block above. Existing keys keep
+    | working and are merged into `privileged` (enabled via OR, roles and
+    | user_ids via union, hide_from_selects via AND). Prefer `privileged`.
+    |
+    | When enabled, users matching the configured roles or IDs can see and
+    | act on all approval actions regardless of being an assigned approver.
+    */
     'super_admin' => [
         'enabled' => false,
-        'roles' => ['super_admin'],
+        'roles' => [],
         'user_ids' => [],
         'hide_from_selects' => true,
     ],
