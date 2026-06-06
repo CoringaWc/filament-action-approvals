@@ -12,7 +12,9 @@ use CoringaWc\FilamentActionApprovals\Models\ApprovalAction;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
 use ReflectionClass;
 
 trait HasApprovals
@@ -25,6 +27,24 @@ trait HasApprovals
         return $this->morphMany(Approval::class, 'approvable');
     }
 
+    /**
+     * Eager-loadable "latest pending approval" relation.
+     *
+     * Exposes the same record as {@see static::currentApproval()} as a single
+     * one-of-many relationship so callers can preload it with `with('pendingApproval')`
+     * and avoid one approval lookup per record (e.g. one query per table row when
+     * rendering approval row actions).
+     *
+     * @return MorphOne<Approval, $this>
+     */
+    public function pendingApproval(): MorphOne
+    {
+        return $this->morphOne(Approval::class, 'approvable')->ofMany(
+            ['created_at' => 'max', 'id' => 'max'],
+            fn (Builder $query): Builder => $query->where('status', ApprovalStatus::Pending),
+        );
+    }
+
     public function latestApproval(): ?Approval
     {
         /** @var ?Approval $approval */
@@ -35,6 +55,16 @@ trait HasApprovals
 
     public function currentApproval(): ?Approval
     {
+        // Prefer the eager-loaded one-of-many relation when present so callers
+        // that preload `pendingApproval` (e.g. Filament tables) do not trigger
+        // an additional query per record.
+        if ($this->relationLoaded('pendingApproval')) {
+            /** @var ?Approval $loaded */
+            $loaded = $this->getRelation('pendingApproval');
+
+            return $loaded;
+        }
+
         /** @var ?Approval $approval */
         $approval = $this->approvals()
             ->where('status', ApprovalStatus::Pending)
