@@ -97,8 +97,21 @@ class Approval extends Model
         return $this->hasMany(ApprovalAction::class)->orderByDesc('created_at');
     }
 
+    /**
+     * Resolve the step instance currently awaiting action.
+     *
+     * When the `stepInstances` relation is already loaded (for example, the
+     * approvals table eager-loads it for every row), the waiting step is read
+     * from the in-memory collection to avoid issuing one query per row. The
+     * relation is ordered by `order`, so the eager-loaded collection yields the
+     * same first waiting instance as the direct query fallback used otherwise.
+     */
     public function currentStepInstance(): ?ApprovalStepInstance
     {
+        if ($this->relationLoaded('stepInstances')) {
+            return $this->stepInstances->firstWhere('status', StepInstanceStatus::Waiting);
+        }
+
         return $this->stepInstances()
             ->where('status', StepInstanceStatus::Waiting)
             ->first();
