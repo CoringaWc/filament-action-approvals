@@ -233,14 +233,15 @@ final class ApprovalPayloadDiff
      */
     private static function explicitDiffRow(array $row): ?array
     {
-        $field = self::firstString($row, ['label', 'field_label', 'field', 'name']);
+        $label = self::firstString($row, ['label', 'field_label']);
+        $field = self::firstString($row, ['field', 'name']) ?? $label;
 
-        if ($field === null || self::isSecretField($field)) {
+        if ($field === null || self::isSecretField($field) || ($label !== null && self::isSecretField($label))) {
             return null;
         }
 
         return self::row(
-            self::fieldLabel($field),
+            $label ?? self::fieldLabel($field),
             self::explicitValue($row, ['current', 'current_value', 'old', 'from']),
             self::explicitValue($row, ['requested', 'requested_value', 'new', 'to']),
         );

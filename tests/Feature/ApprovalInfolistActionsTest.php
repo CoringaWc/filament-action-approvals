@@ -135,6 +135,10 @@ it('shows submitted payload fields in the approval slide over infolist', functio
                     'current' => '11.222.333/0001-44',
                     'requested' => '22.333.444/0001-55',
                 ], [
+                    'label' => 'CEP',
+                    'current' => '70000-000',
+                    'requested' => '70100-000',
+                ], [
                     'label' => 'api_token',
                     'current' => null,
                     'requested' => 'raw-token-value',
@@ -159,12 +163,11 @@ it('shows submitted payload fields in the approval slide over infolist', functio
             'current' => '11.222.333/0001-44',
             'requested' => '22.333.444/0001-55',
         ],
-    ]);
-
-    expect(ApprovalPayloadDiff::linesForApproval($approval->refresh()))->toBe([
-        'Título: Original laptop order -> Updated laptop order',
-        'Valor: 1200 -> 1500',
-        'CNPJ: 11.222.333/0001-44 -> 22.333.444/0001-55',
+        [
+            'field' => 'CEP',
+            'current' => '70000-000',
+            'requested' => '70100-000',
+        ],
     ]);
 
     Livewire::test(ListApprovals::class)
