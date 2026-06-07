@@ -103,21 +103,12 @@ class ApprovalInfolist
                 ->key('submittedChanges')
                 ->description(__('filament-action-approvals::approval.infolist.submitted_changes_helper'))
                 ->schema([
-                    RepeatableEntry::make('payloadDiff')
+                    TextEntry::make('payloadDiff')
                         ->key('payloadDiff')
                         ->hiddenLabel()
-                        ->state(fn (Approval $record): array => ApprovalPayloadDiff::forApproval($record))
-                        ->schema([
-                            TextEntry::make('field')
-                                ->label(__('filament-action-approvals::approval.infolist.field')),
-                            TextEntry::make('current')
-                                ->label(__('filament-action-approvals::approval.infolist.current_value'))
-                                ->placeholder(__('filament-action-approvals::approval.infolist.not_available')),
-                            TextEntry::make('requested')
-                                ->label(__('filament-action-approvals::approval.infolist.requested_value'))
-                                ->placeholder(__('filament-action-approvals::approval.infolist.not_available')),
-                        ])
-                        ->columns(3),
+                        ->state(fn (Approval $record): array => ApprovalPayloadDiff::linesForApproval($record))
+                        ->listWithLineBreaks()
+                        ->bulleted(),
                 ])
                 ->collapsible()
                 ->columns(1)

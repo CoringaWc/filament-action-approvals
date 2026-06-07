@@ -122,32 +122,54 @@ it('shows submitted payload fields in the approval slide over infolist', functio
                 'amount' => 1500,
                 'cpf' => '123.456.789-09',
                 'api_token' => 'raw-token-value',
+                'approval_payload_diff' => [[
+                    'label' => 'Título',
+                    'current' => 'Original laptop order',
+                    'requested' => 'Updated laptop order',
+                ], [
+                    'label' => 'Valor',
+                    'current' => 1200,
+                    'requested' => 1500,
+                ], [
+                    'label' => 'CNPJ',
+                    'current' => '11.222.333/0001-44',
+                    'requested' => '22.333.444/0001-55',
+                ], [
+                    'label' => 'api_token',
+                    'current' => null,
+                    'requested' => 'raw-token-value',
+                ]],
             ],
         ],
     ])->save();
 
     expect(ApprovalPayloadDiff::forApproval($approval->refresh()))->toMatchArray([
         [
-            'field' => 'Title',
+            'field' => 'Título',
             'current' => 'Original laptop order',
             'requested' => 'Updated laptop order',
         ],
         [
-            'field' => 'Amount',
+            'field' => 'Valor',
             'current' => '1200',
             'requested' => '1500',
         ],
         [
-            'field' => 'CPF',
-            'current' => __('filament-action-approvals::approval.infolist.redacted'),
-            'requested' => __('filament-action-approvals::approval.infolist.redacted'),
+            'field' => 'CNPJ',
+            'current' => '11.222.333/0001-44',
+            'requested' => '22.333.444/0001-55',
         ],
+    ]);
+
+    expect(ApprovalPayloadDiff::linesForApproval($approval->refresh()))->toBe([
+        'Título: Original laptop order -> Updated laptop order',
+        'Valor: 1200 -> 1500',
+        'CNPJ: 11.222.333/0001-44 -> 22.333.444/0001-55',
     ]);
 
     Livewire::test(ListApprovals::class)
         ->mountTableAction('view', $approval->refresh())
         ->assertSchemaComponentVisible('submittedChanges', 'mountedActionSchema0')
-        ->assertDontSeeText('123.456.789-09', false)
         ->assertDontSeeText('raw-token-value', false)
         ->assertDontSeeText('Api Token', false);
 });

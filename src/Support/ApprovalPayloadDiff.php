@@ -23,6 +23,11 @@ final class ApprovalPayloadDiff
     public static function forApproval(Approval $approval): array
     {
         $payload = self::payload($approval);
+        $explicitDiff = self::explicitDiff($approval, $payload);
+
+        if ($explicitDiff !== []) {
+            return $explicitDiff;
+        }
 
         if ($payload === []) {
             return [];
@@ -35,6 +40,23 @@ final class ApprovalPayloadDiff
         }
 
         return self::payloadRows($approval, $payload);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function linesForApproval(Approval $approval): array
+    {
+        /** @var list<string> $lines */
+        $lines = collect(self::forApproval($approval))
+            ->map(fn (array $row): string => __('filament-action-approvals::approval.infolist.change_line', [
+                'field' => $row['field'],
+                'current' => $row['current'] ?? __('filament-action-approvals::approval.infolist.not_available'),
+                'requested' => $row['requested'] ?? __('filament-action-approvals::approval.infolist.not_available'),
+            ]))
+            ->all();
+
+        return $lines;
     }
 
     /**
@@ -100,7 +122,7 @@ final class ApprovalPayloadDiff
             ->map(fn (mixed $value, int|string $field): array => self::row(
                 self::fieldLabel((string) $field),
                 self::currentValue($approval, (string) $field),
-                self::isRedactedField((string) $field) ? self::redactedPlaceholder() : self::displayValue($value),
+                self::requestedValue($payload, (string) $field),
             ))
             ->values()
             ->all();
@@ -110,7 +132,7 @@ final class ApprovalPayloadDiff
 
     private static function currentValue(Approval $approval, string $field): ?string
     {
-        if (self::isRedactedField($field)) {
+        if (self::isSecretField($field)) {
             return self::redactedPlaceholder();
         }
 
@@ -138,7 +160,7 @@ final class ApprovalPayloadDiff
      */
     private static function requestedValue(array $payload, string $field): ?string
     {
-        if (self::isRedactedField($field)) {
+        if (self::isSecretField($field)) {
             return self::redactedPlaceholder();
         }
 
@@ -182,6 +204,80 @@ final class ApprovalPayloadDiff
         return null;
     }
 
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return list<array{field: string, current: string|null, requested: string|null}>
+     */
+    private static function explicitDiff(Approval $approval, array $payload): array
+    {
+        $diff = Arr::get($payload, 'approval_payload_diff', Arr::get($approval->metadata ?? [], 'payload_diff', []));
+
+        if (! is_array($diff)) {
+            return [];
+        }
+
+        /** @var list<array{field: string, current: string|null, requested: string|null}> $rows */
+        $rows = collect($diff)
+            ->filter(fn (mixed $row): bool => is_array($row))
+            ->map(fn (array $row): ?array => self::explicitDiffRow($row))
+            ->filter()
+            ->values()
+            ->all();
+
+        return $rows;
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $row
+     * @return array{field: string, current: string|null, requested: string|null}|null
+     */
+    private static function explicitDiffRow(array $row): ?array
+    {
+        $field = self::firstString($row, ['label', 'field_label', 'field', 'name']);
+
+        if ($field === null || self::isSecretField($field)) {
+            return null;
+        }
+
+        return self::row(
+            self::fieldLabel($field),
+            self::explicitValue($row, ['current', 'current_value', 'old', 'from']),
+            self::explicitValue($row, ['requested', 'requested_value', 'new', 'to']),
+        );
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $row
+     * @param  list<string>  $keys
+     */
+    private static function firstString(array $row, array $keys): ?string
+    {
+        foreach ($keys as $key) {
+            $value = Arr::get($row, $key);
+
+            if (is_string($value) && filled($value)) {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $row
+     * @param  list<string>  $keys
+     */
+    private static function explicitValue(array $row, array $keys): ?string
+    {
+        foreach ($keys as $key) {
+            if (Arr::exists($row, $key)) {
+                return self::displayValue(Arr::get($row, $key));
+            }
+        }
+
+        return null;
+    }
+
     private static function fieldLabel(string $field): string
     {
         $normalized = Str::of($field)->lower()->toString();
@@ -215,7 +311,7 @@ final class ApprovalPayloadDiff
 
     private static function isMetadataOnlyField(string $field): bool
     {
-        return in_array($field, ['changed_fields'], true);
+        return in_array($field, ['changed_fields', 'approval_payload_diff'], true);
     }
 
     private static function isSecretField(string $field): bool
@@ -223,14 +319,6 @@ final class ApprovalPayloadDiff
         return Str::of($field)
             ->lower()
             ->contains(['password', 'token', 'secret', 'credential']);
-    }
-
-    private static function isRedactedField(string $field): bool
-    {
-        return self::isSecretField($field)
-            || Str::of($field)
-                ->lower()
-                ->contains(['cpf', 'cnpj', 'ssn', 'tax_identifier']);
     }
 
     private static function changedPlaceholder(): string
