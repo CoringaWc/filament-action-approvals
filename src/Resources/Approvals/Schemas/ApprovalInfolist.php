@@ -18,6 +18,7 @@ use CoringaWc\FilamentActionApprovals\Support\DateDisplay;
 use CoringaWc\FilamentActionApprovals\Support\UserDisplayName;
 use Filament\Actions\ViewAction;
 use Filament\Infolists\Components\RepeatableEntry;
+use Filament\Infolists\Components\RepeatableEntry\TableColumn;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\Section;
@@ -107,6 +108,11 @@ class ApprovalInfolist
                         ->key('payloadDiff')
                         ->hiddenLabel()
                         ->state(fn (Approval $record): array => ApprovalPayloadDiff::forApproval($record))
+                        ->table([
+                            TableColumn::make(__('filament-action-approvals::approval.infolist.field'))->width('14rem'),
+                            TableColumn::make(__('filament-action-approvals::approval.infolist.current_value')),
+                            TableColumn::make(__('filament-action-approvals::approval.infolist.requested_value')),
+                        ])
                         ->schema([
                             TextEntry::make('field')
                                 ->label(__('filament-action-approvals::approval.infolist.field')),
@@ -116,8 +122,7 @@ class ApprovalInfolist
                             TextEntry::make('requested')
                                 ->label(__('filament-action-approvals::approval.infolist.requested_value'))
                                 ->placeholder(__('filament-action-approvals::approval.infolist.not_available')),
-                        ])
-                        ->columns(3),
+                        ]),
                 ])
                 ->collapsible()
                 ->columns(1)
