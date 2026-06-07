@@ -239,6 +239,16 @@ return [
         'no_approval' => 'No Approval',
         'not_available' => 'N/A',
         'rejection_reason' => 'Rejection Reason',
+        'submitted_changes' => 'Submitted Changes',
+        'submitted_changes_helper' => 'Review the fields and requested values before approving.',
+        'field' => 'Field',
+        'current_value' => 'Current Value',
+        'requested_value' => 'Requested Value',
+        'changed' => 'Changed',
+        'redacted' => 'Redacted',
+        'boolean_true' => 'Yes',
+        'boolean_false' => 'No',
+        'items_count' => '{0} No items|{1} :count item|[2,*] :count items',
     ],
 
     // Status column

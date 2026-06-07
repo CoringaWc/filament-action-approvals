@@ -9,6 +9,7 @@ use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
 use CoringaWc\FilamentActionApprovals\Resources\Approvals\Pages\ListApprovals;
 use CoringaWc\FilamentActionApprovals\Resources\Approvals\Schemas\ApprovalInfolist;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalPayloadDiff;
 use CoringaWc\FilamentActionApprovals\Tests\TestCase;
 use Filament\Actions\ViewAction;
 use Livewire\Livewire;
@@ -81,6 +82,74 @@ it('shows the submitted approvable action in the approval slide over infolist', 
     Livewire::test(ListApprovals::class)
         ->mountTableAction('view', $approval)
         ->assertSeeText(__('workbench::workbench.approval_actions.purchase_orders.submit'), false);
+});
+
+it('shows submitted payload fields in the approval slide over infolist', function (): void {
+    /** @var TestCase $test */
+    $test = $this;
+
+    $test->seed(DatabaseSeeder::class);
+
+    $admin = User::query()->where('email', 'admin@filament-action-approvals.test')->firstOrFail();
+
+    $test->actingAs($admin);
+
+    $flow = ApprovalFlow::create([
+        'name' => 'Payload Diff Flow',
+        'approvable_type' => (new PurchaseOrder)->getMorphClass(),
+        'is_active' => true,
+    ]);
+    $flow->steps()->create([
+        'name' => 'Step 1',
+        'order' => 1,
+        'type' => StepType::Single,
+        'approver_resolver' => UserResolver::class,
+        'approver_config' => ['user_ids' => [$admin->getKey()]],
+        'required_approvals' => 1,
+    ]);
+
+    $order = PurchaseOrder::factory()->create([
+        'title' => 'Original laptop order',
+        'amount' => 1200,
+    ]);
+
+    $approval = app(ApprovalEngine::class)->submit($order, $flow, $admin->getKey());
+    $approval->forceFill([
+        'metadata' => [
+            'payload' => [
+                'changed_fields' => ['title', 'amount', 'cpf', 'api_token'],
+                'title' => 'Updated laptop order',
+                'amount' => 1500,
+                'cpf' => '123.456.789-09',
+                'api_token' => 'raw-token-value',
+            ],
+        ],
+    ])->save();
+
+    expect(ApprovalPayloadDiff::forApproval($approval->refresh()))->toMatchArray([
+        [
+            'field' => 'Title',
+            'current' => 'Original laptop order',
+            'requested' => 'Updated laptop order',
+        ],
+        [
+            'field' => 'Amount',
+            'current' => '1200',
+            'requested' => '1500',
+        ],
+        [
+            'field' => 'CPF',
+            'current' => __('filament-action-approvals::approval.infolist.redacted'),
+            'requested' => __('filament-action-approvals::approval.infolist.redacted'),
+        ],
+    ]);
+
+    Livewire::test(ListApprovals::class)
+        ->mountTableAction('view', $approval->refresh())
+        ->assertSchemaComponentVisible('submittedChanges', 'mountedActionSchema0')
+        ->assertDontSeeText('123.456.789-09', false)
+        ->assertDontSeeText('raw-token-value', false)
+        ->assertDontSeeText('Api Token', false);
 });
 
 it('stores the submitted filament action key in the approval audit trail', function (): void {

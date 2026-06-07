@@ -239,6 +239,16 @@ return [
         'no_approval' => 'Sem Aprovação',
         'not_available' => 'N/D',
         'rejection_reason' => 'Motivo da Rejeição',
+        'submitted_changes' => 'Alterações Submetidas',
+        'submitted_changes_helper' => 'Revise os campos e valores solicitados antes de aprovar.',
+        'field' => 'Campo',
+        'current_value' => 'Valor Atual',
+        'requested_value' => 'Valor Solicitado',
+        'changed' => 'Alterado',
+        'redacted' => 'Oculto',
+        'boolean_true' => 'Sim',
+        'boolean_false' => 'Não',
+        'items_count' => '{0} Nenhum item|{1} :count item|[2,*] :count itens',
     ],
 
     // Coluna de status

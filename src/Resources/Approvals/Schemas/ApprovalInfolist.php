@@ -13,6 +13,7 @@ use CoringaWc\FilamentActionApprovals\Models\ApprovalAction;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Support\ApprovableActionLabel;
 use CoringaWc\FilamentActionApprovals\Support\ApprovableModelLabel;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalPayloadDiff;
 use CoringaWc\FilamentActionApprovals\Support\DateDisplay;
 use CoringaWc\FilamentActionApprovals\Support\UserDisplayName;
 use Filament\Actions\ViewAction;
@@ -97,6 +98,30 @@ class ApprovalInfolist
                 ->collapsible()
                 ->columns(3)
                 ->visible(fn (Approval $record): bool => $record->currentStepInstance() !== null),
+
+            Section::make(__('filament-action-approvals::approval.infolist.submitted_changes'))
+                ->key('submittedChanges')
+                ->description(__('filament-action-approvals::approval.infolist.submitted_changes_helper'))
+                ->schema([
+                    RepeatableEntry::make('payloadDiff')
+                        ->key('payloadDiff')
+                        ->hiddenLabel()
+                        ->state(fn (Approval $record): array => ApprovalPayloadDiff::forApproval($record))
+                        ->schema([
+                            TextEntry::make('field')
+                                ->label(__('filament-action-approvals::approval.infolist.field')),
+                            TextEntry::make('current')
+                                ->label(__('filament-action-approvals::approval.infolist.current_value'))
+                                ->placeholder(__('filament-action-approvals::approval.infolist.not_available')),
+                            TextEntry::make('requested')
+                                ->label(__('filament-action-approvals::approval.infolist.requested_value'))
+                                ->placeholder(__('filament-action-approvals::approval.infolist.not_available')),
+                        ])
+                        ->columns(3),
+                ])
+                ->collapsible()
+                ->columns(1)
+                ->visible(fn (Approval $record): bool => ApprovalPayloadDiff::forApproval($record) !== []),
 
             Section::make(__('filament-action-approvals::approval.relation_manager.steps'))
                 ->schema([
