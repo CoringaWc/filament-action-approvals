@@ -8,6 +8,7 @@ use CoringaWc\FilamentActionApprovals\Actions\ApproveAction;
 use CoringaWc\FilamentActionApprovals\Actions\CommentAction;
 use CoringaWc\FilamentActionApprovals\Actions\DelegateAction;
 use CoringaWc\FilamentActionApprovals\Actions\RejectAction;
+use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
@@ -193,6 +194,8 @@ class ApprovalsTable
                             ->rows(3),
                     ])
                     ->requiresConfirmation()
+                    ->visible(fn (): bool => static::currentUserCanResolveAnyApproval())
+                    ->authorizeIndividualRecords(fn (Approval $record): bool => static::currentUserCanApprove($record))
                     ->deselectRecordsAfterCompletion()
                     ->action(fn (Collection $records, array $data): null => static::resolveSelectedApprovals($records, 'approve', $data['comment'] ?? null))
                 : null,
@@ -209,6 +212,8 @@ class ApprovalsTable
                             ->rows(3),
                     ])
                     ->requiresConfirmation()
+                    ->visible(fn (): bool => static::currentUserCanResolveAnyApproval())
+                    ->authorizeIndividualRecords(fn (Approval $record): bool => static::currentUserCanReject($record))
                     ->deselectRecordsAfterCompletion()
                     ->action(fn (Collection $records, array $data): null => static::resolveSelectedApprovals($records, 'reject', $data['comment'] ?? null))
                 : null,
@@ -266,7 +271,9 @@ class ApprovalsTable
 
     public static function configure(Table $table): Table
     {
-        return $table
+        $toolbarActions = static::toolbarActions();
+
+        $table = $table
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with([
                 'approvable',
                 'flow',
@@ -277,8 +284,40 @@ class ApprovalsTable
             ->columns(static::columns())
             ->filters(static::filters(), layout: FiltersLayout::Modal)
             ->recordActions(static::recordActions())
-            ->toolbarActions(static::toolbarActions())
             ->defaultSort('submitted_at', 'desc');
+
+        return $toolbarActions === []
+            ? $table
+            : $table->groupedBulkActions($toolbarActions);
+    }
+
+    protected static function currentUserCanResolveAnyApproval(): bool
+    {
+        $userId = CurrentPanelUser::id();
+
+        if (! is_int($userId) && ! is_string($userId)) {
+            return false;
+        }
+
+        if (FilamentActionApprovalsPlugin::isSuperAdmin($userId)) {
+            return Approval::query()
+                ->withStatus(ApprovalStatus::Pending)
+                ->exists();
+        }
+
+        return Approval::query()
+            ->awaitingUserAction($userId)
+            ->exists();
+    }
+
+    protected static function currentUserCanApprove(Approval $approval): bool
+    {
+        return $approval->canBeApprovedBy(CurrentPanelUser::id());
+    }
+
+    protected static function currentUserCanReject(Approval $approval): bool
+    {
+        return $approval->canBeRejectedBy(CurrentPanelUser::id());
     }
 
     /**
