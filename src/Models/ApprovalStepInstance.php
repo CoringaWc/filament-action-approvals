@@ -8,6 +8,7 @@ use CoringaWc\FilamentActionApprovals\Enums\ActionType;
 use CoringaWc\FilamentActionApprovals\Enums\StepInstanceStatus;
 use CoringaWc\FilamentActionApprovals\Enums\StepType;
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
+use CoringaWc\FilamentActionApprovals\Support\UserModelKey;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
@@ -116,14 +117,16 @@ class ApprovalStepInstance extends Model
      */
     public function scopeAssignedTo(Builder $query, int|string|null $userId): Builder
     {
-        if (! is_int($userId) && ! is_string($userId)) {
+        $normalizedUserId = UserModelKey::normalize($userId);
+
+        if (! is_int($normalizedUserId) && ! is_string($normalizedUserId)) {
             return $query->whereRaw('1 = 0');
         }
 
-        return $query->where(function (Builder $stepInstances) use ($userId): void {
+        return $query->where(function (Builder $stepInstances) use ($normalizedUserId): void {
             $stepInstances
-                ->whereJsonContains('assigned_approver_ids', $userId)
-                ->orWhereHas('delegations', fn (Builder $delegations): Builder => $delegations->where('to_user_id', $userId));
+                ->whereJsonContains('assigned_approver_ids', $normalizedUserId)
+                ->orWhereHas('delegations', fn (Builder $delegations): Builder => $delegations->where('to_user_id', $normalizedUserId));
         });
     }
 
@@ -153,22 +156,24 @@ class ApprovalStepInstance extends Model
 
     public function isAssignedTo(int|string|null $userId): bool
     {
-        if (! is_int($userId) && ! is_string($userId)) {
+        $normalizedUserId = UserModelKey::normalize($userId);
+
+        if (! is_int($normalizedUserId) && ! is_string($normalizedUserId)) {
             return false;
         }
 
-        if (in_array($userId, $this->assigned_approver_ids, true)) {
+        if (collect($this->assigned_approver_ids)->contains(fn (mixed $approverId): bool => UserModelKey::normalize($approverId) === $normalizedUserId)) {
             return true;
         }
 
         if ($this->relationLoaded('delegations')) {
             return $this->delegations->contains(
-                fn (ApprovalDelegation $delegation): bool => (string) $delegation->to_user_id === (string) $userId,
+                fn (ApprovalDelegation $delegation): bool => UserModelKey::normalize($delegation->to_user_id) === $normalizedUserId,
             );
         }
 
         return $this->delegations()
-            ->where('to_user_id', $userId)
+            ->where('to_user_id', $normalizedUserId)
             ->exists();
     }
 
@@ -201,7 +206,9 @@ class ApprovalStepInstance extends Model
 
     public function canBeDelegatedBy(int|string|null $userId): bool
     {
-        if (! is_int($userId) && ! is_string($userId)) {
+        $normalizedUserId = UserModelKey::normalize($userId);
+
+        if (! is_int($normalizedUserId) && ! is_string($normalizedUserId)) {
             return false;
         }
 
@@ -213,7 +220,7 @@ class ApprovalStepInstance extends Model
             return true;
         }
 
-        return in_array($userId, $this->assigned_approver_ids, true);
+        return collect($this->assigned_approver_ids)->contains(fn (mixed $approverId): bool => UserModelKey::normalize($approverId) === $normalizedUserId);
     }
 
     public function canUserAct(int|string $userId): bool
@@ -223,8 +230,14 @@ class ApprovalStepInstance extends Model
 
     public function hasUserActed(int|string $userId): bool
     {
+        $normalizedUserId = UserModelKey::normalize($userId);
+
+        if (! is_int($normalizedUserId) && ! is_string($normalizedUserId)) {
+            return false;
+        }
+
         return $this->actions()
-            ->where('user_id', $userId)
+            ->where('user_id', $normalizedUserId)
             ->whereIn('type', [ActionType::Approved, ActionType::Rejected])
             ->exists();
     }

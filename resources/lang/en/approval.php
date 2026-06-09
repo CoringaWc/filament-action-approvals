@@ -129,6 +129,10 @@ return [
 
         'approve_heading' => 'Approve this record?',
         'reject_heading' => 'Reject this record?',
+        'comment_heading' => 'Comment on this request',
+        'delegate_heading' => 'Delegate this request',
+        'pending_request_exists' => 'An approval request is already pending for this record and action.',
+        'unauthorized' => 'You are not authorized to perform this approval action.',
 
         // Success messages
         'submitted_success' => 'Submitted for approval',
@@ -142,6 +146,13 @@ return [
     'approval_context' => [
         'model_scope' => 'Showing approvals for the :model model.',
         'record_scope' => 'Showing approvals for the :record record.',
+    ],
+
+    'modal' => [
+        'approval_request_callout' => [
+            'heading' => 'This change requires approval',
+            'description' => 'After you submit, the record will stay unchanged until an authorized approver reviews the request.',
+        ],
     ],
 
     // Notifications
@@ -334,6 +345,15 @@ return [
     'sla' => [
         'auto_approved' => 'Auto-approved because the deadline expired',
         'auto_rejected' => 'Auto-rejected because the deadline expired',
+    ],
+
+    'bulk_actions' => [
+        'approve' => 'Approve selected',
+        'approve_heading' => 'Approve selected requests',
+        'reject' => 'Reject selected',
+        'reject_heading' => 'Reject selected requests',
+        'approved' => '{0} No requests were approved|{1} :count request approved|[2,*] :count requests approved',
+        'rejected' => '{0} No requests were rejected|{1} :count request rejected|[2,*] :count requests rejected',
     ],
 
 ];

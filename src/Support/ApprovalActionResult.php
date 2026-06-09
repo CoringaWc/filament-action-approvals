@@ -11,6 +11,7 @@ class ApprovalActionResult
     public function __construct(
         public readonly bool $executed,
         public readonly bool $pendingApproval,
+        public readonly bool $bypassedApproval,
         public readonly ?Approval $approval,
         public readonly ?string $actionKey,
     ) {}
@@ -20,7 +21,19 @@ class ApprovalActionResult
         return new self(
             executed: true,
             pendingApproval: false,
+            bypassedApproval: false,
             approval: null,
+            actionKey: $actionKey,
+        );
+    }
+
+    public static function bypassed(string $actionKey, ?Approval $approval = null): self
+    {
+        return new self(
+            executed: true,
+            pendingApproval: false,
+            bypassedApproval: true,
+            approval: $approval,
             actionKey: $actionKey,
         );
     }
@@ -30,6 +43,7 @@ class ApprovalActionResult
         return new self(
             executed: false,
             pendingApproval: true,
+            bypassedApproval: false,
             approval: $approval,
             actionKey: $actionKey,
         );

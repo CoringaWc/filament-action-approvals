@@ -12,6 +12,7 @@ use CoringaWc\FilamentActionApprovals\Models\ApprovalAction;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
+use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
@@ -244,7 +245,7 @@ trait HasApprovals
      */
     public function canSubmitForApproval(?string $actionKey = null, int|string|null $userId = null): bool
     {
-        $resolvedUserId = $this->normalizeSubmissionPolicyUserId($userId ?? auth()->id());
+        $resolvedUserId = $this->normalizeSubmissionPolicyUserId($userId ?? CurrentPanelUser::id());
 
         if ($resolvedUserId === null) {
             return false;
@@ -260,7 +261,7 @@ trait HasApprovals
      */
     public function canBeSubmittedForApproval(?string $actionKey = null, int|string|null $userId = null): bool
     {
-        $resolvedUserId = $this->normalizeSubmissionPolicyUserId($userId ?? auth()->id());
+        $resolvedUserId = $this->normalizeSubmissionPolicyUserId($userId ?? CurrentPanelUser::id());
 
         // Already pending — can't submit again
         if ($this->isPendingApproval()) {
@@ -328,7 +329,7 @@ trait HasApprovals
      */
     public function onApprovalApproved(Approval $approval): void
     {
-        if (is_callable([$this, 'afterApprovalApproved'])) {
+        if (method_exists($this, 'afterApprovalApproved')) {
             $this->afterApprovalApproved($approval);
         }
     }

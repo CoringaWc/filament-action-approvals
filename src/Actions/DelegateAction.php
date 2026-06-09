@@ -8,8 +8,10 @@ use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
+use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
 use CoringaWc\FilamentActionApprovals\Support\TranslatableSelect;
 use CoringaWc\FilamentActionApprovals\Support\UserDisplayName;
+use CoringaWc\FilamentActionApprovals\Support\UserModelKey;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -38,7 +40,7 @@ class DelegateAction extends Action
             ->icon(Heroicon::OutlinedArrowPath)
             ->color('warning')
             ->visible(function (self $action): bool {
-                $userId = auth()->id();
+                $userId = CurrentPanelUser::id();
 
                 if ($userId === null) {
                     return false;
@@ -59,7 +61,7 @@ class DelegateAction extends Action
                         ->searchable()
                         ->options(function () use ($userKeyName, $userModel): array {
                             $users = $userModel::query();
-                            $currentUserId = auth()->id();
+                            $currentUserId = CurrentPanelUser::id();
 
                             if (is_int($currentUserId) || is_string($currentUserId)) {
                                 $users->where($userKeyName, '!=', $currentUserId);
@@ -94,13 +96,9 @@ class DelegateAction extends Action
             ])
             ->action(function (self $action, array $data): void {
                 $stepInstance = $action->resolveCurrentStepInstance();
-                $userId = auth()->id();
+                $userId = CurrentPanelUser::id();
                 $delegateToUserId = $data['to_user_id'] ?? null;
-
-                // Cast numeric string to int for integer primary key users
-                if (is_string($delegateToUserId) && ctype_digit($delegateToUserId)) {
-                    $delegateToUserId = (int) $delegateToUserId;
-                }
+                $delegateToUserId = UserModelKey::normalize($delegateToUserId);
 
                 if (! $stepInstance || $userId === null || $delegateToUserId === null) {
                     return;
@@ -121,7 +119,8 @@ class DelegateAction extends Action
             ->after(function (self $action): void {
                 $action->dispatchApprovalUpdated();
             })
-            ->requiresConfirmation();
+            ->requiresConfirmation()
+            ->modalHeading(__('filament-action-approvals::approval.actions.delegate_heading'));
     }
 
     protected function resolveCurrentApproval(): ?Approval

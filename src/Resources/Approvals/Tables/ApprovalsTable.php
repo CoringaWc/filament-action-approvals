@@ -10,22 +10,30 @@ use CoringaWc\FilamentActionApprovals\Actions\DelegateAction;
 use CoringaWc\FilamentActionApprovals\Actions\RejectAction;
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
+use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Resources\Approvals\Schemas\ApprovalInfolist;
+use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use CoringaWc\FilamentActionApprovals\Support\ApprovableActionLabel;
 use CoringaWc\FilamentActionApprovals\Support\ApprovableModelLabel;
+use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
 use CoringaWc\FilamentActionApprovals\Support\DateDisplay;
 use CoringaWc\FilamentActionApprovals\Support\UserDisplayName;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
+use Filament\Actions\BulkAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Textarea;
+use Filament\Notifications\Notification;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 
 class ApprovalsTable
@@ -168,6 +176,46 @@ class ApprovalsTable
     }
 
     /**
+     * @return array<int, BulkAction>
+     */
+    protected static function toolbarActions(): array
+    {
+        return array_values(array_filter([
+            FilamentActionApprovalsPlugin::isOperationalActionEnabled('approve')
+                ? BulkAction::make('approveSelected')
+                    ->label(__('filament-action-approvals::approval.bulk_actions.approve'))
+                    ->icon(Heroicon::OutlinedCheckCircle)
+                    ->color('success')
+                    ->modalHeading(__('filament-action-approvals::approval.bulk_actions.approve_heading'))
+                    ->schema([
+                        Textarea::make('comment')
+                            ->label(__('filament-action-approvals::approval.actions.comment_optional'))
+                            ->rows(3),
+                    ])
+                    ->requiresConfirmation()
+                    ->deselectRecordsAfterCompletion()
+                    ->action(fn (Collection $records, array $data): null => static::resolveSelectedApprovals($records, 'approve', $data['comment'] ?? null))
+                : null,
+            FilamentActionApprovalsPlugin::isOperationalActionEnabled('reject')
+                ? BulkAction::make('rejectSelected')
+                    ->label(__('filament-action-approvals::approval.bulk_actions.reject'))
+                    ->icon(Heroicon::OutlinedXCircle)
+                    ->color('danger')
+                    ->modalHeading(__('filament-action-approvals::approval.bulk_actions.reject_heading'))
+                    ->schema([
+                        Textarea::make('comment')
+                            ->label(__('filament-action-approvals::approval.actions.rejection_reason'))
+                            ->required()
+                            ->rows(3),
+                    ])
+                    ->requiresConfirmation()
+                    ->deselectRecordsAfterCompletion()
+                    ->action(fn (Collection $records, array $data): null => static::resolveSelectedApprovals($records, 'reject', $data['comment'] ?? null))
+                : null,
+        ]));
+    }
+
+    /**
      * @return array<int, Action>
      */
     protected static function buildRecordActionItems(bool $grouped): array
@@ -229,6 +277,68 @@ class ApprovalsTable
             ->columns(static::columns())
             ->filters(static::filters(), layout: FiltersLayout::Modal)
             ->recordActions(static::recordActions())
+            ->toolbarActions(static::toolbarActions())
             ->defaultSort('submitted_at', 'desc');
+    }
+
+    /**
+     * @param  Collection<int, Approval>  $records
+     */
+    protected static function resolveSelectedApprovals(Collection $records, string $operation, ?string $comment): null
+    {
+        $userId = CurrentPanelUser::id();
+
+        if (! is_int($userId) && ! is_string($userId)) {
+            return null;
+        }
+
+        $resolvedCount = 0;
+        $engine = app(ApprovalEngine::class);
+
+        foreach ($records as $approval) {
+            if (! $approval instanceof Approval) {
+                continue;
+            }
+
+            $stepInstance = $approval->currentStepInstance();
+
+            if (! $stepInstance instanceof ApprovalStepInstance) {
+                continue;
+            }
+
+            if ($operation === 'approve' && ! $approval->canBeApprovedBy($userId)) {
+                continue;
+            }
+
+            if ($operation === 'reject' && ! $approval->canBeRejectedBy($userId)) {
+                continue;
+            }
+
+            try {
+                if ($operation === 'approve') {
+                    $engine->approve($stepInstance, $userId, $comment);
+                } else {
+                    $engine->reject($stepInstance, $userId, $comment);
+                }
+
+                $resolvedCount++;
+            } catch (AuthorizationException) {
+                continue;
+            }
+        }
+
+        $translationKey = $operation === 'approve' ? 'approved' : 'rejected';
+        $notification = Notification::make()
+            ->title(trans_choice("filament-action-approvals::approval.bulk_actions.{$translationKey}", $resolvedCount, ['count' => $resolvedCount]));
+
+        if ($operation === 'approve') {
+            $notification->success();
+        } else {
+            $notification->danger();
+        }
+
+        $notification->send();
+
+        return null;
     }
 }

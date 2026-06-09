@@ -13,7 +13,10 @@ use CoringaWc\FilamentActionApprovals\Widgets\PendingApprovalsWidget;
 use Filament\Clusters\Cluster;
 use Filament\Contracts\Plugin;
 use Filament\Panel;
+use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Model;
+use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
+use CoringaWc\FilamentActionApprovals\Support\UserModelKey;
 
 class FilamentActionApprovalsPlugin implements Plugin
 {
@@ -311,7 +314,8 @@ class FilamentActionApprovalsPlugin implements Plugin
             return false;
         }
 
-        $userId ??= auth()->id();
+        $userId ??= CurrentPanelUser::id();
+        $userId = UserModelKey::normalize($userId);
 
         if ($userId === null) {
             return false;
@@ -355,11 +359,31 @@ class FilamentActionApprovalsPlugin implements Plugin
      */
     public static function canApplyDirectly(int|string|null $userId = null): bool
     {
+        return static::canBypassApproval($userId);
+    }
+
+    /**
+     * Determine whether the given user may bypass the approval record and apply
+     * the business operation directly.
+     *
+     * This is intended for privileged actors that should save normally instead
+     * of creating and auto-completing an approval trail.
+     */
+    public static function canBypassApproval(int|string|null $userId = null): bool
+    {
         if (! static::privilegedConfig()['apply_directly']) {
             return false;
         }
 
         return static::isSuperAdmin($userId);
+    }
+
+    public static function approvalRequestModalContent(?string $heading = null, ?string $description = null): View
+    {
+        return view('filament-action-approvals::approval-request-callout', [
+            'heading' => $heading ?? __('filament-action-approvals::approval.modal.approval_request_callout.heading'),
+            'description' => $description ?? __('filament-action-approvals::approval.modal.approval_request_callout.description'),
+        ]);
     }
 
     /**

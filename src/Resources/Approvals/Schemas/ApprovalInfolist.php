@@ -14,6 +14,7 @@ use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Support\ApprovableActionLabel;
 use CoringaWc\FilamentActionApprovals\Support\ApprovableModelLabel;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalPayloadDiff;
+use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
 use CoringaWc\FilamentActionApprovals\Support\DateDisplay;
 use CoringaWc\FilamentActionApprovals\Support\UserDisplayName;
 use Filament\Actions\ViewAction;
@@ -53,7 +54,7 @@ class ApprovalInfolist
                             }
 
                             return UserDisplayName::resolveMany(
-                                array_map('intval', $ids),
+                                $ids,
                                 __('filament-action-approvals::approval.infolist.not_available'),
                             );
                         }),
@@ -86,7 +87,7 @@ class ApprovalInfolist
                         ->columnSpanFull()
                         ->alignment(Alignment::End)
                         ->visible(function (Approval $record): bool {
-                            $userId = auth()->id();
+                            $userId = CurrentPanelUser::id();
 
                             if ($userId === null) {
                                 return false;
@@ -144,7 +145,7 @@ class ApprovalInfolist
                             TextEntry::make('approvers_display')
                                 ->label(__('filament-action-approvals::approval.relation_manager.approvers'))
                                 ->state(fn (ApprovalStepInstance $record): string => UserDisplayName::resolveMany(
-                                    array_map('intval', $record->assigned_approver_ids),
+                                    $record->assigned_approver_ids,
                                     __('filament-action-approvals::approval.relation_manager.not_available'),
                                 )),
                             TextEntry::make('received_approvals')
@@ -205,25 +206,33 @@ class ApprovalInfolist
 
             Section::make(__('filament-action-approvals::approval.relation_manager.audit_trail'))
                 ->schema([
-                    RepeatableEntry::make('actions')
+                    RepeatableEntry::make('auditTrail')
                         ->hiddenLabel()
+                        ->state(fn (Approval $record): array => $record->actions
+                            ->map(fn (ApprovalAction $action): array => [
+                                'type' => $action->type,
+                                'actor_name' => UserDisplayName::resolve($action->user),
+                                'comment' => $action->comment,
+                                'created_at' => $action->created_at,
+                            ])
+                            ->all())
                         ->schema([
                             TextEntry::make('type')
                                 ->label(__('filament-action-approvals::approval.fields.type'))
                                 ->badge(),
                             TextEntry::make('actor_name')
                                 ->label(__('filament-action-approvals::approval.relation_manager.by'))
-                                ->state(fn (ApprovalAction $record): ?string => UserDisplayName::resolve($record->user))
                                 ->placeholder(__('filament-action-approvals::approval.relation_manager.system')),
-                            TextEntry::make('comment')
-                                ->label(__('filament-action-approvals::approval.fields.comment'))
-                                ->placeholder(__('filament-action-approvals::approval.relation_manager.not_available')),
                             DateDisplay::entry(
                                 TextEntry::make('created_at')
                                     ->label(__('filament-action-approvals::approval.relation_manager.date')),
                             ),
+                            TextEntry::make('comment')
+                                ->label(__('filament-action-approvals::approval.fields.comment'))
+                                ->placeholder(__('filament-action-approvals::approval.relation_manager.not_available'))
+                                ->columnSpanFull(),
                         ])
-                        ->columns(4),
+                        ->columns(3),
                 ])
                 ->collapsible(),
         ]);

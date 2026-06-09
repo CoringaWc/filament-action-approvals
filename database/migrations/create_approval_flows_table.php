@@ -8,8 +8,8 @@ return new class extends Migration
 {
     public function up(): void
     {
-        $tenancyEnabled = config('filament-approval.multi_tenancy.enabled', false);
-        $tenantColumn = config('filament-approval.multi_tenancy.column', 'company_id');
+        $tenancyEnabled = config('filament-action-approvals.multi_tenancy.enabled', false);
+        $tenantColumn = config('filament-action-approvals.multi_tenancy.column', 'company_id');
 
         Schema::create('approval_flows', function (Blueprint $table) use ($tenancyEnabled, $tenantColumn) {
             $table->id();

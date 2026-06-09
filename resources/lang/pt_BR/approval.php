@@ -129,6 +129,10 @@ return [
 
         'approve_heading' => 'Aprovar este registro?',
         'reject_heading' => 'Rejeitar este registro?',
+        'comment_heading' => 'Comentar esta solicitação',
+        'delegate_heading' => 'Delegar esta solicitação',
+        'pending_request_exists' => 'Já existe uma solicitação de aprovação pendente para este registro e ação.',
+        'unauthorized' => 'Você não tem autorização para executar esta ação de aprovação.',
 
         // Mensagens de sucesso
         'submitted_success' => 'Submetido para aprovação',
@@ -142,6 +146,13 @@ return [
     'approval_context' => [
         'model_scope' => 'Mostrando aprovações do modelo :model.',
         'record_scope' => 'Mostrando aprovações do registro :record.',
+    ],
+
+    'modal' => [
+        'approval_request_callout' => [
+            'heading' => 'Esta alteração precisa de aprovação',
+            'description' => 'Depois do envio, o registro permanecerá sem alterações até que um aprovador autorizado revise a solicitação.',
+        ],
     ],
 
     // Notificações
@@ -334,6 +345,15 @@ return [
     'sla' => [
         'auto_approved' => 'Aprovado automaticamente porque o prazo venceu',
         'auto_rejected' => 'Rejeitado automaticamente porque o prazo venceu',
+    ],
+
+    'bulk_actions' => [
+        'approve' => 'Aprovar selecionadas',
+        'approve_heading' => 'Aprovar solicitações selecionadas',
+        'reject' => 'Rejeitar selecionadas',
+        'reject_heading' => 'Rejeitar solicitações selecionadas',
+        'approved' => '{0} Nenhuma solicitação foi aprovada|{1} :count solicitação aprovada|[2,*] :count solicitações aprovadas',
+        'rejected' => '{0} Nenhuma solicitação foi rejeitada|{1} :count solicitação rejeitada|[2,*] :count solicitações rejeitadas',
     ],
 
 ];

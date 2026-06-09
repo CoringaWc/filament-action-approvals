@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Workbench\App\Filament\Resources\Invoices\Actions;
 
 use Filament\Actions\Action;
+use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Filament\Support\Icons\Heroicon;
 use Workbench\App\Models\Invoice;
@@ -39,7 +40,7 @@ class AdvanceInvoiceStatusAction
                 $result = $record->transitionWithApproval(
                     stateAttribute: 'status',
                     toStateClass: $nextStateClass,
-                    submittedBy: auth()->id(),
+                    submittedBy: Filament::auth()->id(),
                 );
 
                 $notification = Notification::make()

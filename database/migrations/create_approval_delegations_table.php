@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use CoringaWc\FilamentActionApprovals\Support\UserModelKey;
 
 return new class extends Migration
 {
@@ -11,8 +12,8 @@ return new class extends Migration
         Schema::create('approval_delegations', function (Blueprint $table) {
             $table->id();
             $table->foreignId('approval_step_instance_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('from_user_id')->constrained('users')->cascadeOnDelete();
-            $table->foreignId('to_user_id')->constrained('users')->cascadeOnDelete();
+            UserModelKey::addColumn($table, 'from_user_id');
+            UserModelKey::addColumn($table, 'to_user_id');
             $table->text('reason')->nullable();
             $table->timestamp('delegated_at');
             $table->timestamps();

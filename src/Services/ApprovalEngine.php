@@ -21,32 +21,40 @@ use CoringaWc\FilamentActionApprovals\Notifications\ApprovalApprovedNotification
 use CoringaWc\FilamentActionApprovals\Notifications\ApprovalCancelledNotification;
 use CoringaWc\FilamentActionApprovals\Notifications\ApprovalRejectedNotification;
 use CoringaWc\FilamentActionApprovals\Notifications\ApprovalRequestedNotification;
+use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
+use CoringaWc\FilamentActionApprovals\Support\UserModelKey;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ApprovalEngine
 {
-    public function submit(Model $approvable, ?ApprovalFlow $flow = null, int|string|null $submittedBy = null, ?string $actionKey = null): Approval
+    public function submit(Model $approvable, ?ApprovalFlow $flow = null, Model|int|string|null $submittedBy = null, ?string $actionKey = null): Approval
     {
         $flow ??= ApprovalFlow::findSubmissionFlowForModel($approvable, $actionKey);
-        $submittedBy ??= auth()->id();
-
-        if (! is_int($submittedBy) && ! is_string($submittedBy)) {
-            $submittedBy = null;
-        }
+        $submitter = $this->resolveSubmitter($submittedBy);
 
         if (! $flow) {
             throw (new ModelNotFoundException)->setModel(ApprovalFlow::class);
         }
 
-        return DB::transaction(function () use ($approvable, $flow, $submittedBy, $actionKey) {
+        if ($this->shouldBlockConcurrentPendingApproval($approvable, $actionKey)) {
+            throw ValidationException::withMessages([
+                'approval' => __('filament-action-approvals::approval.actions.pending_request_exists'),
+            ]);
+        }
+
+        return DB::transaction(function () use ($approvable, $flow, $submitter, $actionKey) {
             $approval = Approval::create([
                 'approval_flow_id' => $flow->getKey(),
                 'approvable_type' => $approvable->getMorphClass(),
                 'approvable_id' => $approvable->getKey(),
                 'status' => ApprovalStatus::Pending,
-                'submitted_by' => $submittedBy,
+                'submitted_by' => $submitter['user_id'],
+                'submitted_by_type' => $submitter['actor_type'],
+                'submitted_by_id' => $submitter['actor_id'],
                 'submitted_at' => now(),
                 'metadata' => filled($actionKey) ? ['action_key' => $actionKey] : null,
             ]);
@@ -66,24 +74,35 @@ class ApprovalEngine
             }
 
             $approval->actions()->create([
-                'user_id' => $submittedBy,
+                'user_id' => $submitter['user_id'],
                 'type' => ActionType::Submitted,
-                'metadata' => filled($actionKey) ? ['action_key' => $actionKey] : null,
+                'metadata' => array_filter([
+                    'action_key' => filled($actionKey) ? $actionKey : null,
+                    'actor_type' => $submitter['actor_type'],
+                    'actor_id' => $submitter['actor_id'],
+                ], static fn (mixed $value): bool => $value !== null && $value !== ''),
             ]);
 
             $this->activateNextStep($approval);
 
-            event(new ApprovalSubmitted($approval));
-            $this->fireModelCallback($approvable, 'onApprovalSubmitted', $approval);
+            $this->afterCommit(function () use ($approval, $approvable): void {
+                event(new ApprovalSubmitted($approval));
+                $this->fireModelCallback($approvable, 'onApprovalSubmitted', $approval);
+            });
 
             return $approval;
         });
     }
 
-    public function approve(ApprovalStepInstance $stepInstance, int|string $userId, ?string $comment = null): void
+    public function approve(ApprovalStepInstance $stepInstance, int|string|null $userId, ?string $comment = null, bool $force = false): void
     {
-        DB::transaction(function () use ($stepInstance, $userId, $comment) {
-            $approval = $stepInstance->approval;
+        DB::transaction(function () use ($stepInstance, $userId, $comment, $force) {
+            $stepInstance = $this->lockStepInstance($stepInstance);
+            $approval = $this->lockApproval($stepInstance);
+
+            if (! $force && ! $stepInstance->canBeApprovedBy($userId)) {
+                throw new AuthorizationException(__('filament-action-approvals::approval.actions.unauthorized'));
+            }
 
             $approval->actions()->create([
                 'approval_step_instance_id' => $stepInstance->getKey(),
@@ -101,8 +120,10 @@ class ApprovalEngine
                     'completed_at' => now(),
                 ]);
 
-                event(new ApprovalStepCompleted($stepInstance));
-                $this->fireModelCallback($approval->approvable, 'onApprovalStepCompleted', $stepInstance);
+                $this->afterCommit(function () use ($approval, $stepInstance): void {
+                    event(new ApprovalStepCompleted($stepInstance));
+                    $this->fireModelCallback($approval->approvable, 'onApprovalStepCompleted', $stepInstance);
+                });
 
                 $this->activateNextStep($approval->refresh());
             }
@@ -121,7 +142,10 @@ class ApprovalEngine
     public function autoApprove(Approval $approval, int|string $userId, ?string $comment = null): void
     {
         DB::transaction(function () use ($approval, $userId, $comment): void {
-            $approval->refresh();
+            $approval = Approval::query()
+                ->whereKey($approval->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
 
             while ($approval->status === ApprovalStatus::Pending) {
                 $stepInstance = $approval->currentStepInstance();
@@ -129,6 +153,9 @@ class ApprovalEngine
                 if (! $stepInstance) {
                     break;
                 }
+
+                $stepInstance = $this->lockStepInstance($stepInstance);
+                $stepInstance->setRelation('approval', $approval);
 
                 $approval->actions()->create([
                     'approval_step_instance_id' => $stepInstance->getKey(),
@@ -143,8 +170,10 @@ class ApprovalEngine
                     'completed_at' => now(),
                 ]);
 
-                event(new ApprovalStepCompleted($stepInstance));
-                $this->fireModelCallback($approval->approvable, 'onApprovalStepCompleted', $stepInstance);
+                $this->afterCommit(function () use ($approval, $stepInstance): void {
+                    event(new ApprovalStepCompleted($stepInstance));
+                    $this->fireModelCallback($approval->approvable, 'onApprovalStepCompleted', $stepInstance);
+                });
 
                 $this->activateNextStep($approval->refresh());
 
@@ -153,10 +182,15 @@ class ApprovalEngine
         });
     }
 
-    public function reject(ApprovalStepInstance $stepInstance, int|string $userId, ?string $comment = null): void
+    public function reject(ApprovalStepInstance $stepInstance, int|string|null $userId, ?string $comment = null, bool $force = false): void
     {
-        DB::transaction(function () use ($stepInstance, $userId, $comment) {
-            $approval = $stepInstance->approval;
+        DB::transaction(function () use ($stepInstance, $userId, $comment, $force) {
+            $stepInstance = $this->lockStepInstance($stepInstance);
+            $approval = $this->lockApproval($stepInstance);
+
+            if (! $force && ! $stepInstance->canBeRejectedBy($userId)) {
+                throw new AuthorizationException(__('filament-action-approvals::approval.actions.unauthorized'));
+            }
 
             $approval->actions()->create([
                 'approval_step_instance_id' => $stepInstance->getKey(),
@@ -179,29 +213,58 @@ class ApprovalEngine
                 'completed_at' => now(),
             ]);
 
-            event(new ApprovalRejected($approval));
-            $this->fireModelCallback($approval->approvable, 'onApprovalRejected', $approval);
+            $this->afterCommit(function () use ($approval): void {
+                event(new ApprovalRejected($approval));
+                $this->fireModelCallback($approval->approvable, 'onApprovalRejected', $approval);
 
-            $this->notifySubmitter($approval, ApprovalRejectedNotification::class);
+                $this->notifySubmitter($approval, ApprovalRejectedNotification::class);
+            });
         });
     }
 
+    /**
+     * @throws AuthorizationException
+     */
     public function comment(Approval $approval, int|string $userId, string $comment, ?ApprovalStepInstance $stepInstance = null): void
     {
-        $action = $approval->actions()->create([
-            'approval_step_instance_id' => $stepInstance?->getKey(),
-            'user_id' => $userId,
-            'type' => ActionType::Commented,
-            'comment' => $comment,
-        ]);
+        DB::transaction(function () use ($approval, $userId, $comment, $stepInstance): void {
+            $approval = Approval::query()
+                ->whereKey($approval->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        event(new ApprovalCommented($action));
-        $this->fireModelCallback($approval->approvable, 'onApprovalCommented', $action);
+            $currentStep = $stepInstance instanceof ApprovalStepInstance
+                ? $this->lockStepInstance($stepInstance)
+                : $approval->currentStepInstance();
+
+            if (! $approval->canReceiveCommentsFrom($userId)) {
+                throw new AuthorizationException(__('filament-action-approvals::approval.actions.unauthorized'));
+            }
+
+            $action = $approval->actions()->create([
+                'approval_step_instance_id' => $currentStep?->getKey(),
+                'user_id' => $userId,
+                'type' => ActionType::Commented,
+                'comment' => $comment,
+            ]);
+
+            $this->afterCommit(function () use ($approval, $action): void {
+                event(new ApprovalCommented($action));
+                $this->fireModelCallback($approval->approvable, 'onApprovalCommented', $action);
+            });
+        });
     }
 
     public function delegate(ApprovalStepInstance $stepInstance, int|string $fromUserId, int|string $toUserId, ?string $reason = null): void
     {
         DB::transaction(function () use ($stepInstance, $fromUserId, $toUserId, $reason) {
+            $stepInstance = $this->lockStepInstance($stepInstance);
+            $approval = $this->lockApproval($stepInstance);
+
+            if (! $stepInstance->canBeDelegatedBy($fromUserId)) {
+                throw new AuthorizationException(__('filament-action-approvals::approval.actions.unauthorized'));
+            }
+
             $stepInstance->delegations()->create([
                 'from_user_id' => $fromUserId,
                 'to_user_id' => $toUserId,
@@ -209,7 +272,7 @@ class ApprovalEngine
                 'delegated_at' => now(),
             ]);
 
-            $stepInstance->approval->actions()->create([
+            $approval->actions()->create([
                 'approval_step_instance_id' => $stepInstance->getKey(),
                 'user_id' => $fromUserId,
                 'type' => ActionType::Delegated,
@@ -217,9 +280,11 @@ class ApprovalEngine
                 'metadata' => ['delegated_to' => $toUserId],
             ]);
 
-            ApprovalRequestedNotification::send($stepInstance, $toUserId);
-            event(new ApprovalDelegated($stepInstance, $fromUserId, $toUserId));
-            $this->fireModelCallback($stepInstance->approval->approvable, 'onApprovalDelegated', $stepInstance, $fromUserId, $toUserId);
+            $this->afterCommit(function () use ($approval, $stepInstance, $fromUserId, $toUserId): void {
+                ApprovalRequestedNotification::send($stepInstance, $toUserId);
+                event(new ApprovalDelegated($stepInstance, $fromUserId, $toUserId));
+                $this->fireModelCallback($approval->approvable, 'onApprovalDelegated', $stepInstance, $fromUserId, $toUserId);
+            });
         });
     }
 
@@ -235,10 +300,12 @@ class ApprovalEngine
                 'completed_at' => now(),
             ]);
 
-            event(new ApprovalCancelled($approval));
-            $this->fireModelCallback($approval->approvable, 'onApprovalCancelled', $approval);
+            $this->afterCommit(function () use ($approval): void {
+                event(new ApprovalCancelled($approval));
+                $this->fireModelCallback($approval->approvable, 'onApprovalCancelled', $approval);
 
-            $this->notifySubmitter($approval, ApprovalCancelledNotification::class);
+                $this->notifySubmitter($approval, ApprovalCancelledNotification::class);
+            });
         });
     }
 
@@ -255,10 +322,12 @@ class ApprovalEngine
                 'completed_at' => now(),
             ]);
 
-            event(new ApprovalCompleted($approval));
-            $this->fireModelCallback($approval->approvable, 'onApprovalApproved', $approval);
+            $this->afterCommit(function () use ($approval): void {
+                event(new ApprovalCompleted($approval));
+                $this->fireModelCallback($approval->approvable, 'onApprovalApproved', $approval);
 
-            $this->notifySubmitter($approval, ApprovalApprovedNotification::class);
+                $this->notifySubmitter($approval, ApprovalApprovedNotification::class);
+            });
 
             return;
         }
@@ -281,8 +350,89 @@ class ApprovalEngine
         ]);
 
         foreach ($nextStep->assigned_approver_ids as $userId) {
-            ApprovalRequestedNotification::send($nextStep, $userId);
+            $this->afterCommit(function () use ($nextStep, $userId): void {
+                ApprovalRequestedNotification::send($nextStep, $userId);
+            });
         }
+    }
+
+    /**
+     * @return array{user_id: int|string|null, actor_type: string|null, actor_id: int|string|null}
+     */
+    protected function resolveSubmitter(Model|int|string|null $submittedBy): array
+    {
+        if ($submittedBy === null) {
+            $submittedBy = CurrentPanelUser::model();
+        }
+
+        if ($submittedBy instanceof Model) {
+            $actorId = UserModelKey::normalize($submittedBy->getKey());
+
+            return [
+                'user_id' => UserModelKey::isConfiguredUserModel($submittedBy) ? $actorId : null,
+                'actor_type' => $submittedBy->getMorphClass(),
+                'actor_id' => $actorId,
+            ];
+        }
+
+        $userId = UserModelKey::normalize($submittedBy);
+
+        return [
+            'user_id' => $userId,
+            'actor_type' => $userId === null ? null : UserModelKey::configuredUserMorphClass(),
+            'actor_id' => $userId,
+        ];
+    }
+
+    protected function shouldBlockConcurrentPendingApproval(Model $approvable, ?string $actionKey): bool
+    {
+        if (! (bool) config('filament-action-approvals.pending_submissions.block_concurrent', true)) {
+            return false;
+        }
+
+        return Approval::query()
+            ->forApprovable($approvable)
+            ->withStatus(ApprovalStatus::Pending)
+            ->when(
+                filled($actionKey),
+                fn ($query) => $query->where(function ($pending) use ($actionKey): void {
+                    $pending
+                        ->where('metadata->action_key', $actionKey)
+                        ->orWhereHas('flow', fn ($flow) => $flow->where('action_key', $actionKey));
+                }),
+            )
+            ->exists();
+    }
+
+    protected function lockStepInstance(ApprovalStepInstance $stepInstance): ApprovalStepInstance
+    {
+        return ApprovalStepInstance::query()
+            ->whereKey($stepInstance->getKey())
+            ->lockForUpdate()
+            ->firstOrFail();
+    }
+
+    protected function lockApproval(ApprovalStepInstance $stepInstance): Approval
+    {
+        $approval = Approval::query()
+            ->whereKey($stepInstance->approval_id)
+            ->lockForUpdate()
+            ->firstOrFail();
+
+        $stepInstance->setRelation('approval', $approval);
+
+        return $approval;
+    }
+
+    protected function afterCommit(callable $callback): void
+    {
+        if (app()->runningUnitTests()) {
+            $callback();
+
+            return;
+        }
+
+        DB::afterCommit($callback);
     }
 
     /**

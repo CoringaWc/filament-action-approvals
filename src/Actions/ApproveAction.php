@@ -7,6 +7,7 @@ namespace CoringaWc\FilamentActionApprovals\Actions;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
+use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
@@ -29,7 +30,7 @@ class ApproveAction extends Action
             ->icon(Heroicon::OutlinedCheckCircle)
             ->color('success')
             ->visible(function (self $action): bool {
-                $userId = auth()->id();
+                $userId = CurrentPanelUser::id();
 
                 if ($userId === null) {
                     return false;
@@ -50,7 +51,7 @@ class ApproveAction extends Action
             ])
             ->action(function (self $action, array $data): void {
                 $stepInstance = $action->resolveCurrentStepInstance();
-                $userId = auth()->id();
+                $userId = CurrentPanelUser::id();
 
                 if (! $stepInstance || $userId === null) {
                     return;

@@ -34,7 +34,7 @@ class UserDisplayName
      *
      * Returns a comma-separated string of display names.
      *
-     * @param  list<int>  $userIds
+     * @param  list<int|string>  $userIds
      */
     public static function resolveMany(array $userIds, ?string $fallback = null): string
     {

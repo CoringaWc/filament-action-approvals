@@ -9,7 +9,10 @@ use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use Illuminate\Support\Facades\Event;
 use Spatie\Permission\Models\Role;
+use Workbench\App\Models\Invoice;
 use Workbench\App\Models\PurchaseOrder;
+use Workbench\App\States\Invoice\Issuing;
+use Workbench\App\States\Invoice\Sent;
 
 beforeEach(function (): void {
     $this->engine = app(ApprovalEngine::class);
@@ -69,6 +72,35 @@ it('honors the deprecated super_admin alias for privileged identity', function (
     config()->set('filament-action-approvals.privileged.bypass.apply_directly', true);
 
     expect(FilamentActionApprovalsPlugin::canApplyDirectly($user->getKey()))->toBeTrue();
+});
+
+it('can render approval request modal callout content', function (): void {
+    $content = FilamentActionApprovalsPlugin::approvalRequestModalContent()->render();
+
+    expect($content)
+        ->toContain(__('filament-action-approvals::approval.modal.approval_request_callout.heading'))
+        ->toContain(__('filament-action-approvals::approval.modal.approval_request_callout.description'));
+});
+
+it('bypasses approval records for privileged approvable actions', function (): void {
+    $privileged = $this->createUser();
+    $invoice = Invoice::factory()->for($privileged)->issuing()->create();
+    $actionKey = Invoice::stateApprovalActionKey(Issuing::class, Sent::class);
+
+    $this->createSingleStepFlow(Invoice::class, [$this->createUser()->getKey()], $actionKey);
+
+    config()->set('filament-action-approvals.privileged.enabled', true);
+    config()->set('filament-action-approvals.privileged.user_ids', [$privileged->getKey()]);
+    config()->set('filament-action-approvals.privileged.bypass.apply_directly', true);
+
+    $result = $invoice->transitionWithApproval('status', Sent::class, submittedBy: $privileged->getKey());
+
+    expect($result->executed)->toBeTrue()
+        ->and($result->pendingApproval)->toBeFalse()
+        ->and($result->bypassedApproval)->toBeTrue()
+        ->and($result->approval)->toBeNull()
+        ->and($invoice->approvals()->count())->toBe(0)
+        ->and($invoice->refresh()->status)->toBeInstanceOf(Sent::class);
 });
 
 // ─── autoApprove ─────────────────────────────────────────────

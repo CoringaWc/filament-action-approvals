@@ -6,6 +6,7 @@ namespace CoringaWc\FilamentActionApprovals\Concerns;
 
 use Closure;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
+use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
@@ -32,6 +33,14 @@ trait HasApprovableActions
                 : $this->executeApprovedAction($actionKey);
 
             return ApprovalActionResult::executed($actionKey);
+        }
+
+        if (FilamentActionApprovalsPlugin::canBypassApproval($submittedBy)) {
+            $onExecute
+                ? $onExecute($this, $actionKey)
+                : $this->executeApprovedAction($actionKey);
+
+            return ApprovalActionResult::bypassed($actionKey);
         }
 
         $approval = app(ApprovalEngine::class)->submit(

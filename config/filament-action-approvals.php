@@ -15,9 +15,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | User Key
+    |--------------------------------------------------------------------------
+    | Used by package migrations for approval actors. Leave null to infer from
+    | the configured user model, or set explicitly to integer, uuid, ulid, or
+    | string when your application uses a custom primary-key strategy.
+    */
+    'user_table' => null,
+    'user_key_type' => null,
+    'user_key_length' => 255,
+
+    /*
+    |--------------------------------------------------------------------------
     | Approver Resolvers
     |--------------------------------------------------------------------------
-    | Registered resolver classes available in the flow builder UI.
+    | Registered resolver classes available in the flow builder UI. Resolvers
+    | can hide themselves with isAvailable(); RoleResolver is hidden when
+    | spatie/laravel-permission is not installed or not used by the user model.
     */
     'approver_resolvers' => [
         UserResolver::class,
@@ -118,6 +132,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Pending Submissions
+    |--------------------------------------------------------------------------
+    | block_concurrent prevents a second pending approval for the same
+    | approvable record and action key. Disable it when your domain explicitly
+    | allows multiple simultaneous requests for the same operation.
+    */
+    'pending_submissions' => [
+        'block_concurrent' => true,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Notifications
     |--------------------------------------------------------------------------
     | Controls how approval notifications are delivered to users.
@@ -150,6 +176,8 @@ return [
     | All events are disabled by default — opt-in per event.
     */
     'broadcasting' => [
+        'channel' => 'approval-events',
+        'private' => true,
         'events' => [
             'submitted' => false,
             'approved' => false,
@@ -192,8 +220,8 @@ return [
         // Bypass capabilities granted to privileged users.
         'bypass' => [
             // Allow privileged users to apply an approvable action directly,
-            // creating and auto-completing its approval so the regular
-            // ApprovalCompleted event/onApprovalApproved hooks still fire.
+            // without creating an approval record. Applications should execute
+            // their normal save path when this returns true.
             'apply_directly' => false,
         ],
     ],

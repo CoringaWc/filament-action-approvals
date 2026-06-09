@@ -8,12 +8,12 @@ use CoringaWc\FilamentActionApprovals\Contracts\ApproverResolver;
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Support\FormFieldHint;
 use CoringaWc\FilamentActionApprovals\Support\TranslatableSelect;
+use CoringaWc\FilamentActionApprovals\Support\UserModelKey;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Filament\Schemas\Components\Component;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Schema;
-use Spatie\Permission\Models\Role;
 
 class RoleResolver implements ApproverResolver
 {
@@ -27,6 +27,10 @@ class RoleResolver implements ApproverResolver
         $roles = $config['role'] ?? null;
 
         if (! $roles) {
+            return [];
+        }
+
+        if (! static::isAvailable($userModel)) {
             return [];
         }
 
@@ -46,9 +50,8 @@ class RoleResolver implements ApproverResolver
         /** @var list<int|string> $userIds */
         $userIds = $query
             ->pluck($query->getModel()->getKeyName())
-            ->map(function (mixed $userId): int|string {
-                return is_string($userId) && ! ctype_digit($userId) ? $userId : (int) $userId;
-            })
+            ->map(fn (mixed $userId): int|string|null => UserModelKey::normalize($userId))
+            ->filter(fn (mixed $userId): bool => is_int($userId) || is_string($userId))
             ->all();
 
         return $userIds;
@@ -61,7 +64,15 @@ class RoleResolver implements ApproverResolver
 
     public static function isAvailable(?string $modelClass = null): bool
     {
-        return true;
+        if (! class_exists('Spatie\\Permission\\Models\\Role')) {
+            return false;
+        }
+
+        $modelClass ??= FilamentActionApprovalsPlugin::resolveUserModel();
+
+        return method_exists($modelClass, 'scopeRole')
+            || method_exists($modelClass, 'hasAnyRole')
+            || in_array('Spatie\\Permission\\Traits\\HasRoles', class_uses_recursive($modelClass), true);
     }
 
     /**
@@ -77,7 +88,13 @@ class RoleResolver implements ApproverResolver
                         ->multiple()
                         ->searchable()
                         ->options(function (): array {
-                            $query = Role::query();
+                            $roleModel = config('permission.models.role', 'Spatie\\Permission\\Models\\Role');
+
+                            if (! is_string($roleModel) || ! class_exists($roleModel)) {
+                                return [];
+                            }
+
+                            $query = $roleModel::query();
 
                             $excludedRoles = FilamentActionApprovalsPlugin::superAdminRoles();
 

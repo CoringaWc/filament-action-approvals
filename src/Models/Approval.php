@@ -7,7 +7,6 @@ namespace CoringaWc\FilamentActionApprovals\Models;
 use CoringaWc\FilamentActionApprovals\Enums\ActionType;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\Enums\StepInstanceStatus;
-use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
@@ -21,7 +20,9 @@ use Illuminate\Support\Carbon;
  * @property string $approvable_type
  * @property int|string $approvable_id
  * @property ApprovalStatus $status
- * @property int|null $submitted_by
+ * @property int|string|null $submitted_by
+ * @property string|null $submitted_by_type
+ * @property int|string|null $submitted_by_id
  * @property Carbon|null $submitted_at
  * @property Carbon|null $completed_at
  * @property array<string, mixed>|null $metadata
@@ -39,6 +40,8 @@ class Approval extends Model
         'approvable_id',
         'status',
         'submitted_by',
+        'submitted_by_type',
+        'submitted_by_id',
         'submitted_at',
         'completed_at',
         'metadata',
@@ -71,14 +74,11 @@ class Approval extends Model
     }
 
     /**
-     * @return BelongsTo<Model, $this>
+     * @return MorphTo<Model, $this>
      */
-    public function submitter(): BelongsTo
+    public function submitter(): MorphTo
     {
-        /** @var class-string<Model> $userModel */
-        $userModel = FilamentActionApprovalsPlugin::resolveUserModel();
-
-        return $this->belongsTo($userModel, 'submitted_by');
+        return $this->morphTo(__FUNCTION__, 'submitted_by_type', 'submitted_by_id');
     }
 
     /**
@@ -160,7 +160,11 @@ class Approval extends Model
             return $query;
         }
 
-        return $query->where('submitted_by', $userId);
+        return $query->where(function (Builder $submittedBy) use ($userId): void {
+            $submittedBy
+                ->where('submitted_by', $userId)
+                ->orWhere('submitted_by_id', $userId);
+        });
     }
 
     /**

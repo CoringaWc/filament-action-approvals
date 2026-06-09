@@ -7,6 +7,7 @@ namespace CoringaWc\FilamentActionApprovals\Actions;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
+use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
@@ -29,7 +30,7 @@ class CommentAction extends Action
             ->icon(Heroicon::OutlinedChatBubbleLeftEllipsis)
             ->color('gray')
             ->visible(function (self $action): bool {
-                $userId = auth()->id();
+                $userId = CurrentPanelUser::id();
 
                 if ($userId === null) {
                     return false;
@@ -52,7 +53,7 @@ class CommentAction extends Action
             ->action(function (self $action, array $data): void {
                 $approval = $action->resolveCurrentApproval();
                 $stepInstance = $approval?->currentStepInstance();
-                $userId = auth()->id();
+                $userId = CurrentPanelUser::id();
 
                 if (! $approval || $userId === null) {
                     return;
@@ -72,7 +73,8 @@ class CommentAction extends Action
             })
             ->after(function (self $action): void {
                 $action->dispatchApprovalUpdated();
-            });
+            })
+            ->modalHeading(__('filament-action-approvals::approval.actions.comment_heading'));
     }
 
     protected function resolveCurrentApproval(): ?Approval

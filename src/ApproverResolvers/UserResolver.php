@@ -9,6 +9,7 @@ use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Support\FormFieldHint;
 use CoringaWc\FilamentActionApprovals\Support\TranslatableSelect;
 use CoringaWc\FilamentActionApprovals\Support\UserDisplayName;
+use CoringaWc\FilamentActionApprovals\Support\UserModelKey;
 use Filament\Forms\Components\Select;
 use Filament\Schemas\Components\Component;
 use Illuminate\Database\Eloquent\Model;
@@ -24,14 +25,13 @@ class UserResolver implements ApproverResolver
         $userIds = [];
 
         foreach ($config['user_ids'] ?? [] as $userId) {
-            if (is_int($userId)) {
-                $userIds[] = $userId;
+            $normalizedUserId = UserModelKey::normalize($userId);
 
+            if (! is_int($normalizedUserId) && ! is_string($normalizedUserId)) {
                 continue;
             }
 
-            // String userId: normalize numeric strings to int, keep UUID strings as-is
-            $userIds[] = ctype_digit($userId) ? (int) $userId : $userId;
+            $userIds[] = $normalizedUserId;
         }
 
         return $userIds;

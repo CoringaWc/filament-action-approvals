@@ -8,6 +8,7 @@ use CoringaWc\FilamentActionApprovals\Concerns\HasApprovals;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalNotificationEvent;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalNotificationAction;
+use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -39,7 +40,7 @@ class PurchaseOrder extends Model
 
     public function canSubmitForApproval(?string $actionKey = null, int|string|null $userId = null): bool
     {
-        $resolvedUserId = $this->normalizeUserId($userId ?? auth()->id());
+        $resolvedUserId = $this->normalizeUserId($userId ?? CurrentPanelUser::id());
 
         if ($resolvedUserId === null) {
             return false;
