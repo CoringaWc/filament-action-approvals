@@ -18,12 +18,30 @@ class FilamentActionApprovalsServiceProvider extends PackageServiceProvider
      * @var list<string>
      */
     private const MIGRATION_FILE_NAMES = [
-        'create_approval_flows_table',
-        'create_approval_steps_table',
-        'create_approvals_table',
-        'create_approval_step_instances_table',
-        'create_approval_actions_table',
-        'create_approval_delegations_table',
+        'plugin_001_create_approval_flows_table',
+        'plugin_002_create_approval_steps_table',
+        'plugin_003_create_approvals_table',
+        'plugin_004_create_approval_step_instances_table',
+        'plugin_005_create_approval_actions_table',
+        'plugin_006_create_approval_delegations_table',
+        'plugin_007_update_approvals_add_action_key_to_approvals_table',
+        'plugin_008_update_approvals_backfill_action_key_on_approvals_table',
+        'plugin_009_update_approvals_add_pending_unique_indexes_to_approvals_table',
+    ];
+
+    /**
+     * @var array<string, list<string>>
+     */
+    private const LEGACY_MIGRATION_FILE_NAMES = [
+        'plugin_001_create_approval_flows_table' => ['create_approval_flows_table'],
+        'plugin_002_create_approval_steps_table' => ['create_approval_steps_table'],
+        'plugin_003_create_approvals_table' => ['create_approvals_table'],
+        'plugin_004_create_approval_step_instances_table' => ['create_approval_step_instances_table'],
+        'plugin_005_create_approval_actions_table' => ['create_approval_actions_table'],
+        'plugin_006_create_approval_delegations_table' => ['create_approval_delegations_table'],
+        'plugin_007_update_approvals_add_action_key_to_approvals_table' => ['update_approvals_01_add_action_key_to_approvals_table'],
+        'plugin_008_update_approvals_backfill_action_key_on_approvals_table' => ['update_approvals_02_backfill_action_key_on_approvals_table'],
+        'plugin_009_update_approvals_add_pending_unique_indexes_to_approvals_table' => ['update_approvals_03_add_pending_unique_indexes_to_approvals_table'],
     ];
 
     public function registeringPackage(): void
@@ -78,6 +96,12 @@ class FilamentActionApprovalsServiceProvider extends PackageServiceProvider
 
     private function hasPublishedMigration(string $migrationFileName): bool
     {
-        return glob(database_path("migrations/*_{$migrationFileName}.php")) !== [];
+        foreach ([$migrationFileName, ...(self::LEGACY_MIGRATION_FILE_NAMES[$migrationFileName] ?? [])] as $candidate) {
+            if (glob(database_path("migrations/*_{$candidate}.php")) !== []) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

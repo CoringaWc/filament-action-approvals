@@ -144,6 +144,8 @@ return [
         'purchase_orders' => [
             'submit' => 'Submit purchase order',
             'cancel' => 'Cancel purchase order',
+            'edit' => 'Edit purchase order',
+            'delete' => 'Delete purchase order',
         ],
         'expenses' => [
             'submit' => 'Submit expense',

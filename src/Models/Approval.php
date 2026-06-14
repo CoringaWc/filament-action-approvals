@@ -7,6 +7,7 @@ namespace CoringaWc\FilamentActionApprovals\Models;
 use CoringaWc\FilamentActionApprovals\Enums\ActionType;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\Enums\StepInstanceStatus;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
@@ -20,6 +21,7 @@ use Illuminate\Support\Carbon;
  * @property string $approvable_type
  * @property int|string $approvable_id
  * @property ApprovalStatus $status
+ * @property string|null $action_key
  * @property int|string|null $submitted_by
  * @property string|null $submitted_by_type
  * @property int|string|null $submitted_by_id
@@ -34,11 +36,14 @@ use Illuminate\Support\Carbon;
  */
 class Approval extends Model
 {
+    protected $table = 'approvals';
+
     protected $fillable = [
         'approval_flow_id',
         'approvable_type',
         'approvable_id',
         'status',
+        'action_key',
         'submitted_by',
         'submitted_by_type',
         'submitted_by_id',
@@ -70,7 +75,7 @@ class Approval extends Model
      */
     public function flow(): BelongsTo
     {
-        return $this->belongsTo(ApprovalFlow::class, 'approval_flow_id');
+        return $this->belongsTo(ApprovalModels::flow(), 'approval_flow_id');
     }
 
     /**
@@ -86,7 +91,7 @@ class Approval extends Model
      */
     public function stepInstances(): HasMany
     {
-        return $this->hasMany(ApprovalStepInstance::class)->orderBy('order');
+        return $this->hasMany(ApprovalModels::stepInstance(), 'approval_id')->orderBy('order');
     }
 
     /**
@@ -94,7 +99,7 @@ class Approval extends Model
      */
     public function actions(): HasMany
     {
-        return $this->hasMany(ApprovalAction::class)->orderByDesc('created_at');
+        return $this->hasMany(ApprovalModels::action(), 'approval_id')->orderByDesc('created_at');
     }
 
     /**
@@ -265,6 +270,10 @@ class Approval extends Model
 
     public function submittedActionKey(): ?string
     {
+        if (is_string($this->action_key) && filled($this->action_key)) {
+            return $this->action_key;
+        }
+
         $actionKey = data_get($this->metadata, 'action_key');
 
         if (is_string($actionKey) && filled($actionKey)) {

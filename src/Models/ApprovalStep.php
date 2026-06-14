@@ -7,6 +7,7 @@ namespace CoringaWc\FilamentActionApprovals\Models;
 use CoringaWc\FilamentActionApprovals\Contracts\ApproverResolver;
 use CoringaWc\FilamentActionApprovals\Enums\EscalationAction;
 use CoringaWc\FilamentActionApprovals\Enums\StepType;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -29,6 +30,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class ApprovalStep extends Model
 {
+    protected $table = 'approval_steps';
+
     protected $fillable = [
         'approval_flow_id',
         'name',
@@ -59,7 +62,7 @@ class ApprovalStep extends Model
      */
     public function flow(): BelongsTo
     {
-        return $this->belongsTo(ApprovalFlow::class, 'approval_flow_id');
+        return $this->belongsTo(ApprovalModels::flow(), 'approval_flow_id');
     }
 
     /**
@@ -67,7 +70,7 @@ class ApprovalStep extends Model
      */
     public function instances(): HasMany
     {
-        return $this->hasMany(ApprovalStepInstance::class);
+        return $this->hasMany(ApprovalModels::stepInstance(), 'approval_step_id');
     }
 
     /**

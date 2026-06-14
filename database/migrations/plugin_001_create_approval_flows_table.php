@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('approval_flows')) {
+            return;
+        }
+
         $tenancyEnabled = config('filament-action-approvals.multi_tenancy.enabled', false);
         $tenantColumn = config('filament-action-approvals.multi_tenancy.column', 'company_id');
 

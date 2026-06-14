@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CoringaWc\FilamentActionApprovals\Models;
 
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
@@ -21,6 +22,8 @@ use Illuminate\Support\Carbon;
  */
 class ApprovalDelegation extends Model
 {
+    protected $table = 'approval_delegations';
+
     protected $fillable = [
         'approval_step_instance_id',
         'from_user_id',
@@ -41,7 +44,7 @@ class ApprovalDelegation extends Model
      */
     public function stepInstance(): BelongsTo
     {
-        return $this->belongsTo(ApprovalStepInstance::class, 'approval_step_instance_id');
+        return $this->belongsTo(ApprovalModels::stepInstance(), 'approval_step_instance_id');
     }
 
     /**

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace CoringaWc\FilamentActionApprovals\Widgets;
 
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
-use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalDashboardFilters;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
 use Filament\Widgets\ChartWidget;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
 
@@ -44,7 +44,7 @@ class ApprovalStatusChartWidget extends ChartWidget
         ];
 
         $counts = array_map(function (ApprovalStatus $status): int {
-            return ApprovalDashboardFilters::applyToQuery(Approval::query(), $this->pageFilters, 'submitted_at')
+            return ApprovalDashboardFilters::applyToQuery(ApprovalModels::approvalQuery(), $this->pageFilters, 'submitted_at')
                 ->where('status', $status->value)
                 ->count();
         }, $statuses);

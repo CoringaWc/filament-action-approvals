@@ -7,8 +7,8 @@ namespace CoringaWc\FilamentActionApprovals\Widgets;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\Enums\StepInstanceStatus;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
-use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalDashboardFilters;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
 use Filament\Support\Icons\Heroicon;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
 use Filament\Widgets\StatsOverviewWidget;
@@ -30,7 +30,7 @@ class ApprovalAnalyticsWidget extends StatsOverviewWidget
     {
         $averageApprovalHours = round(
             ApprovalDashboardFilters::applyToQuery(
-                Approval::query()->whereNotNull('submitted_at')->whereNotNull('completed_at'),
+                ApprovalModels::approvalQuery()->whereNotNull('submitted_at')->whereNotNull('completed_at'),
                 $this->pageFilters,
                 'completed_at',
             )
@@ -43,7 +43,7 @@ class ApprovalAnalyticsWidget extends StatsOverviewWidget
         return [
             Stat::make(
                 __('filament-action-approvals::approval.widgets.pending_approvals'),
-                ApprovalDashboardFilters::applyToQuery(Approval::query(), $this->pageFilters, 'submitted_at')
+                ApprovalDashboardFilters::applyToQuery(ApprovalModels::approvalQuery(), $this->pageFilters, 'submitted_at')
                     ->where('status', ApprovalStatus::Pending)
                     ->count(),
             )
@@ -51,7 +51,7 @@ class ApprovalAnalyticsWidget extends StatsOverviewWidget
                 ->icon(Heroicon::OutlinedClock),
             Stat::make(
                 __('filament-action-approvals::approval.widgets.approved_30d'),
-                ApprovalDashboardFilters::applyToQuery(Approval::query(), $this->pageFilters, 'completed_at')
+                ApprovalDashboardFilters::applyToQuery(ApprovalModels::approvalQuery(), $this->pageFilters, 'completed_at')
                     ->where('status', ApprovalStatus::Approved)
                     ->count(),
             )
@@ -59,7 +59,7 @@ class ApprovalAnalyticsWidget extends StatsOverviewWidget
                 ->icon(Heroicon::OutlinedCheckCircle),
             Stat::make(
                 __('filament-action-approvals::approval.widgets.rejected_30d'),
-                ApprovalDashboardFilters::applyToQuery(Approval::query(), $this->pageFilters, 'completed_at')
+                ApprovalDashboardFilters::applyToQuery(ApprovalModels::approvalQuery(), $this->pageFilters, 'completed_at')
                     ->where('status', ApprovalStatus::Rejected)
                     ->count(),
             )
@@ -67,7 +67,7 @@ class ApprovalAnalyticsWidget extends StatsOverviewWidget
                 ->icon(Heroicon::OutlinedXCircle),
             Stat::make(
                 __('filament-action-approvals::approval.widgets.overdue_steps'),
-                ApprovalDashboardFilters::applyToQuery(ApprovalStepInstance::query(), $this->pageFilters, 'activated_at')
+                ApprovalDashboardFilters::applyToQuery(ApprovalModels::stepInstanceQuery(), $this->pageFilters, 'activated_at')
                     ->where('status', StepInstanceStatus::Waiting)
                     ->where('sla_deadline', '<', now())
                     ->count(),

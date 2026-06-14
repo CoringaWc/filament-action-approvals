@@ -9,6 +9,7 @@ use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Resources\Approvals\ApprovalResource;
 use CoringaWc\FilamentActionApprovals\Support\ApprovableModelLabel;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
 use CoringaWc\FilamentActionApprovals\Widgets\ApprovalAnalyticsWidget;
 use Filament\Actions\Action;
 use Filament\Resources\Pages\ListRecords;
@@ -101,20 +102,20 @@ class ListApprovals extends ListRecords
     protected function getTableQuery(): Builder
     {
         return $this->applyContextualScope(
-            Approval::query()->withOperationalRelations(),
+            ApprovalModels::approvalQuery()->withOperationalRelations(),
         );
     }
 
     protected function getStatusCount(ApprovalStatus $status): int
     {
-        return $this->applyContextualScope(Approval::query())
+        return $this->applyContextualScope(ApprovalModels::approvalQuery())
             ->where('status', $status->value)
             ->count();
     }
 
     protected function getAllCount(): int
     {
-        return $this->applyContextualScope(Approval::query())->count();
+        return $this->applyContextualScope(ApprovalModels::approvalQuery())->count();
     }
 
     /**

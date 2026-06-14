@@ -122,6 +122,9 @@ return [
         'approval_flow' => 'Fluxo de Aprovação',
         'approval_action' => 'Ação a aprovar',
         'approval_action_helper' => 'Informe qual cenário está sendo submetido. O sistema tentará usar um fluxo específico para essa ação e, se não existir, usará o fluxo genérico do modelo.',
+        'submit_approval_request' => 'Enviar solicitação de aprovação',
+        'request_delete' => 'Solicitar exclusão',
+        'request_delete_heading' => 'Solicitar exclusão?',
         'comment_optional' => 'Comentário (opcional)',
         'rejection_reason' => 'Motivo da rejeição',
         'delegate_to' => 'Delegar para',
@@ -136,7 +139,11 @@ return [
 
         // Mensagens de sucesso
         'submitted_success' => 'Submetido para aprovação',
+        'approval_request_submitted' => 'Solicitação de aprovação enviada',
         'submission_not_allowed' => 'Você não tem permissão para submeter este registro para aprovação.',
+        'apply_failed' => 'A ação aprovada não pôde ser aplicada. A aprovação permanece pendente.',
+        'approval_flow_missing' => 'Nenhum fluxo de aprovação está configurado para esta solicitação.',
+        'no_changes_to_approve' => 'Nenhuma solicitação de aprovação foi criada porque nenhum campo governado mudou.',
         'approved_success' => 'Aprovado',
         'rejected_success' => 'Rejeitado',
         'comment_success' => 'Comentário adicionado',

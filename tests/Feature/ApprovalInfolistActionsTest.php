@@ -177,6 +177,133 @@ it('shows submitted payload fields in the approval slide over infolist', functio
         ->assertDontSeeText('Api Token', false);
 });
 
+it('redacts sensitive values from submitted payload diffs before display', function (): void {
+    /** @var TestCase $test */
+    $test = $this;
+
+    $test->seed(DatabaseSeeder::class);
+
+    $admin = User::query()->where('email', 'admin@filament-action-approvals.test')->firstOrFail();
+
+    $test->actingAs($admin);
+
+    $flow = ApprovalFlow::create([
+        'name' => 'Sensitive Payload Diff Flow',
+        'approvable_type' => (new PurchaseOrder)->getMorphClass(),
+        'is_active' => true,
+    ]);
+    $flow->steps()->create([
+        'name' => 'Step 1',
+        'order' => 1,
+        'type' => StepType::Single,
+        'approver_resolver' => UserResolver::class,
+        'approver_config' => ['user_ids' => [$admin->getKey()]],
+        'required_approvals' => 1,
+    ]);
+
+    $approval = app(ApprovalEngine::class)->submit(
+        PurchaseOrder::factory()->create(),
+        $flow,
+        $admin->getKey(),
+    );
+
+    $approval->forceFill([
+        'metadata' => [
+            'payload' => [
+                'approval_payload_diff' => [[
+                    'label' => 'Observações',
+                    'current' => 'Sem dado sensível',
+                    'requested' => 'Contém CPF 123.456.789-09 e api_token raw-token-value.',
+                ], [
+                    'label' => 'CPF',
+                    'current' => '123.456.789-09',
+                    'requested' => '987.654.321-00',
+                ], [
+                    'label' => 'Senha',
+                    'current' => null,
+                    'requested' => 'SenhaAberta123',
+                ], [
+                    'label' => 'CNPJ',
+                    'current' => '11.222.333/0001-44',
+                    'requested' => '22.333.444/0001-55',
+                ]],
+            ],
+        ],
+    ])->save();
+
+    $redacted = __('filament-action-approvals::approval.infolist.redacted');
+    $diff = ApprovalPayloadDiff::forApproval($approval->refresh());
+
+    expect($diff)->toHaveCount(2)
+        ->and($diff[0]['field'])->toBe('Observações')
+        ->and($diff[0]['requested'])->toContain($redacted)
+        ->and($diff[0]['requested'])->not->toContain('123.456.789-09')
+        ->and($diff[0]['requested'])->not->toContain('raw-token-value')
+        ->and($diff[1])->toMatchArray([
+            'field' => 'CNPJ',
+            'current' => '11.222.333/0001-44',
+            'requested' => '22.333.444/0001-55',
+        ]);
+
+    Livewire::test(ListApprovals::class)
+        ->mountTableAction('view', $approval->refresh())
+        ->assertDontSeeText('123.456.789-09', false)
+        ->assertDontSeeText('987.654.321-00', false)
+        ->assertDontSeeText('raw-token-value', false)
+        ->assertDontSeeText('SenhaAberta123', false);
+});
+
+it('redacts sensitive values before storing approval comments and delegation reasons', function (): void {
+    /** @var TestCase $test */
+    $test = $this;
+
+    $submitter = User::factory()->create();
+    $approver = User::factory()->create();
+    $delegate = User::factory()->create();
+
+    $flow = $test->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
+    $approval = app(ApprovalEngine::class)->submit(
+        PurchaseOrder::factory()->create(),
+        $flow,
+        $submitter->getKey(),
+    );
+
+    $engine = app(ApprovalEngine::class);
+    $stepInstance = $approval->currentStepInstance();
+
+    $engine->comment(
+        $approval,
+        $approver->getKey(),
+        'Comentário com CPF 123.456.789-09 e token raw-token-value.',
+        $stepInstance,
+    );
+    $engine->delegate(
+        $stepInstance,
+        $approver->getKey(),
+        $delegate->getKey(),
+        'Delegado com senha MinhaSenha123.',
+    );
+    $engine->reject(
+        $stepInstance,
+        $approver->getKey(),
+        'Rejeitado por CPF 987.654.321-00 e password Aberta123.',
+    );
+
+    $storedText = collect([
+        ...$approval->refresh()->actions()->pluck('comment')->all(),
+        $stepInstance->delegations()->latest()->value('reason'),
+        $approval->latestRejectionReason(),
+    ])->filter()->join(' ');
+
+    expect($storedText)
+        ->toContain(__('filament-action-approvals::approval.infolist.redacted'))
+        ->not->toContain('123.456.789-09')
+        ->not->toContain('987.654.321-00')
+        ->not->toContain('raw-token-value')
+        ->not->toContain('MinhaSenha123')
+        ->not->toContain('Aberta123');
+});
+
 it('stores the submitted filament action key in the approval audit trail', function (): void {
     /** @var TestCase $test */
     $test = $this;

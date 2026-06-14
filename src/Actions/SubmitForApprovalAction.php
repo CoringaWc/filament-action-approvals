@@ -8,6 +8,7 @@ use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use CoringaWc\FilamentActionApprovals\Support\ApprovableActionLabel;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
@@ -69,7 +70,8 @@ class SubmitForApprovalAction extends Action
                     return [];
                 }
 
-                $flows = ApprovalFlow::forModel($record)->get();
+                $flowModel = ApprovalModels::flow();
+                $flows = $flowModel::forModel($record)->get();
 
                 // When locked to a specific action key, skip the action selector entirely
                 if ($action->lockedActionKey !== null) {
@@ -141,7 +143,7 @@ class SubmitForApprovalAction extends Action
                 }
 
                 $flow = (is_int($flowId) || is_string($flowId))
-                    ? ApprovalFlow::query()->find($flowId)
+                    ? ApprovalModels::flowQuery()->find($flowId)
                     : null;
 
                 app(ApprovalEngine::class)->submit($record, $flow, actionKey: $actionKey);
@@ -170,7 +172,8 @@ class SubmitForApprovalAction extends Action
             return false;
         }
 
-        $flows = ApprovalFlow::forModel($record)->get();
+        $flowModel = ApprovalModels::flow();
+        $flows = $flowModel::forModel($record)->get();
 
         if ($flows->isEmpty()) {
             return false;
@@ -196,7 +199,8 @@ class SubmitForApprovalAction extends Action
             return [];
         }
 
-        $completedKeys = $excludeCompleted ? Approval::completedActionKeysFor($record) : [];
+        $approvalModel = ApprovalModels::approval();
+        $completedKeys = $excludeCompleted ? $approvalModel::completedActionKeysFor($record) : [];
 
         return array_filter(
             ApprovableActionLabel::optionsFor($record),
@@ -221,11 +225,15 @@ class SubmitForApprovalAction extends Action
             return collect();
         }
 
-        if ($actionKey !== null && in_array($actionKey, Approval::completedActionKeysFor($record), true)) {
+        $approvalModel = ApprovalModels::approval();
+
+        if ($actionKey !== null && in_array($actionKey, $approvalModel::completedActionKeysFor($record), true)) {
             return collect();
         }
 
-        return ApprovalFlow::filterSubmissionFlows($flows, $actionKey);
+        $flowModel = ApprovalModels::flow();
+
+        return $flowModel::filterSubmissionFlows($flows, $actionKey);
     }
 
     protected function recordCanBeSubmittedForApproval(Model $record, ?string $actionKey = null): bool

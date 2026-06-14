@@ -6,8 +6,10 @@ namespace CoringaWc\FilamentActionApprovals\Models;
 
 use CoringaWc\FilamentActionApprovals\Enums\ActionType;
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * @property int $approval_id
@@ -16,12 +18,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property ActionType $type
  * @property string|null $comment
  * @property array<string, mixed>|null $metadata
+ * @property Carbon|null $created_at
  * @property-read Approval $approval
  * @property-read ApprovalStepInstance|null $stepInstance
  * @property-read Model|null $user
  */
 class ApprovalAction extends Model
 {
+    protected $table = 'approval_actions';
+
     protected $fillable = [
         'approval_id',
         'approval_step_instance_id',
@@ -44,7 +49,7 @@ class ApprovalAction extends Model
      */
     public function approval(): BelongsTo
     {
-        return $this->belongsTo(Approval::class);
+        return $this->belongsTo(ApprovalModels::approval());
     }
 
     /**
@@ -52,7 +57,7 @@ class ApprovalAction extends Model
      */
     public function stepInstance(): BelongsTo
     {
-        return $this->belongsTo(ApprovalStepInstance::class, 'approval_step_instance_id');
+        return $this->belongsTo(ApprovalModels::stepInstance(), 'approval_step_instance_id');
     }
 
     /**

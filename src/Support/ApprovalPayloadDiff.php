@@ -191,6 +191,7 @@ final class ApprovalPayloadDiff
 
         if (is_scalar($value)) {
             $value = Str::of((string) $value)->trim()->toString();
+            $value = SensitiveDataRedactor::text($value);
 
             return $value === '' ? null : $value;
         }
@@ -317,9 +318,7 @@ final class ApprovalPayloadDiff
 
     private static function isSecretField(string $field): bool
     {
-        return Str::of($field)
-            ->lower()
-            ->contains(['password', 'token', 'secret', 'credential']);
+        return SensitiveDataRedactor::isSensitiveField($field);
     }
 
     private static function changedPlaceholder(): string

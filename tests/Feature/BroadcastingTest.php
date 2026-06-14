@@ -12,7 +12,7 @@ use CoringaWc\FilamentActionApprovals\Events\ApprovalRejected;
 use CoringaWc\FilamentActionApprovals\Events\ApprovalStepCompleted;
 use CoringaWc\FilamentActionApprovals\Events\ApprovalSubmitted;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
-use Illuminate\Broadcasting\Channel;
+use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Workbench\App\Models\PurchaseOrder;
 
@@ -58,7 +58,7 @@ it('enables broadcasting when config is true', function (): void {
     expect($event->broadcastWhen())->toBeTrue();
 });
 
-it('broadcasts on the approval-events channel', function (): void {
+it('broadcasts on the private approval-events channel by default', function (): void {
     $approver = $this->createUser();
     $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
     $order = PurchaseOrder::factory()->create();
@@ -68,8 +68,8 @@ it('broadcasts on the approval-events channel', function (): void {
     $channels = $event->broadcastOn();
 
     expect($channels)->toHaveCount(1)
-        ->and($channels[0])->toBeInstanceOf(Channel::class)
-        ->and($channels[0]->name)->toBe('approval-events');
+        ->and($channels[0])->toBeInstanceOf(PrivateChannel::class)
+        ->and($channels[0]->name)->toBe('private-approval-events');
 });
 
 it('returns null broadcast queue by default', function (): void {

@@ -7,6 +7,7 @@ namespace CoringaWc\FilamentActionApprovals\Widgets;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Resources\Approvals\Tables\ApprovalsTable;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget;
@@ -52,7 +53,7 @@ class ContextualApprovalsTable extends TableWidget
      */
     protected function getTableQuery(): Builder
     {
-        return Approval::query()
+        return ApprovalModels::approvalQuery()
             ->withOperationalRelations()
             ->when(
                 filled($this->approvableType),

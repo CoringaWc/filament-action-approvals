@@ -5,6 +5,7 @@ declare(strict_types=1);
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
+use Illuminate\Auth\Access\AuthorizationException;
 use Spatie\Permission\Models\Role;
 use Workbench\App\Models\PurchaseOrder;
 
@@ -124,7 +125,7 @@ it('returns configured roles when feature is active', function (): void {
 
 // ─── Super Admin Engine Integration ──────────────────────────
 
-it('engine does not perform authorization — any userId is accepted', function (): void {
+it('engine enforces approver authorization for approval actions', function (): void {
     $approver = $this->createUser();
     $nonApprover = $this->createUser();
 
@@ -135,11 +136,11 @@ it('engine does not perform authorization — any userId is accepted', function 
     $stepInstance = $approval->currentStepInstance();
     expect($stepInstance)->not->toBeNull();
 
-    // Engine accepts any userId (authorization is in Filament UI layer)
-    $this->engine->approve($stepInstance, $nonApprover->getKey());
+    expect(fn () => $this->engine->approve($stepInstance, $nonApprover->getKey()))
+        ->toThrow(AuthorizationException::class);
 
     $approval->refresh();
-    expect($approval->status)->toBe(ApprovalStatus::Approved);
+    expect($approval->status)->toBe(ApprovalStatus::Pending);
 });
 
 it('canUserAct returns true for assigned approver', function (): void {

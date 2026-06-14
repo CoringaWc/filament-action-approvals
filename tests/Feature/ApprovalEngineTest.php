@@ -9,7 +9,9 @@ use CoringaWc\FilamentActionApprovals\Events\ApprovalRejected;
 use CoringaWc\FilamentActionApprovals\Events\ApprovalSubmitted;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Event;
 use Workbench\App\Models\PurchaseOrder;
 
@@ -96,6 +98,43 @@ it('uses action-specific flow when action key is provided', function (): void {
 
     expect($approval->flow->is($actionFlow))->toBeTrue()
         ->and($approval->flow->is($genericFlow))->toBeFalse();
+});
+
+it('stores the submitted action key on the approval row', function (): void {
+    $approver = $this->createUser();
+    $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()], 'cancel');
+    $order = PurchaseOrder::factory()->create();
+
+    $approval = $this->engine->submit($order, submittedBy: $approver->getKey(), actionKey: 'cancel');
+
+    expect($approval->action_key)->toBe('cancel')
+        ->and($approval->submittedActionKey())->toBe('cancel');
+});
+
+it('prevents duplicate pending approvals for the same approvable and action key at the database level', function (): void {
+    $approver = $this->createUser();
+    $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()], 'cancel');
+    $order = PurchaseOrder::factory()->create();
+
+    $this->engine->submit($order, $flow, $approver->getKey(), 'cancel');
+
+    expect(fn () => Approval::query()->create([
+        'approval_flow_id' => $flow->getKey(),
+        'approvable_type' => $order->getMorphClass(),
+        'approvable_id' => $order->getKey(),
+        'status' => ApprovalStatus::Pending,
+        'action_key' => 'cancel',
+        'submitted_by' => $approver->getKey(),
+        'submitted_by_type' => $approver->getMorphClass(),
+        'submitted_by_id' => $approver->getKey(),
+        'submitted_at' => now(),
+    ]))->toThrow(QueryException::class);
+
+    expect(Approval::query()
+        ->forApprovable($order)
+        ->withStatus(ApprovalStatus::Pending)
+        ->where('action_key', 'cancel')
+        ->count())->toBe(1);
 });
 
 it('throws when only action-specific flows exist and no action key is provided', function (): void {
@@ -192,6 +231,38 @@ it('completes approval when last step is approved', function (): void {
 
     $order->refresh();
     expect($order->status)->toBe('approved');
+});
+
+it('blocks public forced approval and rejection calls', function (): void {
+    $approver = $this->createUser();
+    $order = PurchaseOrder::factory()->create();
+    $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
+    $approval = $this->engine->submit($order, $flow, $approver->getKey());
+    $stepInstance = $approval->currentStepInstance();
+
+    expect($stepInstance)->not->toBeNull();
+
+    expect(fn (): null => $this->engine->approve($stepInstance, null, 'System approve', force: true))
+        ->toThrow(AuthorizationException::class);
+
+    expect(fn (): null => $this->engine->reject($stepInstance, null, 'System reject', force: true))
+        ->toThrow(AuthorizationException::class);
+
+    expect($approval->refresh()->status)->toBe(ApprovalStatus::Pending);
+});
+
+it('allows explicit system forced approval', function (): void {
+    $approver = $this->createUser();
+    $order = PurchaseOrder::factory()->create();
+    $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
+    $approval = $this->engine->submit($order, $flow, $approver->getKey());
+    $stepInstance = $approval->currentStepInstance();
+
+    expect($stepInstance)->not->toBeNull();
+
+    $this->engine->approveForSystem($stepInstance, 'System approve');
+
+    expect($approval->refresh()->status)->toBe(ApprovalStatus::Approved);
 });
 
 // ─── Reject ───────────────────────────────────────────────────

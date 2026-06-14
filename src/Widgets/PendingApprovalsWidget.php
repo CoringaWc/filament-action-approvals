@@ -7,6 +7,7 @@ namespace CoringaWc\FilamentActionApprovals\Widgets;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Support\ApprovableModelLabel;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
 use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
 use CoringaWc\FilamentActionApprovals\Support\DateDisplay;
 use Filament\Facades\Filament;
@@ -30,7 +31,7 @@ class PendingApprovalsWidget extends TableWidget
     {
         return $table
             ->query(
-                ApprovalStepInstance::query()
+                ApprovalModels::stepInstanceQuery()
                     ->waiting()
                     ->assignedTo(CurrentPanelUser::id())
                     ->with(['approval.approvable', 'step'])

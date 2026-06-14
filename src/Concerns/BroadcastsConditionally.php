@@ -32,8 +32,8 @@ trait BroadcastsConditionally
     public function broadcastWith(): array
     {
         $approval = property_exists($this, 'approval') ? $this->approval : null;
-        $approval ??= property_exists($this, 'stepInstance') ? $this->stepInstance?->approval : null;
-        $approval ??= property_exists($this, 'action') ? $this->action?->approval : null;
+        $approval ??= property_exists($this, 'stepInstance') ? $this->stepInstance->approval : null;
+        $approval ??= property_exists($this, 'action') ? $this->action->approval : null;
 
         if (! $approval instanceof Approval) {
             return [];

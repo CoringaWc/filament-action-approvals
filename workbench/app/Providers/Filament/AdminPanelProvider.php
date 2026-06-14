@@ -65,6 +65,7 @@ class AdminPanelProvider extends PanelProvider
                     ->flowResource()
                     ->approvalResource()
                     ->dashboard()
+                    ->interceptCrudActions()
                     ->userModel(User::class)
                     ->navigationGroup(__('filament-action-approvals::approval.navigation_group')),
             ]);

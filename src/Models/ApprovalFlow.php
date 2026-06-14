@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CoringaWc\FilamentActionApprovals\Models;
 
+use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -24,6 +25,8 @@ use Illuminate\Support\Collection;
 class ApprovalFlow extends Model
 {
     use SoftDeletes;
+
+    protected $table = 'approval_flows';
 
     protected static function booted(): void
     {
@@ -54,7 +57,7 @@ class ApprovalFlow extends Model
      */
     public function steps(): HasMany
     {
-        return $this->hasMany(ApprovalStep::class)->orderBy('order');
+        return $this->hasMany(ApprovalModels::step(), 'approval_flow_id')->orderBy('order');
     }
 
     /**
@@ -62,7 +65,7 @@ class ApprovalFlow extends Model
      */
     public function approvals(): HasMany
     {
-        return $this->hasMany(Approval::class);
+        return $this->hasMany(ApprovalModels::approval(), 'approval_flow_id');
     }
 
     /**

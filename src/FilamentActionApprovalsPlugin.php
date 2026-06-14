@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 namespace CoringaWc\FilamentActionApprovals;
 
+use Closure;
 use CoringaWc\FilamentActionApprovals\Contracts\ApproverResolver;
 use CoringaWc\FilamentActionApprovals\Pages\ApprovalsDashboard;
 use CoringaWc\FilamentActionApprovals\Resources\ApprovalFlows\ApprovalFlowResource;
 use CoringaWc\FilamentActionApprovals\Resources\Approvals\ApprovalResource;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalCrudActionInterceptor;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
+use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
+use CoringaWc\FilamentActionApprovals\Support\UserModelKey;
 use CoringaWc\FilamentActionApprovals\Widgets\ApprovalAnalyticsWidget;
 use CoringaWc\FilamentActionApprovals\Widgets\PendingApprovalsWidget;
 use Filament\Clusters\Cluster;
@@ -15,8 +20,6 @@ use Filament\Contracts\Plugin;
 use Filament\Panel;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Model;
-use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
-use CoringaWc\FilamentActionApprovals\Support\UserModelKey;
 
 class FilamentActionApprovalsPlugin implements Plugin
 {
@@ -28,11 +31,18 @@ class FilamentActionApprovalsPlugin implements Plugin
 
     protected ?bool $hasWidgets = null;
 
+    protected ?bool $interceptsCrudActions = null;
+
     /** @var array<class-string>|null */
     protected ?array $approverResolvers = null;
 
     /** @var class-string|null */
     protected ?string $userModel = null;
+
+    /** @var array<string, class-string>|null */
+    protected ?array $models = null;
+
+    protected ?Closure $approvalActionAuthorization = null;
 
     protected ?string $navigationGroup = null;
 
@@ -74,6 +84,13 @@ class FilamentActionApprovalsPlugin implements Plugin
         return $this;
     }
 
+    public function interceptCrudActions(bool $enabled = true): static
+    {
+        $this->interceptsCrudActions = $enabled;
+
+        return $this;
+    }
+
     /**
      * Override the approver resolvers for this panel.
      *
@@ -94,6 +111,28 @@ class FilamentActionApprovalsPlugin implements Plugin
     public function userModel(string $model): static
     {
         $this->userModel = $model;
+
+        return $this;
+    }
+
+    /**
+     * Override package persistence models for this panel.
+     *
+     * Each configured class must extend the package model represented by the
+     * matching key. Config-level overrides are still used for any missing key.
+     *
+     * @param  array<string, class-string>  $models
+     */
+    public function models(array $models): static
+    {
+        $this->models = $models;
+
+        return $this;
+    }
+
+    public function authorizeApprovalActionsUsing(Closure $callback): static
+    {
+        $this->approvalActionAuthorization = $callback;
 
         return $this;
     }
@@ -129,6 +168,14 @@ class FilamentActionApprovalsPlugin implements Plugin
         return $model;
     }
 
+    /**
+     * @return array<string, class-string>
+     */
+    public function getModelOverrides(): array
+    {
+        return $this->models ?? [];
+    }
+
     public function getNavigationGroup(): ?string
     {
         return $this->navigationGroup
@@ -136,8 +183,21 @@ class FilamentActionApprovalsPlugin implements Plugin
             ?? __('filament-action-approvals::approval.navigation_group');
     }
 
+    public function canRunApprovalAction(?Model $approval = null): bool
+    {
+        if ($this->approvalActionAuthorization === null) {
+            return true;
+        }
+
+        return (bool) ($this->approvalActionAuthorization)($approval);
+    }
+
     public function register(Panel $panel): void
     {
+        if ($this->shouldInterceptCrudActions()) {
+            app(ApprovalCrudActionInterceptor::class)->register();
+        }
+
         $resources = [];
 
         if ($this->hasFlowResource()) {
@@ -201,6 +261,22 @@ class FilamentActionApprovalsPlugin implements Plugin
         return ! $this->hasDashboardPage();
     }
 
+    protected function shouldInterceptCrudActions(): bool
+    {
+        return $this->interceptsCrudActions
+            ?? (bool) config('filament-action-approvals.crud_actions.intercept', false);
+    }
+
+    public function interceptsCrudActions(): bool
+    {
+        return $this->shouldInterceptCrudActions();
+    }
+
+    public static function shouldInterceptCrudActionsForCurrentPanel(): bool
+    {
+        return static::current()?->interceptsCrudActions() ?? false;
+    }
+
     /**
      * Get the current plugin instance from the active Filament panel.
      */
@@ -232,6 +308,54 @@ class FilamentActionApprovalsPlugin implements Plugin
             ?? config('auth.providers.users.model');
 
         return $model;
+    }
+
+    /**
+     * @return class-string<Models\Approval>
+     */
+    public static function resolveApprovalModel(): string
+    {
+        return ApprovalModels::approval();
+    }
+
+    /**
+     * @return class-string<Models\ApprovalFlow>
+     */
+    public static function resolveApprovalFlowModel(): string
+    {
+        return ApprovalModels::flow();
+    }
+
+    /**
+     * @return class-string<Models\ApprovalStep>
+     */
+    public static function resolveApprovalStepModel(): string
+    {
+        return ApprovalModels::step();
+    }
+
+    /**
+     * @return class-string<Models\ApprovalStepInstance>
+     */
+    public static function resolveApprovalStepInstanceModel(): string
+    {
+        return ApprovalModels::stepInstance();
+    }
+
+    /**
+     * @return class-string<Models\ApprovalAction>
+     */
+    public static function resolveApprovalActionModel(): string
+    {
+        return ApprovalModels::action();
+    }
+
+    /**
+     * @return class-string<Models\ApprovalDelegation>
+     */
+    public static function resolveApprovalDelegationModel(): string
+    {
+        return ApprovalModels::delegation();
     }
 
     /**
@@ -494,6 +618,11 @@ class FilamentActionApprovalsPlugin implements Plugin
     public static function shouldGroupApprovalResourceRecordActions(): bool
     {
         return (bool) config('filament-action-approvals.approvals_resource.group_record_actions', true);
+    }
+
+    public static function canRunOperationalApprovalAction(?Model $approval = null): bool
+    {
+        return static::current()?->canRunApprovalAction($approval) ?? true;
     }
 
     public static function isOperationalActionEnabled(string $action, bool $default = true): bool

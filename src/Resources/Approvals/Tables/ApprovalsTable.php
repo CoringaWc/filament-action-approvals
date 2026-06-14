@@ -16,6 +16,7 @@ use CoringaWc\FilamentActionApprovals\Resources\Approvals\Schemas\ApprovalInfoli
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use CoringaWc\FilamentActionApprovals\Support\ApprovableActionLabel;
 use CoringaWc\FilamentActionApprovals\Support\ApprovableModelLabel;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
 use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
 use CoringaWc\FilamentActionApprovals\Support\DateDisplay;
 use CoringaWc\FilamentActionApprovals\Support\UserDisplayName;
@@ -130,7 +131,7 @@ class ApprovalsTable
         return [
             SelectFilter::make('approvable_type')
                 ->label(__('filament-action-approvals::approval.approval_filters.model'))
-                ->options(fn (): array => Approval::query()
+                ->options(fn (): array => ApprovalModels::approvalQuery()
                     ->distinct()
                     ->pluck('approvable_type')
                     ->filter()
@@ -148,7 +149,7 @@ class ApprovalsTable
                     $userModel = FilamentActionApprovalsPlugin::resolveUserModel();
 
                     return $userModel::query()
-                        ->whereIn('id', Approval::query()->distinct()->pluck('submitted_by')->filter()->all())
+                        ->whereIn('id', ApprovalModels::approvalQuery()->distinct()->pluck('submitted_by')->filter()->all())
                         ->get()
                         ->mapWithKeys(fn ($user): array => [$user->getKey() => UserDisplayName::resolve($user) ?? (string) $user->getKey()])
                         ->all();
@@ -293,6 +294,10 @@ class ApprovalsTable
 
     protected static function currentUserCanResolveAnyApproval(): bool
     {
+        if (! FilamentActionApprovalsPlugin::canRunOperationalApprovalAction()) {
+            return false;
+        }
+
         $userId = CurrentPanelUser::id();
 
         if (! is_int($userId) && ! is_string($userId)) {
@@ -300,24 +305,26 @@ class ApprovalsTable
         }
 
         if (FilamentActionApprovalsPlugin::isSuperAdmin($userId)) {
-            return Approval::query()
+            return ApprovalModels::approvalQuery()
                 ->withStatus(ApprovalStatus::Pending)
                 ->exists();
         }
 
-        return Approval::query()
+        return ApprovalModels::approvalQuery()
             ->awaitingUserAction($userId)
             ->exists();
     }
 
     protected static function currentUserCanApprove(Approval $approval): bool
     {
-        return $approval->canBeApprovedBy(CurrentPanelUser::id());
+        return FilamentActionApprovalsPlugin::canRunOperationalApprovalAction($approval)
+            && $approval->canBeApprovedBy(CurrentPanelUser::id());
     }
 
     protected static function currentUserCanReject(Approval $approval): bool
     {
-        return $approval->canBeRejectedBy(CurrentPanelUser::id());
+        return FilamentActionApprovalsPlugin::canRunOperationalApprovalAction($approval)
+            && $approval->canBeRejectedBy(CurrentPanelUser::id());
     }
 
     /**
@@ -335,10 +342,6 @@ class ApprovalsTable
         $engine = app(ApprovalEngine::class);
 
         foreach ($records as $approval) {
-            if (! $approval instanceof Approval) {
-                continue;
-            }
-
             $stepInstance = $approval->currentStepInstance();
 
             if (! $stepInstance instanceof ApprovalStepInstance) {
@@ -350,6 +353,10 @@ class ApprovalsTable
             }
 
             if ($operation === 'reject' && ! $approval->canBeRejectedBy($userId)) {
+                continue;
+            }
+
+            if (! FilamentActionApprovalsPlugin::canRunOperationalApprovalAction($approval)) {
                 continue;
             }
 

@@ -7,6 +7,7 @@ namespace CoringaWc\FilamentActionApprovals\Resources\ApprovalFlows\Tables;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
 use CoringaWc\FilamentActionApprovals\Support\ApprovableActionLabel;
 use CoringaWc\FilamentActionApprovals\Support\ApprovableModelLabel;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
 use CoringaWc\FilamentActionApprovals\Support\DateDisplay;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -63,6 +64,7 @@ class ApprovalFlowsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->query(ApprovalModels::flowQuery())
             ->columns(static::columns())
             ->recordActions(static::recordActions());
     }

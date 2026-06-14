@@ -1,14 +1,18 @@
 <?php
 
+use CoringaWc\FilamentActionApprovals\Support\UserModelKey;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
-use CoringaWc\FilamentActionApprovals\Support\UserModelKey;
 
 return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('approval_actions')) {
+            return;
+        }
+
         Schema::create('approval_actions', function (Blueprint $table) {
             $table->id();
             $table->foreignId('approval_id')->constrained()->cascadeOnDelete();

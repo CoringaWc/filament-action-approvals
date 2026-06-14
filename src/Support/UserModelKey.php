@@ -25,7 +25,7 @@ final class UserModelKey
         }
 
         /** @var Model $model */
-        $model = app(static::modelClass());
+        $model = app(self::modelClass());
 
         return $model->getTable();
     }
@@ -33,7 +33,7 @@ final class UserModelKey
     public static function keyName(): string
     {
         /** @var Model $model */
-        $model = app(static::modelClass());
+        $model = app(self::modelClass());
 
         return $model->getKeyName();
     }
@@ -47,22 +47,20 @@ final class UserModelKey
         }
 
         /** @var Model $model */
-        $model = app(static::modelClass());
+        $model = app(self::modelClass());
 
         if ($model->getKeyType() === 'int' || $model->getKeyType() === 'integer') {
             return 'integer';
         }
 
-        if (method_exists($model, 'newUniqueId')) {
-            $uniqueId = (string) $model->newUniqueId();
+        $uniqueId = (string) $model->newUniqueId();
 
-            if (Str::isUlid($uniqueId)) {
-                return 'ulid';
-            }
+        if (Str::isUlid($uniqueId)) {
+            return 'ulid';
+        }
 
-            if (Str::isUuid($uniqueId)) {
-                return 'uuid';
-            }
+        if (Str::isUuid($uniqueId)) {
+            return 'uuid';
         }
 
         return 'string';
@@ -70,7 +68,7 @@ final class UserModelKey
 
     public static function addColumn(Blueprint $table, string $column, bool $nullable = false): void
     {
-        $definition = match (static::keyType()) {
+        $definition = match (self::keyType()) {
             'uuid' => $table->uuid($column),
             'ulid' => $table->ulid($column),
             'string' => $table->string($column, (int) config('filament-action-approvals.user_key_length', 255)),
@@ -88,7 +86,7 @@ final class UserModelKey
             return null;
         }
 
-        if (static::keyType() === 'integer') {
+        if (self::keyType() === 'integer') {
             return is_string($userId) && ctype_digit($userId) ? (int) $userId : $userId;
         }
 
@@ -97,13 +95,13 @@ final class UserModelKey
 
     public static function isConfiguredUserModel(Model $user): bool
     {
-        return is_a($user, static::modelClass());
+        return is_a($user, self::modelClass());
     }
 
     public static function configuredUserMorphClass(): string
     {
         /** @var Model $model */
-        $model = app(static::modelClass());
+        $model = app(self::modelClass());
 
         return $model->getMorphClass();
     }

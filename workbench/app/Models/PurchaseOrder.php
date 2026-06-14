@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Workbench\App\Models;
 
+use CoringaWc\FilamentActionApprovals\Attributes\ApprovableCrudAction;
+use CoringaWc\FilamentActionApprovals\Concerns\HasApprovalCrudActions;
 use CoringaWc\FilamentActionApprovals\Concerns\HasApprovals;
+use CoringaWc\FilamentActionApprovals\Contracts\InterceptsApprovalCrudActions;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalNotificationEvent;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalNotificationAction;
@@ -13,8 +16,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class PurchaseOrder extends Model
+#[ApprovableCrudAction(operation: InterceptsApprovalCrudActions::OperationEdit, actionKey: 'purchase-order.edit', fields: ['title', 'description', 'amount'])]
+#[ApprovableCrudAction(operation: InterceptsApprovalCrudActions::OperationDelete, actionKey: 'purchase-order.delete')]
+class PurchaseOrder extends Model implements InterceptsApprovalCrudActions
 {
+    use HasApprovalCrudActions;
     use HasApprovals {
         canSubmitForApproval as protected canSubmitForApprovalThroughFlow;
     }
@@ -30,6 +36,8 @@ class PurchaseOrder extends Model
         return [
             'submit' => __('workbench::workbench.approval_actions.purchase_orders.submit'),
             'cancel' => __('workbench::workbench.approval_actions.purchase_orders.cancel'),
+            'purchase-order.edit' => __('workbench::workbench.approval_actions.purchase_orders.edit'),
+            'purchase-order.delete' => __('workbench::workbench.approval_actions.purchase_orders.delete'),
         ];
     }
 

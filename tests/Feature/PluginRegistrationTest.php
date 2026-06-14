@@ -3,8 +3,10 @@
 declare(strict_types=1);
 
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
+use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Resources\Approvals\ApprovalResource;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
+use Illuminate\Database\Eloquent\Model;
 use Workbench\App\Models\User;
 
 it('registers approval engine in service container', function (): void {
@@ -62,6 +64,19 @@ it('still allows explicitly enabling global panel widgets alongside the dedicate
 
 it('resolves user model from plugin', function (): void {
     expect(FilamentActionApprovalsPlugin::resolveUserModel())->toBe(User::class);
+});
+
+it('allows consumers to authorize operational approval actions', function (): void {
+    $approval = new Approval;
+    $allowedApproval = new Approval;
+    $allowedApproval->id = 123;
+
+    $plugin = (new FilamentActionApprovalsPlugin)
+        ->authorizeApprovalActionsUsing(fn (?Model $approval): bool => $approval instanceof Approval && (int) $approval->getKey() === 123);
+
+    expect($plugin->canRunApprovalAction())->toBeFalse()
+        ->and($plugin->canRunApprovalAction($approval))->toBeFalse()
+        ->and($plugin->canRunApprovalAction($allowedApproval))->toBeTrue();
 });
 
 it('keeps the approval resource without a dedicated view page', function (): void {

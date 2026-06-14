@@ -8,6 +8,7 @@ use CoringaWc\FilamentActionApprovals\Enums\ActionType;
 use CoringaWc\FilamentActionApprovals\Enums\StepInstanceStatus;
 use CoringaWc\FilamentActionApprovals\Enums\StepType;
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
 use CoringaWc\FilamentActionApprovals\Support\UserModelKey;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -38,6 +39,8 @@ use Illuminate\Support\Carbon;
  */
 class ApprovalStepInstance extends Model
 {
+    protected $table = 'approval_step_instances';
+
     protected $fillable = [
         'approval_id',
         'approval_step_id',
@@ -75,7 +78,7 @@ class ApprovalStepInstance extends Model
      */
     public function approval(): BelongsTo
     {
-        return $this->belongsTo(Approval::class);
+        return $this->belongsTo(ApprovalModels::approval());
     }
 
     /**
@@ -83,7 +86,7 @@ class ApprovalStepInstance extends Model
      */
     public function step(): BelongsTo
     {
-        return $this->belongsTo(ApprovalStep::class, 'approval_step_id');
+        return $this->belongsTo(ApprovalModels::step(), 'approval_step_id');
     }
 
     /**
@@ -91,7 +94,7 @@ class ApprovalStepInstance extends Model
      */
     public function actions(): HasMany
     {
-        return $this->hasMany(ApprovalAction::class);
+        return $this->hasMany(ApprovalModels::action(), 'approval_step_instance_id');
     }
 
     /**
@@ -99,7 +102,7 @@ class ApprovalStepInstance extends Model
      */
     public function delegations(): HasMany
     {
-        return $this->hasMany(ApprovalDelegation::class);
+        return $this->hasMany(ApprovalModels::delegation(), 'approval_step_instance_id');
     }
 
     /**

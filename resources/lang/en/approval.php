@@ -122,6 +122,9 @@ return [
         'approval_flow' => 'Approval Flow',
         'approval_action' => 'Action to approve',
         'approval_action_helper' => 'Choose which business scenario is being submitted. The system will try a flow specific to that action and fall back to the model generic flow when none exists.',
+        'submit_approval_request' => 'Submit approval request',
+        'request_delete' => 'Request deletion',
+        'request_delete_heading' => 'Request deletion?',
         'comment_optional' => 'Comment (optional)',
         'rejection_reason' => 'Reason for rejection',
         'delegate_to' => 'Delegate to',
@@ -136,7 +139,11 @@ return [
 
         // Success messages
         'submitted_success' => 'Submitted for approval',
+        'approval_request_submitted' => 'Approval request submitted',
         'submission_not_allowed' => 'You are not allowed to submit this record for approval.',
+        'apply_failed' => 'The approved action could not be applied. The approval remains pending.',
+        'approval_flow_missing' => 'No approval flow is configured for this request.',
+        'no_changes_to_approve' => 'No approval request was created because no governed fields changed.',
         'approved_success' => 'Approved',
         'rejected_success' => 'Rejected',
         'comment_success' => 'Comment added',

@@ -9,6 +9,7 @@ use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Resources\Approvals\Schemas\ApprovalInfolist;
 use CoringaWc\FilamentActionApprovals\Support\ApprovableModelLabel;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalDashboardFilters;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
 use CoringaWc\FilamentActionApprovals\Support\DateDisplay;
 use CoringaWc\FilamentActionApprovals\Support\UserDisplayName;
 use Filament\Actions\ViewAction;
@@ -71,7 +72,7 @@ class OldestPendingApprovalsWidget extends TableWidget
     protected function getTableQuery(): Builder
     {
         return ApprovalDashboardFilters::applyToQuery(
-            Approval::query()
+            ApprovalModels::approvalQuery()
                 ->withOperationalRelations()
                 ->where('status', ApprovalStatus::Pending->value),
             $this->pageFilters,

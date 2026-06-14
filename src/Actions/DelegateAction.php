@@ -52,7 +52,8 @@ class DelegateAction extends Action
                     return false;
                 }
 
-                return $approval->canBeDelegatedBy($userId);
+                return FilamentActionApprovalsPlugin::canRunOperationalApprovalAction($approval)
+                    && $approval->canBeDelegatedBy($userId);
             })
             ->schema([
                 TranslatableSelect::apply(

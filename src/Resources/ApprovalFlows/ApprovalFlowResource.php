@@ -23,6 +23,11 @@ class ApprovalFlowResource extends Resource
 
     protected static string|\BackedEnum|null $navigationIcon = Heroicon::OutlinedArrowPath;
 
+    public static function getModel(): string
+    {
+        return FilamentActionApprovalsPlugin::resolveApprovalFlowModel();
+    }
+
     public static function getNavigationIcon(): string|\BackedEnum|null
     {
         return FilamentActionApprovalsPlugin::resolveResourceNavigationIcon()

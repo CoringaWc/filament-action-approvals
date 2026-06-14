@@ -3,6 +3,12 @@
 use CoringaWc\FilamentActionApprovals\ApproverResolvers\CustomRuleResolver;
 use CoringaWc\FilamentActionApprovals\ApproverResolvers\RoleResolver;
 use CoringaWc\FilamentActionApprovals\ApproverResolvers\UserResolver;
+use CoringaWc\FilamentActionApprovals\Models\Approval;
+use CoringaWc\FilamentActionApprovals\Models\ApprovalAction;
+use CoringaWc\FilamentActionApprovals\Models\ApprovalDelegation;
+use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
+use CoringaWc\FilamentActionApprovals\Models\ApprovalStep;
+use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 
 return [
 
@@ -12,6 +18,23 @@ return [
     |--------------------------------------------------------------------------
     */
     'user_model' => config('auth.providers.users.model'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Package Models
+    |--------------------------------------------------------------------------
+    | Override these classes when your application needs project-owned models
+    | with additional casts, relationships, scopes, observers, or policies.
+    | Each override must extend the corresponding package model below.
+    */
+    'models' => [
+        'approval' => Approval::class,
+        'approval_flow' => ApprovalFlow::class,
+        'approval_step' => ApprovalStep::class,
+        'approval_step_instance' => ApprovalStepInstance::class,
+        'approval_action' => ApprovalAction::class,
+        'approval_delegation' => ApprovalDelegation::class,
+    ],
 
     /*
     |--------------------------------------------------------------------------
@@ -140,6 +163,18 @@ return [
     */
     'pending_submissions' => [
         'block_concurrent' => true,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Native CRUD Action Interception
+    |--------------------------------------------------------------------------
+    | When enabled on a panel, the plugin configures Filament EditAction and
+    | DeleteAction. Models that implement the package CRUD approval contract
+    | submit configured operations for approval instead of mutating directly.
+    */
+    'crud_actions' => [
+        'intercept' => false,
     ],
 
     /*

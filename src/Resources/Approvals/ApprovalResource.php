@@ -20,6 +20,11 @@ class ApprovalResource extends Resource
 
     protected static string|\BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentCheck;
 
+    public static function getModel(): string
+    {
+        return FilamentActionApprovalsPlugin::resolveApprovalModel();
+    }
+
     public static function getNavigationIcon(): string|\BackedEnum|null
     {
         return FilamentActionApprovalsPlugin::resolveApprovalResourceNavigationIcon()

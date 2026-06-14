@@ -7,6 +7,7 @@ use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\Events\ApprovalCompleted;
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Event;
 use Spatie\Permission\Models\Role;
 use Workbench\App\Models\Invoice;
@@ -105,6 +106,20 @@ it('bypasses approval records for privileged approvable actions', function (): v
 
 // ─── autoApprove ─────────────────────────────────────────────
 
+it('blocks public auto approval calls', function (): void {
+    $approver = $this->createUser();
+    $privileged = $this->createUser();
+    $flow = $this->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()]);
+    $order = PurchaseOrder::factory()->create(['status' => 'draft']);
+
+    $approval = $this->engine->submit($order, $flow, $privileged->getKey());
+
+    expect(fn (): null => $this->engine->autoApprove($approval, $privileged->getKey()))
+        ->toThrow(AuthorizationException::class);
+
+    expect($approval->refresh()->status)->toBe(ApprovalStatus::Pending);
+});
+
 it('completes a single-step approval and fires ApprovalCompleted', function (): void {
     Event::fake([ApprovalCompleted::class]);
 
@@ -115,7 +130,7 @@ it('completes a single-step approval and fires ApprovalCompleted', function (): 
 
     $approval = $this->engine->submit($order, $flow, $privileged->getKey());
 
-    $this->engine->autoApprove($approval, $privileged->getKey());
+    $this->engine->autoApproveForSystem($approval, $privileged->getKey());
 
     $approval->refresh();
 
@@ -130,7 +145,7 @@ it('applies the approvable mutation through the completion callback', function (
 
     $approval = $this->engine->submit($order, $flow, $privileged->getKey());
 
-    $this->engine->autoApprove($approval, $privileged->getKey());
+    $this->engine->autoApproveForSystem($approval, $privileged->getKey());
 
     expect($order->refresh()->status)->toBe('approved');
 });
@@ -145,7 +160,7 @@ it('records one approved action per step on a multi-step flow', function (): voi
 
     $approval = $this->engine->submit($order, $flow, $privileged->getKey());
 
-    $this->engine->autoApprove($approval, $privileged->getKey());
+    $this->engine->autoApproveForSystem($approval, $privileged->getKey());
 
     $approval->refresh();
 
@@ -164,7 +179,7 @@ it('completes a step that requires multiple approvals with a single action', fun
 
     $approval = $this->engine->submit($order, $flow, $privileged->getKey());
 
-    $this->engine->autoApprove($approval, $privileged->getKey());
+    $this->engine->autoApproveForSystem($approval, $privileged->getKey());
 
     $approval->refresh();
 

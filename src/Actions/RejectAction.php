@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CoringaWc\FilamentActionApprovals\Actions;
 
+use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
@@ -42,7 +43,8 @@ class RejectAction extends Action
                     return false;
                 }
 
-                return $approval->canBeRejectedBy($userId);
+                return FilamentActionApprovalsPlugin::canRunOperationalApprovalAction($approval)
+                    && $approval->canBeRejectedBy($userId);
             })
             ->schema([
                 Textarea::make('comment')

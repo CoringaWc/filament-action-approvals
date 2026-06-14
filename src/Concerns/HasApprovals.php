@@ -12,6 +12,7 @@ use CoringaWc\FilamentActionApprovals\Models\ApprovalAction;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
 use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
@@ -25,7 +26,7 @@ trait HasApprovals
      */
     public function approvals(): MorphMany
     {
-        return $this->morphMany(Approval::class, 'approvable');
+        return $this->morphMany(ApprovalModels::approval(), 'approvable');
     }
 
     /**
@@ -40,7 +41,7 @@ trait HasApprovals
      */
     public function pendingApproval(): MorphOne
     {
-        return $this->morphOne(Approval::class, 'approvable')->ofMany(
+        return $this->morphOne(ApprovalModels::approval(), 'approvable')->ofMany(
             ['created_at' => 'max', 'id' => 'max'],
             fn (Builder $query): Builder => $query->where('status', ApprovalStatus::Pending),
         );
@@ -251,7 +252,9 @@ trait HasApprovals
             return false;
         }
 
-        return ApprovalFlow::getSubmissionFlowsForModel($this, $actionKey)
+        $flowModel = ApprovalModels::flow();
+
+        return $flowModel::getSubmissionFlowsForModel($this, $actionKey)
             ->contains(fn (ApprovalFlow $flow): bool => $this->flowIncludesSubmissionApprover($flow, $resolvedUserId));
     }
 

@@ -144,6 +144,8 @@ return [
         'purchase_orders' => [
             'submit' => 'Enviar pedido de compra',
             'cancel' => 'Cancelar pedido de compra',
+            'edit' => 'Editar pedido de compra',
+            'delete' => 'Excluir pedido de compra',
         ],
         'expenses' => [
             'submit' => 'Enviar despesa',

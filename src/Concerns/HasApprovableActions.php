@@ -11,6 +11,7 @@ use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalActionResult;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -64,7 +65,9 @@ trait HasApprovableActions
 
     public function resolveApprovalFlow(string $actionKey): ?ApprovalFlow
     {
-        return ApprovalFlow::forAction($this, $actionKey)->first();
+        $flowModel = ApprovalModels::flow();
+
+        return $flowModel::forAction($this, $actionKey)->first();
     }
 
     protected function afterApprovalApproved(Approval $approval): void

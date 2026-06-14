@@ -13,6 +13,7 @@ use CoringaWc\FilamentActionApprovals\Notifications\ApprovalEscalatedNotificatio
 use CoringaWc\FilamentActionApprovals\Notifications\ApprovalRequestedNotification;
 use CoringaWc\FilamentActionApprovals\Notifications\ApprovalSlaWarningNotification;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
 use Illuminate\Console\Command;
 
 class ProcessApprovalSlaCommand extends Command
@@ -33,7 +34,7 @@ class ProcessApprovalSlaCommand extends Command
 
     protected function processWarnings(float $warningThreshold): void
     {
-        $candidates = ApprovalStepInstance::query()
+        $candidates = ApprovalModels::stepInstanceQuery()
             ->where('status', StepInstanceStatus::Waiting)
             ->whereNotNull('sla_deadline')
             ->where('sla_warning_sent', false)
@@ -60,7 +61,7 @@ class ProcessApprovalSlaCommand extends Command
 
     protected function processBreaches(ApprovalEngine $engine): void
     {
-        $breached = ApprovalStepInstance::query()
+        $breached = ApprovalModels::stepInstanceQuery()
             ->where('status', StepInstanceStatus::Waiting)
             ->whereNotNull('sla_deadline')
             ->where('sla_deadline', '<=', now())
@@ -96,8 +97,8 @@ class ProcessApprovalSlaCommand extends Command
 
         match ($action) {
             EscalationAction::Notify => $this->sendEscalationNotification($instance),
-            EscalationAction::AutoApprove => $engine->approve($instance, null, __('filament-action-approvals::approval.sla.auto_approved'), force: true),
-            EscalationAction::Reject => $engine->reject($instance, null, __('filament-action-approvals::approval.sla.auto_rejected'), force: true),
+            EscalationAction::AutoApprove => $engine->approveForSystem($instance, __('filament-action-approvals::approval.sla.auto_approved')),
+            EscalationAction::Reject => $engine->rejectForSystem($instance, __('filament-action-approvals::approval.sla.auto_rejected')),
             EscalationAction::Reassign => $this->reassign($instance),
         };
 

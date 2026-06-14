@@ -12,6 +12,7 @@ use CoringaWc\FilamentActionApprovals\Support\UserModelKey;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Filament\Schemas\Components\Component;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Schema;
 
@@ -30,14 +31,27 @@ class RoleResolver implements ApproverResolver
             return [];
         }
 
-        if (! static::isAvailable($userModel)) {
+        if (! class_exists($userModel) || ! static::isAvailable($userModel)) {
             return [];
         }
 
-        // Normalize to array (supports legacy single string or new multi-select array)
-        $roleNames = is_array($roles) ? $roles : [$roles];
+        /** @var class-string<Model> $userModel */
 
-        $query = $userModel::role($roleNames);
+        // Normalize to array (supports legacy single string or new multi-select array)
+        $roleNames = collect(is_array($roles) ? $roles : [$roles])
+            ->filter(fn (string $role): bool => filled($role))
+            ->values()
+            ->all();
+
+        if ($roleNames === []) {
+            return [];
+        }
+
+        $query = $userModel::query()
+            ->whereHas(
+                'roles',
+                fn (Builder $query): Builder => $query->whereIn('name', $roleNames),
+            );
 
         if (config('filament-action-approvals.multi_tenancy.enabled', false) && config('filament-action-approvals.multi_tenancy.scope_approvers', true)) {
             $column = config('filament-action-approvals.multi_tenancy.column', 'company_id');
@@ -69,6 +83,12 @@ class RoleResolver implements ApproverResolver
         }
 
         $modelClass ??= FilamentActionApprovalsPlugin::resolveUserModel();
+
+        if (! class_exists($modelClass)) {
+            return false;
+        }
+
+        /** @var class-string $modelClass */
 
         return method_exists($modelClass, 'scopeRole')
             || method_exists($modelClass, 'hasAnyRole')

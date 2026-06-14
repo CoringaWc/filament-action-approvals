@@ -209,12 +209,13 @@ class ApprovalInfolist
                     RepeatableEntry::make('auditTrail')
                         ->hiddenLabel()
                         ->state(fn (Approval $record): array => $record->actions
-                            ->map(fn (ApprovalAction $action): array => [
+                            ->map(static fn (ApprovalAction $action): array => [
                                 'type' => $action->type,
                                 'actor_name' => UserDisplayName::resolve($action->user),
                                 'comment' => $action->comment,
                                 'created_at' => $action->created_at,
                             ])
+                            ->values()
                             ->all())
                         ->schema([
                             TextEntry::make('type')

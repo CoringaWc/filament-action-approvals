@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CoringaWc\FilamentActionApprovals\Actions;
 
+use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
@@ -42,7 +43,8 @@ class CommentAction extends Action
                     return false;
                 }
 
-                return $approval->canReceiveCommentsFrom($userId);
+                return FilamentActionApprovalsPlugin::canRunOperationalApprovalAction($approval)
+                    && $approval->canReceiveCommentsFrom($userId);
             })
             ->schema([
                 Textarea::make('comment')

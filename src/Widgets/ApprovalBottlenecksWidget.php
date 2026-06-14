@@ -10,6 +10,7 @@ use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
 use CoringaWc\FilamentActionApprovals\Support\ApprovableActionLabel;
 use CoringaWc\FilamentActionApprovals\Support\ApprovableModelLabel;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalDashboardFilters;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
@@ -58,7 +59,7 @@ class ApprovalBottlenecksWidget extends TableWidget
      */
     protected function getTableQuery(): Builder
     {
-        return ApprovalFlow::query()
+        return ApprovalModels::flowQuery()
             ->withCount([
                 'approvals as pending_approvals_count' => function (Builder $query): void {
                     ApprovalDashboardFilters::applyToQuery(
