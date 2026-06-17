@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use CoringaWc\FilamentActionApprovals\Concerns\InteractsWithApprovalState;
 use CoringaWc\FilamentActionApprovals\ApproverResolvers\UserResolver;
+use CoringaWc\FilamentActionApprovals\Concerns\InteractsWithApprovalState;
 use CoringaWc\FilamentActionApprovals\Enums\StepType;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;

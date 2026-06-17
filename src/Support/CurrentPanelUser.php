@@ -23,7 +23,7 @@ final class CurrentPanelUser
 
     public static function id(): int|string|null
     {
-        $user = static::model();
+        $user = self::model();
 
         if (! $user instanceof Model) {
             return null;
