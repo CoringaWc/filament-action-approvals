@@ -321,6 +321,12 @@ class ApprovalsTable
             && $approval->canBeApprovedBy(CurrentPanelUser::id());
     }
 
+    protected static function hasUnresolvedApplyFailure(Approval $approval): bool
+    {
+        return data_get($approval->metadata, 'apply_failed_at') !== null
+            && data_get($approval->metadata, 'applied_at') === null;
+    }
+
     protected static function currentUserCanReject(Approval $approval): bool
     {
         return FilamentActionApprovalsPlugin::canRunOperationalApprovalAction($approval)
@@ -339,6 +345,7 @@ class ApprovalsTable
         }
 
         $resolvedCount = 0;
+        $failedApplyCount = 0;
         $engine = app(ApprovalEngine::class);
 
         foreach ($records as $approval) {
@@ -371,6 +378,19 @@ class ApprovalsTable
             } catch (AuthorizationException) {
                 continue;
             }
+
+            if ($operation === 'approve' && static::hasUnresolvedApplyFailure($approval->refresh())) {
+                $failedApplyCount++;
+            }
+        }
+
+        if ($operation === 'approve' && $failedApplyCount > 0) {
+            Notification::make()
+                ->title(__('filament-action-approvals::approval.actions.approved_apply_failed'))
+                ->danger()
+                ->send();
+
+            return null;
         }
 
         $translationKey = $operation === 'approve' ? 'approved' : 'rejected';

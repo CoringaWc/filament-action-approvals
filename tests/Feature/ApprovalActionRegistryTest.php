@@ -8,6 +8,7 @@ use CoringaWc\FilamentActionApprovals\Enums\StepType;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
+use CoringaWc\FilamentActionApprovals\Resources\Approvals\Pages\ListApprovals;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalActionRegistry;
 use CoringaWc\FilamentActionApprovals\Tests\TestCase;
@@ -159,6 +160,43 @@ it('uses registered handlers before the crud fallback', function (): void {
     expect($order->getAttribute('amount'))->toEqual('1200.00');
     expect(data_get($approval->refresh()->metadata, 'crud.applied_at'))->toBeNull();
     expect(data_get($approval->metadata, 'applied_via'))->toBe('handler');
+});
+
+it('notifies operational failure from approval record actions', function (): void {
+    /** @var TestCase $test */
+    $test = $this;
+
+    $submitter = User::factory()->create();
+    $approver = User::factory()->create();
+    $order = PurchaseOrder::factory()->for($submitter, 'user')->create(['title' => 'Original order']);
+    $flow = createRegistrySingleStepFlow(PurchaseOrder::class, $approver, 'purchase-order.fail-action');
+
+    app(ApprovalActionRegistry::class)->applyUsing(
+        PurchaseOrder::class,
+        'purchase-order.fail-action',
+        ApprovalActionRegistry::OperationAction,
+        fn (): never => throw ValidationException::withMessages(['approval' => 'Cannot apply.']),
+    );
+
+    $approval = app(ApprovalEngine::class)->submit(
+        $order,
+        $flow,
+        $submitter,
+        'purchase-order.fail-action',
+        ['payload' => ['title' => 'Should not apply']],
+    );
+
+    $test->actingAs($approver);
+
+    Livewire::test(ListApprovals::class)
+        ->callTableAction('approve', $approval, [
+            'comment' => 'Approved for operational failure test.',
+        ])
+        ->assertNotified(__('filament-action-approvals::approval.actions.approved_apply_failed'))
+        ->assertNotNotified(__('filament-action-approvals::approval.actions.approved_success'));
+
+    expect($approval->refresh()->status)->toBe(ApprovalStatus::Approved)
+        ->and(data_get($approval->metadata, 'apply_failed_at'))->not->toBeNull();
 });
 
 /**

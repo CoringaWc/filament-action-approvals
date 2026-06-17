@@ -78,6 +78,17 @@ class ApproveAction extends Action
                     $data['comment'] ?? null,
                 );
 
+                $approval = $approval->refresh();
+
+                if ($action->hasUnresolvedApplyFailure($approval)) {
+                    Notification::make()
+                        ->title(__('filament-action-approvals::approval.actions.approved_apply_failed'))
+                        ->danger()
+                        ->send();
+
+                    return;
+                }
+
                 Notification::make()
                     ->title(__('filament-action-approvals::approval.actions.approved_success'))
                     ->success()
@@ -111,6 +122,12 @@ class ApproveAction extends Action
     protected function resolveCurrentStepInstance(): ?ApprovalStepInstance
     {
         return $this->resolveCurrentApproval()?->currentStepInstance();
+    }
+
+    protected function hasUnresolvedApplyFailure(Approval $approval): bool
+    {
+        return data_get($approval->metadata, 'apply_failed_at') !== null
+            && data_get($approval->metadata, 'applied_at') === null;
     }
 
     protected function dispatchApprovalUpdated(): void
