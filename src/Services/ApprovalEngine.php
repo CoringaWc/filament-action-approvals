@@ -23,16 +23,21 @@ use CoringaWc\FilamentActionApprovals\Notifications\ApprovalCancelledNotificatio
 use CoringaWc\FilamentActionApprovals\Notifications\ApprovalRejectedNotification;
 use CoringaWc\FilamentActionApprovals\Notifications\ApprovalRequestedNotification;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalActionRegistry;
 use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
 use CoringaWc\FilamentActionApprovals\Support\SensitiveDataRedactor;
 use CoringaWc\FilamentActionApprovals\Support\UserModelKey;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class ApprovalEngine
 {
@@ -407,7 +412,11 @@ class ApprovalEngine
                 'completed_at' => now(),
             ]);
 
-            $this->applyApprovedCrudAction($approval->refresh());
+            $approval = $approval->refresh();
+
+            if (! $this->applyRegisteredActionHandler($approval)) {
+                $this->applyApprovedCrudAction($approval);
+            }
 
             $this->afterCommit(function () use ($approval): void {
                 event(new ApprovalCompleted($approval));
@@ -485,6 +494,136 @@ class ApprovalEngine
         data_set($metadata, 'crud.applied_at', $appliedAt);
         data_set($metadata, 'applied_at', $appliedAt);
         data_set($metadata, 'applied_via', 'crud');
+
+        $approval->forceFill(['metadata' => $metadata])->save();
+    }
+
+    private function applyRegisteredActionHandler(Approval $approval): bool
+    {
+        $operation = $this->resolveApprovalOperation($approval);
+        $approvable = $this->resolveApprovableForApply($approval);
+        $handler = app(ApprovalActionRegistry::class)->resolveApplyHandler(
+            $approval,
+            $approvable,
+            $approval->submittedActionKey(),
+            $operation,
+        );
+
+        if ($handler === null) {
+            return false;
+        }
+
+        if (data_get($approval->metadata, 'applied_at') !== null || data_get($approval->metadata, 'apply_failed_at') !== null) {
+            return true;
+        }
+
+        if (! $approvable instanceof Model) {
+            $this->markRegisteredHandlerApplyFailed($approval, ValidationException::withMessages([
+                'approval' => __('filament-action-approvals::approval.actions.apply_failed'),
+            ]));
+
+            return true;
+        }
+
+        $payload = data_get($approval->metadata, 'payload', []);
+
+        if (! is_array($payload)) {
+            $this->markRegisteredHandlerApplyFailed($approval, ValidationException::withMessages([
+                'approval' => __('filament-action-approvals::approval.actions.apply_failed'),
+            ]));
+
+            return true;
+        }
+
+        try {
+            /** @var array<string, mixed> $payload */
+            $handler($approvable, $approval, $payload, $this->resolveApprovedByUserId($approval));
+        } catch (Throwable $exception) {
+            $this->markRegisteredHandlerApplyFailed($approval, $exception);
+
+            return true;
+        }
+
+        $this->markRegisteredHandlerApplySucceeded($approval);
+
+        return true;
+    }
+
+    private function resolveApprovalOperation(Approval $approval): string
+    {
+        $operation = data_get($approval->metadata, 'operation');
+
+        if (is_string($operation) && filled($operation)) {
+            return $operation;
+        }
+
+        $crudOperation = data_get($approval->metadata, 'crud.operation');
+
+        return is_string($crudOperation) && filled($crudOperation)
+            ? $crudOperation
+            : ApprovalActionRegistry::OperationAction;
+    }
+
+    private function resolveApprovableForApply(Approval $approval): ?Model
+    {
+        $approvable = $approval->approvable;
+
+        if ($approvable instanceof Model) {
+            return $approvable;
+        }
+
+        $modelClass = Relation::getMorphedModel($approval->approvable_type) ?? $approval->approvable_type;
+
+        if (! is_a($modelClass, Model::class, true)) {
+            return null;
+        }
+
+        /** @var class-string<Model> $modelClass */
+        $query = $modelClass::query();
+
+        if (in_array(SoftDeletes::class, class_uses_recursive($modelClass), true)) {
+            $query->withoutGlobalScope(SoftDeletingScope::class);
+        }
+
+        $approvable = $query->whereKey($approval->approvable_id)->first();
+
+        return $approvable instanceof Model ? $approvable : null;
+    }
+
+    private function resolveApprovedByUserId(Approval $approval): int|string|null
+    {
+        return $approval->actions()
+            ->where('type', ActionType::Approved)
+            ->latest()
+            ->value('user_id');
+    }
+
+    private function markRegisteredHandlerApplySucceeded(Approval $approval): void
+    {
+        $approval->refresh();
+
+        $metadata = $approval->metadata ?? [];
+        $metadata['applied_at'] = data_get($metadata, 'applied_at') ?? now()->toISOString();
+        $metadata['applied_via'] = data_get($metadata, 'applied_via') ?? 'handler';
+
+        Arr::forget($metadata, ['apply_failed_at', 'apply_failed_reason', 'apply_failed_exception']);
+
+        $approval->forceFill(['metadata' => $metadata])->save();
+    }
+
+    private function markRegisteredHandlerApplyFailed(Approval $approval, Throwable $exception): void
+    {
+        $approval->refresh();
+
+        $metadata = $approval->metadata ?? [];
+
+        if (data_get($metadata, 'applied_at') !== null) {
+            return;
+        }
+
+        $metadata['apply_failed_at'] = now()->toISOString();
+        $metadata['apply_failed_reason'] = __('filament-action-approvals::approval.actions.apply_failed');
+        $metadata['apply_failed_exception'] = class_basename($exception);
 
         $approval->forceFill(['metadata' => $metadata])->save();
     }

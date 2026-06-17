@@ -6,6 +6,7 @@ namespace CoringaWc\FilamentActionApprovals;
 
 use CoringaWc\FilamentActionApprovals\Commands\ProcessApprovalSlaCommand;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalActionRegistry;
 use Illuminate\Console\Scheduling\Schedule;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
@@ -67,6 +68,7 @@ class FilamentActionApprovalsServiceProvider extends PackageServiceProvider
     public function packageRegistered(): void
     {
         $this->app->singleton(ApprovalEngine::class);
+        $this->app->singleton(ApprovalActionRegistry::class);
     }
 
     public function packageBooted(): void
