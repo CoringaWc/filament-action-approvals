@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace CoringaWc\FilamentActionApprovals\Actions;
 
-use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
+use CoringaWc\FilamentActionApprovals\Support\OperationalApprovalAuthorizer;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
@@ -43,8 +43,13 @@ class ApproveAction extends Action
                     return false;
                 }
 
-                return FilamentActionApprovalsPlugin::canRunOperationalApprovalAction($approval)
-                    && $approval->canBeApprovedBy($userId);
+                return app(OperationalApprovalAuthorizer::class)->canApprove($approval, $userId);
+            })
+            ->authorize(function (self $action): bool {
+                $approval = $action->resolveCurrentApproval();
+
+                return $approval instanceof Approval
+                    && app(OperationalApprovalAuthorizer::class)->canApprove($approval, CurrentPanelUser::id());
             })
             ->schema([
                 Textarea::make('comment')
@@ -52,10 +57,18 @@ class ApproveAction extends Action
                     ->rows(3),
             ])
             ->action(function (self $action, array $data): void {
-                $stepInstance = $action->resolveCurrentStepInstance();
+                $approval = $action->resolveCurrentApproval();
                 $userId = CurrentPanelUser::id();
 
-                if (! $stepInstance || $userId === null) {
+                if (! $approval instanceof Approval) {
+                    return;
+                }
+
+                app(OperationalApprovalAuthorizer::class)->ensureCanApprove($approval, $userId);
+
+                $stepInstance = $approval->currentStepInstance();
+
+                if (! $stepInstance instanceof ApprovalStepInstance) {
                     return;
                 }
 

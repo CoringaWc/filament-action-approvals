@@ -9,6 +9,7 @@ use CoringaWc\FilamentActionApprovals\Contracts\ApproverResolver;
 use CoringaWc\FilamentActionApprovals\Pages\ApprovalsDashboard;
 use CoringaWc\FilamentActionApprovals\Resources\ApprovalFlows\ApprovalFlowResource;
 use CoringaWc\FilamentActionApprovals\Resources\Approvals\ApprovalResource;
+use CoringaWc\FilamentActionApprovals\Schemas\Components\ApprovalRequestCallout;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalCrudActionInterceptor;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
 use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
@@ -18,6 +19,7 @@ use CoringaWc\FilamentActionApprovals\Widgets\PendingApprovalsWidget;
 use Filament\Clusters\Cluster;
 use Filament\Contracts\Plugin;
 use Filament\Panel;
+use Filament\Schemas\Components\Callout;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Model;
 
@@ -508,6 +510,11 @@ class FilamentActionApprovalsPlugin implements Plugin
             'heading' => $heading ?? __('filament-action-approvals::approval.modal.approval_request_callout.heading'),
             'description' => $description ?? __('filament-action-approvals::approval.modal.approval_request_callout.description'),
         ]);
+    }
+
+    public static function approvalRequestCallout(?string $heading = null, ?string $description = null): Callout
+    {
+        return ApprovalRequestCallout::make($heading, $description);
     }
 
     /**
