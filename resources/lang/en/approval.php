@@ -142,6 +142,7 @@ return [
         'approval_request_submitted' => 'Approval request submitted',
         'submission_not_allowed' => 'You are not allowed to submit this record for approval.',
         'apply_failed' => 'The approved action could not be applied. The approval remains pending.',
+        'approved_apply_failed' => 'The approved action could not be applied.',
         'approval_flow_missing' => 'No approval flow is configured for this request.',
         'no_changes_to_approve' => 'No approval request was created because no governed fields changed.',
         'approved_success' => 'Approved',

@@ -622,7 +622,7 @@ class ApprovalEngine
         }
 
         $metadata['apply_failed_at'] = now()->toISOString();
-        $metadata['apply_failed_reason'] = __('filament-action-approvals::approval.actions.apply_failed');
+        $metadata['apply_failed_reason'] = __('filament-action-approvals::approval.actions.approved_apply_failed');
         $metadata['apply_failed_exception'] = class_basename($exception);
 
         $approval->forceFill(['metadata' => $metadata])->save();

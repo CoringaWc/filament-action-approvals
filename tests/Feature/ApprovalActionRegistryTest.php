@@ -105,6 +105,7 @@ it('records registered handler failures without rolling back approval completion
         ->and($order->refresh()->getAttribute('title'))->toBe('Original order')
         ->and(data_get($approval->metadata, 'applied_at'))->toBeNull()
         ->and(data_get($approval->metadata, 'apply_failed_at'))->not->toBeNull()
+        ->and(data_get($approval->metadata, 'apply_failed_reason'))->toBe(__('filament-action-approvals::approval.actions.approved_apply_failed'))
         ->and(data_get($approval->metadata, 'apply_failed_exception'))->toBe('ValidationException');
 });
 
