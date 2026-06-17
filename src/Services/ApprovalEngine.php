@@ -22,8 +22,8 @@ use CoringaWc\FilamentActionApprovals\Notifications\ApprovalApprovedNotification
 use CoringaWc\FilamentActionApprovals\Notifications\ApprovalCancelledNotification;
 use CoringaWc\FilamentActionApprovals\Notifications\ApprovalRejectedNotification;
 use CoringaWc\FilamentActionApprovals\Notifications\ApprovalRequestedNotification;
-use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalActionRegistry;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
 use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
 use CoringaWc\FilamentActionApprovals\Support\SensitiveDataRedactor;
 use CoringaWc\FilamentActionApprovals\Support\UserModelKey;
