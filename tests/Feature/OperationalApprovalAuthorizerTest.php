@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\ApproverResolvers\UserResolver;
 use CoringaWc\FilamentActionApprovals\Enums\StepType;
+use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
