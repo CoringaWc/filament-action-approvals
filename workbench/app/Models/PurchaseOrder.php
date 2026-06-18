@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace Workbench\App\Models;
 
-use CoringaWc\FilamentActionApprovals\Attributes\ApprovableCrudAction;
-use CoringaWc\FilamentActionApprovals\Concerns\HasApprovalCrudActions;
+use CoringaWc\FilamentActionApprovals\Attributes\ApprovableOperation;
 use CoringaWc\FilamentActionApprovals\Concerns\HasApprovals;
-use CoringaWc\FilamentActionApprovals\Contracts\InterceptsApprovalCrudActions;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalNotificationEvent;
+use CoringaWc\FilamentActionApprovals\Enums\ApprovalOperation;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalNotificationAction;
 use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
@@ -16,11 +15,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[ApprovableCrudAction(operation: InterceptsApprovalCrudActions::OperationEdit, actionKey: 'purchase-order.edit', fields: ['title', 'description', 'amount'])]
-#[ApprovableCrudAction(operation: InterceptsApprovalCrudActions::OperationDelete, actionKey: 'purchase-order.delete')]
-class PurchaseOrder extends Model implements InterceptsApprovalCrudActions
+#[ApprovableOperation(operation: ApprovalOperation::Update, actionKey: 'purchase-order.edit', fields: ['title', 'description', 'amount'])]
+#[ApprovableOperation(operation: ApprovalOperation::Delete, actionKey: 'purchase-order.delete')]
+class PurchaseOrder extends Model
 {
-    use HasApprovalCrudActions;
     use HasApprovals {
         canSubmitForApproval as protected canSubmitForApprovalThroughFlow;
     }

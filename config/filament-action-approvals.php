@@ -167,13 +167,14 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Native CRUD Action Interception
+    | Native Operation Interception
     |--------------------------------------------------------------------------
     | When enabled on a panel, the plugin configures Filament EditAction and
-    | DeleteAction. Models that implement the package CRUD approval contract
-    | submit configured operations for approval instead of mutating directly.
+    | DeleteAction. Models that use HasApprovals and declare approvable
+    | operations submit configured operations for approval instead of mutating
+    | directly when a matching approval flow exists.
     */
-    'crud_actions' => [
+    'operations' => [
         'intercept' => false,
     ],
 

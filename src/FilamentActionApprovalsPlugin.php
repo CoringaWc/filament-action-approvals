@@ -10,8 +10,8 @@ use CoringaWc\FilamentActionApprovals\Pages\ApprovalsDashboard;
 use CoringaWc\FilamentActionApprovals\Resources\ApprovalFlows\ApprovalFlowResource;
 use CoringaWc\FilamentActionApprovals\Resources\Approvals\ApprovalResource;
 use CoringaWc\FilamentActionApprovals\Schemas\Components\ApprovalRequestCallout;
-use CoringaWc\FilamentActionApprovals\Support\ApprovalCrudActionInterceptor;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalOperationInterceptor;
 use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
 use CoringaWc\FilamentActionApprovals\Support\PrivilegedUserAccess;
 use CoringaWc\FilamentActionApprovals\Support\UserModelKey;
@@ -34,7 +34,7 @@ class FilamentActionApprovalsPlugin implements Plugin
 
     protected ?bool $hasWidgets = null;
 
-    protected ?bool $interceptsCrudActions = null;
+    protected ?bool $interceptsOperations = null;
 
     /** @var array<class-string>|null */
     protected ?array $approverResolvers = null;
@@ -87,9 +87,9 @@ class FilamentActionApprovalsPlugin implements Plugin
         return $this;
     }
 
-    public function interceptCrudActions(bool $enabled = true): static
+    public function interceptOperations(bool $enabled = true): static
     {
-        $this->interceptsCrudActions = $enabled;
+        $this->interceptsOperations = $enabled;
 
         return $this;
     }
@@ -197,8 +197,8 @@ class FilamentActionApprovalsPlugin implements Plugin
 
     public function register(Panel $panel): void
     {
-        if ($this->shouldInterceptCrudActions()) {
-            app(ApprovalCrudActionInterceptor::class)->register();
+        if ($this->shouldInterceptOperations()) {
+            app(ApprovalOperationInterceptor::class)->register();
         }
 
         $resources = [];
@@ -264,20 +264,20 @@ class FilamentActionApprovalsPlugin implements Plugin
         return ! $this->hasDashboardPage();
     }
 
-    protected function shouldInterceptCrudActions(): bool
+    protected function shouldInterceptOperations(): bool
     {
-        return $this->interceptsCrudActions
-            ?? (bool) config('filament-action-approvals.crud_actions.intercept', false);
+        return $this->interceptsOperations
+            ?? (bool) config('filament-action-approvals.operations.intercept', false);
     }
 
-    public function interceptsCrudActions(): bool
+    public function interceptsOperations(): bool
     {
-        return $this->shouldInterceptCrudActions();
+        return $this->shouldInterceptOperations();
     }
 
-    public static function shouldInterceptCrudActionsForCurrentPanel(): bool
+    public static function shouldInterceptOperationsForCurrentPanel(): bool
     {
-        return static::current()?->interceptsCrudActions() ?? false;
+        return static::current()?->interceptsOperations() ?? false;
     }
 
     /**

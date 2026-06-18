@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use CoringaWc\FilamentActionApprovals\Enums\ActionType;
+use CoringaWc\FilamentActionApprovals\Enums\ApprovalOperation;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalPayloadDiff;
@@ -52,9 +53,12 @@ it('intercepts native edit actions and submits changed allowlisted fields for ap
 
     expect($approval->status)->toBe(ApprovalStatus::Pending)
         ->and($approval->submittedActionKey())->toBe('purchase-order.edit')
-        ->and(data_get($approval->metadata, 'crud.operation'))->toBe('edit')
+        ->and(data_get($approval->metadata, 'operation.name'))->toBe(ApprovalOperation::Update->value)
+        ->and(data_get($approval->metadata, 'operation.fields'))->toBe(['title', 'amount'])
         ->and(data_get($approval->metadata, 'payload.title'))->toBe('Updated order')
         ->and(data_get($approval->metadata, 'payload.amount'))->toBe(1500)
+        ->and(data_get($approval->metadata, 'payload.changed_fields'))->toBeNull()
+        ->and(data_get($approval->metadata, 'payload.approval_payload_diff'))->toBeNull()
         ->and(data_get($approval->metadata, 'payload.description'))->toBeNull();
 
     expect(ApprovalPayloadDiff::forApproval($approval))->toHaveCount(2);
@@ -63,7 +67,7 @@ it('intercepts native edit actions and submits changed allowlisted fields for ap
 
     expect($order->refresh()->title)->toBe('Updated order')
         ->and($order->amount)->toEqual('1500.00')
-        ->and(data_get($approval->refresh()->metadata, 'crud.applied_at'))->not->toBeNull()
+        ->and(data_get($approval->refresh()->metadata, 'operation.applied_at'))->not->toBeNull()
         ->and(data_get($approval->metadata, 'applied_at'))->not->toBeNull();
 });
 
@@ -93,16 +97,16 @@ it('intercepts native delete actions and only deletes after approval is complete
     $approval = $order->approvals()->firstOrFail();
 
     expect($approval->submittedActionKey())->toBe('purchase-order.delete')
-        ->and(data_get($approval->metadata, 'crud.operation'))->toBe('delete');
+        ->and(data_get($approval->metadata, 'operation.name'))->toBe(ApprovalOperation::Delete->value);
 
     app(ApprovalEngine::class)->approve($approval->currentStepInstance(), $approver->getKey());
 
     expect(PurchaseOrder::query()->find($orderKey))->toBeNull()
-        ->and(data_get($approval->refresh()->metadata, 'crud.applied_at'))->not->toBeNull()
+        ->and(data_get($approval->refresh()->metadata, 'operation.applied_at'))->not->toBeNull()
         ->and(data_get($approval->metadata, 'applied_at'))->not->toBeNull();
 });
 
-it('safe fails intercepted edit actions when no approval flow exists', function (): void {
+it('falls back to native edit actions when no approval flow exists', function (): void {
     /** @var TestCase $test */
     $test = $this;
 
@@ -124,13 +128,14 @@ it('safe fails intercepted edit actions when no approval flow exists', function 
             'description' => $order->getAttribute('description'),
             'amount' => 1500,
         ])
-        ->assertNotified(__('filament-action-approvals::approval.actions.approval_flow_missing'));
+        ->assertNotified(__('filament-actions::edit.single.notifications.saved.title'));
 
-    expect($order->refresh()->getAttribute('title'))->toBe('Original order')
+    expect($order->refresh()->getAttribute('title'))->toBe('Updated order')
+        ->and($order->getAttribute('amount'))->toEqual('1500.00')
         ->and($order->approvals()->count())->toBe(0);
 });
 
-it('safe fails intercepted delete actions when no approval flow exists', function (): void {
+it('falls back to native delete actions when no approval flow exists', function (): void {
     /** @var TestCase $test */
     $test = $this;
 
@@ -145,9 +150,9 @@ it('safe fails intercepted delete actions when no approval flow exists', functio
 
     Livewire::test(ListPurchaseOrders::class)
         ->callTableAction('delete', $order)
-        ->assertNotified(__('filament-action-approvals::approval.actions.approval_flow_missing'));
+        ->assertNotified(__('filament-actions::delete.single.notifications.deleted.title'));
 
-    expect(PurchaseOrder::query()->find($orderKey))->toBeInstanceOf(PurchaseOrder::class)
+    expect(PurchaseOrder::query()->find($orderKey))->toBeNull()
         ->and($order->approvals()->count())->toBe(0);
 });
 
@@ -223,7 +228,7 @@ it('safe fails intercepted edit actions when a matching approval is already pend
         ->and($order->approvals()->count())->toBe(1);
 });
 
-it('keeps intercepted crud approvals pending when the target disappears before approval', function (): void {
+it('keeps intercepted operation approvals pending when the target disappears before approval', function (): void {
     /** @var TestCase $test */
     $test = $this;
 
@@ -258,12 +263,12 @@ it('keeps intercepted crud approvals pending when the target disappears before a
 
     expect($approval->refresh()->status)->toBe(ApprovalStatus::Pending)
         ->and($approval->completed_at)->toBeNull()
-        ->and(data_get($approval->metadata, 'crud.applied_at'))->toBeNull()
+        ->and(data_get($approval->metadata, 'operation.applied_at'))->toBeNull()
         ->and(data_get($approval->metadata, 'applied_at'))->toBeNull()
         ->and($approval->actions()->where('type', ActionType::Approved)->count())->toBe(0);
 });
 
-it('keeps intercepted crud approvals pending when the target cannot apply crud operations', function (): void {
+it('keeps intercepted operation approvals pending when the target cannot apply operations', function (): void {
     /** @var TestCase $test */
     $test = $this;
 
@@ -275,7 +280,7 @@ it('keeps intercepted crud approvals pending when the target cannot apply crud o
     $approval = app(ApprovalEngine::class)->submit($target, $flow, $submitter->getKey());
     $approval->forceFill([
         'metadata' => [
-            'crud' => ['operation' => 'edit'],
+            'operation' => ['name' => ApprovalOperation::Update->value],
             'payload' => ['name' => 'Updated user'],
         ],
     ])->save();
@@ -285,12 +290,12 @@ it('keeps intercepted crud approvals pending when the target cannot apply crud o
 
     expect($approval->refresh()->status)->toBe(ApprovalStatus::Pending)
         ->and($target->refresh()->name)->toBe('Original user')
-        ->and(data_get($approval->metadata, 'crud.applied_at'))->toBeNull()
+        ->and(data_get($approval->metadata, 'operation.applied_at'))->toBeNull()
         ->and(data_get($approval->metadata, 'applied_at'))->toBeNull()
         ->and($approval->actions()->where('type', ActionType::Approved)->count())->toBe(0);
 });
 
-it('lets privileged users apply intercepted crud actions directly without approval records', function (): void {
+it('lets privileged users apply intercepted operations directly without approval records', function (): void {
     /** @var TestCase $test */
     $test = $this;
 

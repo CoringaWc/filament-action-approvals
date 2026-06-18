@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use CoringaWc\FilamentActionApprovals\ApproverResolvers\UserResolver;
+use CoringaWc\FilamentActionApprovals\Enums\ApprovalOperation;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\Enums\StepType;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
@@ -131,7 +132,7 @@ it('uses registered handlers before the crud fallback', function (): void {
     app(ApprovalActionRegistry::class)->applyUsing(
         PurchaseOrder::class,
         'purchase-order.edit',
-        'edit',
+        ApprovalOperation::Update->value,
         function (Model $record): void {
             $record->update(['title' => 'Applied by handler']);
         },
@@ -158,7 +159,7 @@ it('uses registered handlers before the crud fallback', function (): void {
 
     expect($order->refresh()->getAttribute('title'))->toBe('Applied by handler');
     expect($order->getAttribute('amount'))->toEqual('1200.00');
-    expect(data_get($approval->refresh()->metadata, 'crud.applied_at'))->toBeNull();
+    expect(data_get($approval->refresh()->metadata, 'operation.applied_at'))->toBeNull();
     expect(data_get($approval->metadata, 'applied_via'))->toBe('handler');
 });
 

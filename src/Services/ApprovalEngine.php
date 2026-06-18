@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace CoringaWc\FilamentActionApprovals\Services;
 
-use CoringaWc\FilamentActionApprovals\Contracts\InterceptsApprovalCrudActions;
 use CoringaWc\FilamentActionApprovals\Enums\ActionType;
+use CoringaWc\FilamentActionApprovals\Enums\ApprovalOperation;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\Enums\StepInstanceStatus;
 use CoringaWc\FilamentActionApprovals\Events\ApprovalCancelled;
@@ -415,7 +415,7 @@ class ApprovalEngine
             $approval = $approval->refresh();
 
             if (! $this->applyRegisteredActionHandler($approval)) {
-                $this->applyApprovedCrudAction($approval);
+                $this->applyApprovedOperation($approval);
             }
 
             $this->afterCommit(function () use ($approval): void {
@@ -452,23 +452,20 @@ class ApprovalEngine
         }
     }
 
-    private function applyApprovedCrudAction(Approval $approval): void
+    private function applyApprovedOperation(Approval $approval): void
     {
-        if (data_get($approval->metadata, 'crud.applied_at') !== null || data_get($approval->metadata, 'applied_at') !== null) {
+        if (data_get($approval->metadata, 'operation.applied_at') !== null || data_get($approval->metadata, 'crud.applied_at') !== null || data_get($approval->metadata, 'applied_at') !== null) {
             return;
         }
 
-        $operation = data_get($approval->metadata, 'crud.operation');
+        $operation = $this->resolveApprovalOperation($approval);
         $payload = data_get($approval->metadata, 'payload', []);
 
-        if ($operation === null) {
+        if ($operation === ApprovalActionRegistry::OperationAction) {
             return;
         }
 
-        if (! is_string($operation) || ! in_array($operation, [
-            InterceptsApprovalCrudActions::OperationEdit,
-            InterceptsApprovalCrudActions::OperationDelete,
-        ], true) || ! is_array($payload)) {
+        if (! in_array(ApprovalOperation::fromOperation($operation), [ApprovalOperation::Update, ApprovalOperation::Delete], true) || ! is_array($payload)) {
             throw ValidationException::withMessages([
                 'approval' => __('filament-action-approvals::approval.actions.apply_failed'),
             ]);
@@ -476,24 +473,26 @@ class ApprovalEngine
 
         $approvable = $approval->approvable;
 
-        if (! $approvable instanceof InterceptsApprovalCrudActions) {
+        if (! is_object($approvable) || ! method_exists($approvable, 'applyApprovedOperation')) {
             throw ValidationException::withMessages([
                 'approval' => __('filament-action-approvals::approval.actions.apply_failed'),
             ]);
         }
 
         /** @var array<string, mixed> $payload */
-        $approvable->applyApprovedCrudAction($operation, Arr::except($payload, [
+        $applicablePayload = Arr::except($payload, [
             'changed_fields',
             'approval_payload_diff',
-        ]));
+        ]);
+
+        $approvable->applyApprovedOperation($operation, $applicablePayload);
 
         $metadata = $approval->metadata ?? [];
         $appliedAt = now()->toISOString();
 
-        data_set($metadata, 'crud.applied_at', $appliedAt);
+        data_set($metadata, 'operation.applied_at', $appliedAt);
         data_set($metadata, 'applied_at', $appliedAt);
-        data_set($metadata, 'applied_via', 'crud');
+        data_set($metadata, 'applied_via', 'operation');
 
         $approval->forceFill(['metadata' => $metadata])->save();
     }
@@ -555,6 +554,14 @@ class ApprovalEngine
 
         if (is_string($operation) && filled($operation)) {
             return $operation;
+        }
+
+        if (is_array($operation)) {
+            $name = data_get($operation, 'name');
+
+            if (is_string($name) && filled($name)) {
+                return $name;
+            }
         }
 
         $crudOperation = data_get($approval->metadata, 'crud.operation');

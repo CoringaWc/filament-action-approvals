@@ -316,10 +316,11 @@ The `FilamentActionApprovalsPlugin` supports fluent configuration per panel:
 
 ```php
 FilamentActionApprovalsPlugin::make()
-    ->flowResource()                    // Enable/disable the flow CRUD resource
+    ->flowResource()                    // Enable/disable the flow management resource
     ->approvalResource()                // Enable/disable the operational approvals resource
     ->dashboard()                       // Enable/disable the opt-in approvals dashboard page
     ->widgets()                         // Enable/disable global panel dashboard widgets
+    ->interceptOperations()             // Intercept native EditAction/DeleteAction when a flow exists
     ->resolvers([...])                  // Override resolvers for this panel
     ->userModel(User::class)            // Override user model for this panel
     ->navigationGroup('Workflow')       // Override navigation group label

@@ -39,6 +39,15 @@ return [
         'returned' => 'Devolvido',
     ],
 
+    // Operações
+    'operation' => [
+        'create' => 'Criar',
+        'update' => 'Atualizar',
+        'delete' => 'Excluir',
+        'restore' => 'Restaurar',
+        'force_delete' => 'Excluir definitivamente',
+    ],
+
     // Status da instância de etapa
     'step_status' => [
         'pending' => 'Pendente',

@@ -39,6 +39,15 @@ return [
         'returned' => 'Returned',
     ],
 
+    // Operations
+    'operation' => [
+        'create' => 'Create',
+        'update' => 'Update',
+        'delete' => 'Delete',
+        'restore' => 'Restore',
+        'force_delete' => 'Force delete',
+    ],
+
     // Step instance statuses
     'step_status' => [
         'pending' => 'Pending',

@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace CoringaWc\FilamentActionApprovals\Concerns;
 
 use CoringaWc\FilamentActionApprovals\Attributes\ApprovableActions;
+use CoringaWc\FilamentActionApprovals\Attributes\ApprovableCrudAction;
+use CoringaWc\FilamentActionApprovals\Attributes\ApprovableOperation;
 use CoringaWc\FilamentActionApprovals\Enums\ActionType;
+use CoringaWc\FilamentActionApprovals\Enums\ApprovalOperation;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalAction;
@@ -13,10 +16,12 @@ use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalOperationPayload;
 use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
+use Illuminate\Support\Arr;
 use ReflectionClass;
 
 trait HasApprovals
@@ -214,6 +219,156 @@ trait HasApprovals
             ->first();
 
         return $rejectionAction?->comment;
+    }
+
+    /**
+     * @var array<class-string, list<ApprovableOperation>>
+     */
+    private static array $approvalOperationAttributeCache = [];
+
+    public function approvalActionKeyForOperation(ApprovalOperation|string $operation): ?string
+    {
+        return $this->approvalOperationDefinition($operation)?->normalizedActionKey();
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function approvalFieldsForOperation(ApprovalOperation|string $operation): array
+    {
+        $definition = $this->approvalOperationDefinition($operation);
+
+        if (! $definition instanceof ApprovableOperation) {
+            return [];
+        }
+
+        return $definition->fields;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    public function approvalPayloadForOperation(ApprovalOperation|string $operation, array $data): array
+    {
+        if (ApprovalOperation::fromOperation($operation) === ApprovalOperation::Delete) {
+            return app(ApprovalOperationPayload::class)->deletePayload();
+        }
+
+        return app(ApprovalOperationPayload::class)->editPayload($this, $data, $this->approvalFieldsForOperation($operation));
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    public function submitApproval(ApprovalOperation|string $operation, array $data = []): Approval
+    {
+        return app(ApprovalEngine::class)->submit(
+            approvable: $this,
+            submittedBy: CurrentPanelUser::id(),
+            actionKey: $this->approvalActionKeyForOperation($operation),
+            metadata: $this->approvalMetadataForOperation($operation, $data),
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    public function applyApprovedOperation(ApprovalOperation|string $operation, array $payload): void
+    {
+        $approvalOperation = ApprovalOperation::fromOperation($operation);
+
+        if ($approvalOperation === ApprovalOperation::Delete) {
+            $this->delete();
+
+            return;
+        }
+
+        if ($approvalOperation === ApprovalOperation::Update) {
+            $fields = $this->approvalFieldsForOperation($operation);
+            $data = $fields === [] ? $payload : Arr::only($payload, $fields);
+
+            $this->fill($data);
+            $this->save();
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    protected function approvalMetadataForOperation(ApprovalOperation|string $operation, array $data): array
+    {
+        return [
+            'payload' => $this->approvalPayloadForOperation($operation, $data),
+            'payload_diff' => $this->approvalPayloadDiffForOperation($operation, $data),
+            'operation' => [
+                'name' => ApprovalOperation::normalize($operation),
+                'fields' => $this->approvalChangedFieldsForOperation($operation, $data),
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return list<string>
+     */
+    protected function approvalChangedFieldsForOperation(ApprovalOperation|string $operation, array $data): array
+    {
+        if (ApprovalOperation::fromOperation($operation) === ApprovalOperation::Delete) {
+            return [];
+        }
+
+        return app(ApprovalOperationPayload::class)->editFields($this, $data, $this->approvalFieldsForOperation($operation));
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return list<array{field: string, current: mixed, requested: mixed}>
+     */
+    protected function approvalPayloadDiffForOperation(ApprovalOperation|string $operation, array $data): array
+    {
+        if (ApprovalOperation::fromOperation($operation) === ApprovalOperation::Delete) {
+            return [];
+        }
+
+        return app(ApprovalOperationPayload::class)->editDiff($this, $data, $this->approvalFieldsForOperation($operation));
+    }
+
+    protected function approvalOperationDefinition(ApprovalOperation|string $operation): ?ApprovableOperation
+    {
+        $normalizedOperation = ApprovalOperation::normalize($operation);
+
+        foreach (self::approvalOperationAttributes() as $attribute) {
+            if ($attribute->enabled && $attribute->normalizedOperation() === $normalizedOperation) {
+                return $attribute;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return list<ApprovableOperation>
+     */
+    protected static function approvalOperationAttributes(): array
+    {
+        if (array_key_exists(static::class, self::$approvalOperationAttributeCache)) {
+            return self::$approvalOperationAttributeCache[static::class];
+        }
+
+        $reflection = new ReflectionClass(static::class);
+
+        /** @var list<ApprovableOperation> $attributes */
+        $attributes = collect([
+            ...$reflection->getAttributes(ApprovableOperation::class),
+            ...$reflection->getAttributes(ApprovableCrudAction::class),
+        ])
+            ->map(fn (\ReflectionAttribute $attribute): ApprovableOperation => $attribute->newInstance())
+            ->values()
+            ->all();
+
+        return self::$approvalOperationAttributeCache[static::class] = $attributes;
     }
 
     // ──────────────────────────────────────────────────────────────

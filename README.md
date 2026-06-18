@@ -13,6 +13,7 @@ Action-based approval workflows for [Filament v5](https://filamentphp.com). Defi
 - **Polymorphic** — any Eloquent model can be approvable via the `HasApprovals` trait
 - **Pluggable approver resolvers** — `UserResolver`, `RoleResolver`, `CustomRuleResolver`, or create your own
 - **Approvable actions** — define domain-specific actions (submit, cancel, etc.) on your model, each with its own approval flow
+- **Native operation interception** — opt in to intercept Filament `EditAction` and `DeleteAction` with `ApprovalOperation` metadata when a matching flow exists
 - **Per-action submit buttons** — create dedicated `SubmitForApprovalAction` instances locked to a specific `actionKey`
 - **Delegation** — approvers can delegate their step to another user
 - **SLA enforcement** — per-step SLA deadlines with warning notifications and configurable escalation (notify, auto-approve, reject, reassign)
@@ -20,7 +21,7 @@ Action-based approval workflows for [Filament v5](https://filamentphp.com). Defi
 - **Resubmission policy** — control whether models can be resubmitted after approval/rejection
 - **User display name** — uses Filament's `getFilamentName()` when available, falls back to `name` attribute
 - **Built-in Filament components**:
-  - `ApprovalFlowResource` — CRUD for managing approval flow definitions
+  - `ApprovalFlowResource` — UI for managing approval flow definitions
     - `ApprovalResource` — operational approvals listing with status tabs, filters, overview stats, and slide-over detail view
     - `ListApprovalsAction` — contextual action that opens a slide-over table for approvals scoped to a model or record
     - `ApprovalsDashboard` — opt-in global dashboard with period filters and operational widgets
@@ -110,6 +111,11 @@ return [
         'delegate' => false,
     ],
 
+    // Intercept native Filament operations when models declare approval operations
+    'operations' => [
+        'intercept' => false,
+    ],
+
     // Broadcasting — opt-in per event (all disabled by default)
     'broadcasting' => [
         'events' => [
@@ -173,10 +179,11 @@ public function panel(Panel $panel): Panel
     return $panel
         ->plugins([
             FilamentActionApprovalsPlugin::make()
-                ->flowResource()      // Enable the ApprovalFlow CRUD resource (default: true)
+                ->flowResource()      // Enable the ApprovalFlow resource (default: true)
                 ->approvalResource()  // Enable the operational ApprovalResource (default: true)
                 ->dashboard()         // Enable the ApprovalsDashboard page (default: false / opt-in)
                 ->widgets()           // Enable global panel widgets explicitly when also using the dedicated dashboard
+                ->interceptOperations() // Intercept EditAction/DeleteAction when an approval flow exists
                 ->navigationGroup('Workflow'),  // Override navigation group
         ]);
 }
@@ -190,6 +197,7 @@ public function panel(Panel $panel): Panel
 | `approvalResource(bool $enabled = true)` | Enable/disable the built-in ApprovalResource          |
 | `dashboard(bool $enabled = true)`        | Enable/disable the opt-in ApprovalsDashboard page     |
 | `widgets(bool $enabled = true)`          | Enable/disable PendingApprovals and Analytics widgets |
+| `interceptOperations(bool $enabled = true)` | Intercept native Edit/Delete operations when a flow exists |
 | `resolvers(array $resolvers)`            | Override approver resolvers for this panel            |
 | `userModel(string $model)`               | Override the user model for this panel                |
 | `navigationGroup(string $group)`         | Override the navigation group label                   |
@@ -289,6 +297,40 @@ class PurchaseOrder extends Model
 ```
 
 When `approvableActions()` is defined, the `SubmitForApprovalAction` will show a selector for the user to pick which action they are requesting. You can also create dedicated buttons per action — see [Per-Action Submit Buttons](#per-action-submit-buttons).
+
+### Native Operation Interception
+
+Enable `interceptOperations()` on the panel and declare model operations with `ApprovableOperation`. When a matching active flow exists, native Filament `EditAction` and `DeleteAction` submit an approval request instead of mutating the record. If no flow exists, the native action continues normally.
+
+```php
+use CoringaWc\FilamentActionApprovals\Attributes\ApprovableOperation;
+use CoringaWc\FilamentActionApprovals\Concerns\HasApprovals;
+use CoringaWc\FilamentActionApprovals\Enums\ApprovalOperation;
+
+#[ApprovableOperation(
+    operation: ApprovalOperation::Update,
+    actionKey: 'purchase-order.edit',
+    fields: ['title', 'amount'],
+)]
+#[ApprovableOperation(
+    operation: ApprovalOperation::Delete,
+    actionKey: 'purchase-order.delete',
+)]
+class PurchaseOrder extends Model
+{
+    use HasApprovals;
+}
+```
+
+```php
+use Filament\Actions\DeleteAction;
+use Filament\Actions\EditAction;
+
+EditAction::make();
+DeleteAction::make();
+```
+
+New approval metadata uses `operation.name`, `operation.fields`, `payload`, and `payload_diff`. Update payloads are dirty-only and restricted to the declared `fields` allowlist.
 
 ### 3. Create an Approval Flow
 
