@@ -6,6 +6,7 @@ namespace CoringaWc\FilamentActionApprovals\ApproverResolvers;
 
 use CoringaWc\FilamentActionApprovals\Contracts\ApproverResolver;
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
+use CoringaWc\FilamentActionApprovals\Support\ApproverUserOptions;
 use CoringaWc\FilamentActionApprovals\Support\FormFieldHint;
 use CoringaWc\FilamentActionApprovals\Support\TranslatableSelect;
 use CoringaWc\FilamentActionApprovals\Support\UserDisplayName;
@@ -52,6 +53,7 @@ class UserResolver implements ApproverResolver
      */
     public static function configSchema(): array
     {
+        /** @var class-string<Model> $userModel */
         $userModel = FilamentActionApprovalsPlugin::resolveUserModel();
 
         return [
@@ -62,27 +64,33 @@ class UserResolver implements ApproverResolver
                         ->multiple()
                         ->searchable()
                         ->options(function () use ($userModel): array {
-                            $query = $userModel::query();
-
-                            // Exclude super admin users from options
                             $excludedIds = FilamentActionApprovalsPlugin::superAdminUserIds();
-
-                            if ($excludedIds !== []) {
-                                $query->whereNotIn($query->getModel()->getKeyName(), $excludedIds);
-                            }
-
-                            // Exclude users with super admin roles
                             $excludedRoles = FilamentActionApprovalsPlugin::superAdminRoles();
 
-                            if ($excludedRoles !== [] && method_exists($userModel, 'role')) {
-                                $query->whereDoesntHave('roles', function ($q) use ($excludedRoles): void {
-                                    $q->whereIn('name', $excludedRoles);
-                                });
-                            }
+                            return app(ApproverUserOptions::class)->remember(
+                                userModel: $userModel,
+                                excludedIds: $excludedIds,
+                                excludedRoles: $excludedRoles,
+                                callback: static function () use ($userModel, $excludedIds, $excludedRoles): array {
+                                    $query = $userModel::query();
 
-                            return $query->get()
-                                ->mapWithKeys(fn (Model $user): array => [$user->getKey() => UserDisplayName::resolve($user)])
-                                ->all();
+                                    // Exclude super admin users from options.
+                                    if ($excludedIds !== []) {
+                                        $query->whereNotIn($query->getModel()->getKeyName(), $excludedIds);
+                                    }
+
+                                    // Exclude users with super admin roles.
+                                    if ($excludedRoles !== [] && method_exists($userModel, 'role')) {
+                                        $query->whereDoesntHave('roles', function ($q) use ($excludedRoles): void {
+                                            $q->whereIn('name', $excludedRoles);
+                                        });
+                                    }
+
+                                    return $query->get()
+                                        ->mapWithKeys(fn (Model $user): array => [$user->getKey() => UserDisplayName::resolve($user) ?? (string) $user->getKey()])
+                                        ->all();
+                                },
+                            );
                         })
                         ->required(),
                 ),

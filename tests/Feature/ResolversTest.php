@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 use CoringaWc\FilamentActionApprovals\ApproverResolvers\CustomRuleResolver;
 use CoringaWc\FilamentActionApprovals\ApproverResolvers\RoleResolver;
+use CoringaWc\FilamentActionApprovals\ApproverResolvers\UserResolver;
 use CoringaWc\FilamentActionApprovals\Concerns\HasApprovals;
+use CoringaWc\FilamentActionApprovals\Support\ApproverUserOptions;
 use Filament\Forms\Components\Select;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Schema\Blueprint;
@@ -117,6 +119,31 @@ it('can disable role panel scoping through config', function (): void {
 
     expect($options)->toHaveKey('Admin Role');
     expect($options)->toHaveKey('App Role');
+});
+
+// ─── UserResolver ─────────────────────────────────────────────
+
+it('memoizes user select options within the request lifecycle', function (): void {
+    User::factory()->count(3)->create();
+    app(ApproverUserOptions::class)->flush();
+
+    $fields = UserResolver::configSchema();
+    /** @var Select $select */
+    $select = $fields[0];
+
+    DB::enableQueryLog();
+
+    $firstOptions = $select->getOptions();
+    $queriesAfterFirstCall = count(DB::getQueryLog());
+    $secondOptions = $select->getOptions();
+
+    expect($firstOptions)->toHaveCount(3)
+        ->and($secondOptions)->toBe($firstOptions)
+        ->and($queriesAfterFirstCall)->toBeGreaterThan(0)
+        ->and(DB::getQueryLog())->toHaveCount($queriesAfterFirstCall);
+
+    DB::disableQueryLog();
+    app(ApproverUserOptions::class)->flush();
 });
 
 // ─── CustomRuleResolver ───────────────────────────────────────

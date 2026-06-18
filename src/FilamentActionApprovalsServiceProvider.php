@@ -7,6 +7,7 @@ namespace CoringaWc\FilamentActionApprovals;
 use CoringaWc\FilamentActionApprovals\Commands\ProcessApprovalSlaCommand;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalActionRegistry;
+use CoringaWc\FilamentActionApprovals\Support\ApproverUserOptions;
 use CoringaWc\FilamentActionApprovals\Support\PrivilegedUserAccess;
 use Illuminate\Console\Scheduling\Schedule;
 use Spatie\LaravelPackageTools\Package;
@@ -70,6 +71,7 @@ class FilamentActionApprovalsServiceProvider extends PackageServiceProvider
     {
         $this->app->singleton(ApprovalEngine::class);
         $this->app->singleton(ApprovalActionRegistry::class);
+        $this->app->scoped(ApproverUserOptions::class);
         $this->app->scoped(PrivilegedUserAccess::class);
     }
 
