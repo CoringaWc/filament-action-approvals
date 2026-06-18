@@ -13,6 +13,7 @@ use CoringaWc\FilamentActionApprovals\Schemas\Components\ApprovalRequestCallout;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalCrudActionInterceptor;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
 use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
+use CoringaWc\FilamentActionApprovals\Support\PrivilegedUserAccess;
 use CoringaWc\FilamentActionApprovals\Support\UserModelKey;
 use CoringaWc\FilamentActionApprovals\Widgets\ApprovalAnalyticsWidget;
 use CoringaWc\FilamentActionApprovals\Widgets\PendingApprovalsWidget;
@@ -451,28 +452,10 @@ class FilamentActionApprovalsPlugin implements Plugin
             return true;
         }
 
-        if ($config['roles'] === []) {
-            return false;
-        }
-
+        /** @var class-string<Model> $userModel */
         $userModel = static::resolveUserModel();
 
-        /** @var Model|null $user */
-        $user = $userModel::query()->find($userId);
-
-        if (! $user) {
-            return false;
-        }
-
-        // Support spatie/laravel-permission if available
-        if (method_exists($user, 'hasAnyRole')) {
-            /** @var bool $hasRole */
-            $hasRole = $user->hasAnyRole($config['roles']);
-
-            return $hasRole;
-        }
-
-        return false;
+        return app(PrivilegedUserAccess::class)->isSuperAdmin($userId, $userModel, $config);
     }
 
     /**

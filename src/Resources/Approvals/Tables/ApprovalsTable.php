@@ -280,6 +280,7 @@ class ApprovalsTable
                 'flow',
                 'submitter',
                 'stepInstances.step',
+                'stepInstances.actions',
                 'actions.user',
             ]))
             ->columns(static::columns())

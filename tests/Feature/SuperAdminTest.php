@@ -5,13 +5,29 @@ declare(strict_types=1);
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
+use CoringaWc\FilamentActionApprovals\Support\PrivilegedUserAccess;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Role;
 use Workbench\App\Models\PurchaseOrder;
 
 beforeEach(function (): void {
     $this->engine = app(ApprovalEngine::class);
 });
+
+function countQueriesFor(Closure $callback): int
+{
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+
+    $callback();
+
+    $queryCount = count(DB::getQueryLog());
+
+    DB::disableQueryLog();
+
+    return $queryCount;
+}
 
 // ─── isSuperAdmin ────────────────────────────────────────────
 
@@ -66,6 +82,72 @@ it('returns false when user does not exist', function (): void {
     config()->set('filament-action-approvals.super_admin.roles', ['super_admin']);
 
     expect(FilamentActionApprovalsPlugin::isSuperAdmin(99999))->toBeFalse();
+});
+
+it('memoizes privileged role checks within the current request lifecycle', function (): void {
+    Role::findOrCreate('super_admin', 'web');
+    $user = $this->createUser();
+    $user->assignRole('super_admin');
+
+    config()->set('filament-action-approvals.super_admin.enabled', true);
+    config()->set('filament-action-approvals.super_admin.roles', ['super_admin']);
+    config()->set('filament-action-approvals.super_admin.user_ids', []);
+
+    $firstQueryCount = countQueriesFor(fn (): bool => FilamentActionApprovalsPlugin::isSuperAdmin($user->getKey()));
+    $secondQueryCount = countQueriesFor(function () use ($user): void {
+        foreach (range(1, 5) as $ignored) {
+            expect(FilamentActionApprovalsPlugin::isSuperAdmin($user->getKey()))->toBeTrue();
+        }
+    });
+
+    expect($firstQueryCount)->toBeGreaterThan(0)
+        ->and($secondQueryCount)->toBe(0);
+});
+
+it('keeps privileged role check cache isolated per user', function (): void {
+    Role::findOrCreate('super_admin', 'web');
+    $superAdmin = $this->createUser();
+    $regularUser = $this->createUser();
+    $superAdmin->assignRole('super_admin');
+
+    config()->set('filament-action-approvals.super_admin.enabled', true);
+    config()->set('filament-action-approvals.super_admin.roles', ['super_admin']);
+    config()->set('filament-action-approvals.super_admin.user_ids', []);
+
+    expect(FilamentActionApprovalsPlugin::isSuperAdmin($superAdmin->getKey()))->toBeTrue()
+        ->and(FilamentActionApprovalsPlugin::isSuperAdmin($regularUser->getKey()))->toBeFalse();
+});
+
+it('can flush cached privileged role checks after role mutations', function (): void {
+    Role::findOrCreate('super_admin', 'web');
+    $user = $this->createUser();
+
+    config()->set('filament-action-approvals.super_admin.enabled', true);
+    config()->set('filament-action-approvals.super_admin.roles', ['super_admin']);
+    config()->set('filament-action-approvals.super_admin.user_ids', []);
+
+    expect(FilamentActionApprovalsPlugin::isSuperAdmin($user->getKey()))->toBeFalse();
+
+    $user->assignRole('super_admin');
+    app(PrivilegedUserAccess::class)->flush();
+
+    expect(FilamentActionApprovalsPlugin::isSuperAdmin($user->getKey()))->toBeTrue();
+});
+
+it('does not share privileged role checks across scoped lifecycles', function (): void {
+    Role::findOrCreate('super_admin', 'web');
+    $user = $this->createUser();
+
+    config()->set('filament-action-approvals.super_admin.enabled', true);
+    config()->set('filament-action-approvals.super_admin.roles', ['super_admin']);
+    config()->set('filament-action-approvals.super_admin.user_ids', []);
+
+    expect(FilamentActionApprovalsPlugin::isSuperAdmin($user->getKey()))->toBeFalse();
+
+    $user->assignRole('super_admin');
+    app()->forgetScopedInstances();
+
+    expect(FilamentActionApprovalsPlugin::isSuperAdmin($user->getKey()))->toBeTrue();
 });
 
 // ─── shouldHideSuperAdminsFromSelects ─────────────────────────

@@ -239,6 +239,13 @@ class ApprovalStepInstance extends Model
             return false;
         }
 
+        if ($this->relationLoaded('actions')) {
+            return $this->actions->contains(
+                fn (ApprovalAction $action): bool => UserModelKey::normalize($action->user_id) === $normalizedUserId
+                    && in_array($action->type, [ActionType::Approved, ActionType::Rejected], true),
+            );
+        }
+
         return $this->actions()
             ->where('user_id', $normalizedUserId)
             ->whereIn('type', [ActionType::Approved, ActionType::Rejected])
