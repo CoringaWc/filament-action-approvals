@@ -205,7 +205,7 @@ trait HasApprovals
             }
 
             try {
-                $key = $definition->localActionKey();
+                $key = $definition->normalizedActionKey(static::class);
             } catch (InvalidArgumentException) {
                 continue;
             }
