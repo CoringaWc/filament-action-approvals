@@ -56,6 +56,31 @@ final class SensitiveDataRedactor
         return $text === null ? null : self::text($text);
     }
 
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    public static function metadata(array $data): array
+    {
+        return collect($data)
+            ->reject(fn (mixed $value, int|string $key): bool => is_string($key) && self::isSensitiveField($key))
+            ->map(function (mixed $value): mixed {
+                if (is_array($value)) {
+                    return self::metadata($value);
+                }
+
+                if (is_string($value)) {
+                    $redacted = self::text($value);
+
+                    return $redacted === $value ? $value : null;
+                }
+
+                return $value;
+            })
+            ->reject(fn (mixed $value): bool => $value === null)
+            ->all();
+    }
+
     public static function isSensitiveField(string $field): bool
     {
         $normalized = Str::of(Str::snake(str_replace(['-', '.', ' '], '_', $field)))

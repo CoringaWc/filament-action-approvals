@@ -151,6 +151,7 @@ return [
         'approval_request_submitted' => 'Solicitação de aprovação enviada',
         'submission_not_allowed' => 'Você não tem permissão para submeter este registro para aprovação.',
         'apply_failed' => 'A ação aprovada não pôde ser aplicada. A aprovação permanece pendente.',
+        'ambiguous_approval_operation' => 'Esta alteração corresponde a mais de uma ação de aprovação. Nenhuma alteração foi salva.',
         'approved_apply_failed' => 'A ação aprovada não pôde ser aplicada.',
         'approval_flow_missing' => 'Nenhum fluxo de aprovação está configurado para esta solicitação.',
         'no_changes_to_approve' => 'Nenhuma solicitação de aprovação foi criada porque nenhum campo governado mudou.',

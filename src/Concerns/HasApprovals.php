@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CoringaWc\FilamentActionApprovals\Concerns;
 
+use BackedEnum;
 use CoringaWc\FilamentActionApprovals\Attributes\ApprovableActions;
 use CoringaWc\FilamentActionApprovals\Attributes\ApprovableCrudAction;
 use CoringaWc\FilamentActionApprovals\Attributes\ApprovableOperation;
@@ -22,6 +23,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Illuminate\Support\Arr;
+use Illuminate\Validation\ValidationException;
 use ReflectionClass;
 
 trait HasApprovals
@@ -86,9 +88,9 @@ trait HasApprovals
         return $this->latestApproval()?->status;
     }
 
-    public function submitForApproval(?ApprovalFlow $flow = null, int|string|null $submittedBy = null, ?string $actionKey = null): Approval
+    public function submitForApproval(?ApprovalFlow $flow = null, int|string|null $submittedBy = null, ?string $actionKey = null, string|BackedEnum|null $action = null): Approval
     {
-        return app(ApprovalEngine::class)->submit($this, $flow, $submittedBy, $actionKey);
+        return app(ApprovalEngine::class)->submit($this, $flow, $submittedBy, $actionKey, action: $action);
     }
 
     /**
@@ -125,7 +127,7 @@ trait HasApprovals
      * Return the enum class-string for approvable actions, if configured
      * via #[ApprovableActions] attribute with an enum class.
      *
-     * @return class-string<\BackedEnum>|null
+     * @return class-string<BackedEnum>|null
      */
     public static function approvableActionsEnumClass(): ?string
     {
@@ -160,7 +162,7 @@ trait HasApprovals
     /**
      * Resolve approvable actions from a backed enum implementing HasLabel.
      *
-     * @param  class-string<\BackedEnum>  $enumClass
+     * @param  class-string<BackedEnum>  $enumClass
      * @return array<string, string>
      */
     protected static function resolveApprovableActionsFromEnum(string $enumClass): array
@@ -171,7 +173,7 @@ trait HasApprovals
 
         $actions = [];
 
-        /** @var \BackedEnum[] $cases */
+        /** @var BackedEnum[] $cases */
         $cases = $enumClass::cases();
 
         foreach ($cases as $case) {
@@ -228,7 +230,24 @@ trait HasApprovals
 
     public function approvalActionKeyForOperation(ApprovalOperation|string $operation): ?string
     {
-        return $this->approvalOperationDefinition($operation)?->normalizedActionKey();
+        return $this->approvalOperationDefinition($operation)?->normalizedActionKey($this);
+    }
+
+    public function approvalActionForOperation(ApprovalOperation|string $operation): ?string
+    {
+        return $this->approvalActionKeyForOperation($operation);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function approvalActionKeysForOperation(ApprovalOperation|string $operation): array
+    {
+        return array_values(collect($this->approvalOperationDefinitionsForOperation($operation))
+            ->map(fn (ApprovableOperation $definition): string => $definition->normalizedActionKey($this))
+            ->unique()
+            ->values()
+            ->all());
     }
 
     /**
@@ -247,6 +266,27 @@ trait HasApprovals
 
     /**
      * @param  array<string, mixed>  $data
+     */
+    public function approvalOperationDefinitionForData(ApprovalOperation|string $operation, array $data): ?ApprovableOperation
+    {
+        $matches = collect($this->approvalOperationDefinitionsForOperation($operation))
+            ->filter(fn (ApprovableOperation $definition): bool => $this->approvalOperationDefinitionHasChanges($definition, $operation, $data))
+            ->values();
+
+        if ($matches->count() > 1) {
+            throw ValidationException::withMessages([
+                'approval' => __('filament-action-approvals::approval.actions.ambiguous_approval_operation'),
+            ]);
+        }
+
+        /** @var ?ApprovableOperation $definition */
+        $definition = $matches->first();
+
+        return $definition;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
     public function approvalPayloadForOperation(ApprovalOperation|string $operation, array $data): array
@@ -255,7 +295,27 @@ trait HasApprovals
             return app(ApprovalOperationPayload::class)->deletePayload();
         }
 
-        return app(ApprovalOperationPayload::class)->editPayload($this, $data, $this->approvalFieldsForOperation($operation));
+        $definition = $this->approvalOperationDefinitionForData($operation, $data)
+            ?? $this->approvalOperationDefinition($operation);
+
+        if (! $definition instanceof ApprovableOperation) {
+            return [];
+        }
+
+        return $this->approvalPayloadForOperationDefinition($definition, $operation, $data);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    public function approvalPayloadForOperationDefinition(ApprovableOperation $definition, ApprovalOperation|string $operation, array $data): array
+    {
+        if (ApprovalOperation::fromOperation($operation) === ApprovalOperation::Delete) {
+            return app(ApprovalOperationPayload::class)->deletePayload();
+        }
+
+        return app(ApprovalOperationPayload::class)->editPayload($this, $data, $definition->fields, $definition->relationships);
     }
 
     /**
@@ -263,11 +323,30 @@ trait HasApprovals
      */
     public function submitApproval(ApprovalOperation|string $operation, array $data = []): Approval
     {
+        $definition = $data === []
+            ? $this->approvalOperationDefinition($operation)
+            : $this->approvalOperationDefinitionForData($operation, $data);
+
+        if (! $definition instanceof ApprovableOperation) {
+            throw ValidationException::withMessages([
+                'approval' => __('filament-action-approvals::approval.actions.no_changes_to_approve'),
+            ]);
+        }
+
+        return $this->submitApprovalForOperationDefinition($operation, $definition, $data);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    public function submitApprovalForOperationDefinition(ApprovalOperation|string $operation, ApprovableOperation $definition, array $data = []): Approval
+    {
         return app(ApprovalEngine::class)->submit(
             approvable: $this,
             submittedBy: CurrentPanelUser::id(),
-            actionKey: $this->approvalActionKeyForOperation($operation),
-            metadata: $this->approvalMetadataForOperation($operation, $data),
+            action: $definition->action,
+            actionKey: $definition->action === null ? $definition->normalizedActionKey($this) : null,
+            metadata: $this->approvalMetadataForOperationDefinition($operation, $definition, $data),
         );
     }
 
@@ -299,12 +378,40 @@ trait HasApprovals
      */
     protected function approvalMetadataForOperation(ApprovalOperation|string $operation, array $data): array
     {
+        $definition = $this->approvalOperationDefinitionForData($operation, $data)
+            ?? $this->approvalOperationDefinition($operation);
+
+        if (! $definition instanceof ApprovableOperation) {
+            return [];
+        }
+
+        return $this->approvalMetadataForOperationDefinition($operation, $definition, $data);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    protected function approvalMetadataForOperationDefinition(ApprovalOperation|string $operation, ApprovableOperation $definition, array $data): array
+    {
+        $payloadData = app(ApprovalOperationPayload::class)->editPayloadData($this, $data, $definition->fields, $definition->relationships);
+
         return [
-            'payload' => $this->approvalPayloadForOperation($operation, $data),
-            'payload_diff' => $this->approvalPayloadDiffForOperation($operation, $data),
+            'action' => $definition->normalizedActionKey($this),
+            'payload' => ApprovalOperation::fromOperation($operation) === ApprovalOperation::Delete
+                ? app(ApprovalOperationPayload::class)->deletePayload()
+                : $payloadData['payload'],
+            'payload_diff' => ApprovalOperation::fromOperation($operation) === ApprovalOperation::Delete
+                ? []
+                : $payloadData['diff'],
             'operation' => [
                 'name' => ApprovalOperation::normalize($operation),
-                'fields' => $this->approvalChangedFieldsForOperation($operation, $data),
+                'fields' => ApprovalOperation::fromOperation($operation) === ApprovalOperation::Delete
+                    ? []
+                    : $payloadData['fields'],
+                'relationships' => ApprovalOperation::fromOperation($operation) === ApprovalOperation::Delete
+                    ? []
+                    : $payloadData['relationships'],
             ],
         ];
     }
@@ -319,12 +426,19 @@ trait HasApprovals
             return [];
         }
 
-        return app(ApprovalOperationPayload::class)->editFields($this, $data, $this->approvalFieldsForOperation($operation));
+        $definition = $this->approvalOperationDefinitionForData($operation, $data)
+            ?? $this->approvalOperationDefinition($operation);
+
+        if (! $definition instanceof ApprovableOperation) {
+            return [];
+        }
+
+        return app(ApprovalOperationPayload::class)->editFields($this, $data, $definition->fields, $definition->relationships);
     }
 
     /**
      * @param  array<string, mixed>  $data
-     * @return list<array{field: string, current: mixed, requested: mixed}>
+     * @return list<array<string, mixed>>
      */
     protected function approvalPayloadDiffForOperation(ApprovalOperation|string $operation, array $data): array
     {
@@ -332,20 +446,44 @@ trait HasApprovals
             return [];
         }
 
-        return app(ApprovalOperationPayload::class)->editDiff($this, $data, $this->approvalFieldsForOperation($operation));
+        $definition = $this->approvalOperationDefinitionForData($operation, $data)
+            ?? $this->approvalOperationDefinition($operation);
+
+        if (! $definition instanceof ApprovableOperation) {
+            return [];
+        }
+
+        return app(ApprovalOperationPayload::class)->editDiff($this, $data, $definition->fields, $definition->relationships);
     }
 
     protected function approvalOperationDefinition(ApprovalOperation|string $operation): ?ApprovableOperation
     {
-        $normalizedOperation = ApprovalOperation::normalize($operation);
+        return $this->approvalOperationDefinitionsForOperation($operation)[0] ?? null;
+    }
 
-        foreach (self::approvalOperationAttributes() as $attribute) {
-            if ($attribute->enabled && $attribute->normalizedOperation() === $normalizedOperation) {
-                return $attribute;
-            }
+    /**
+     * @return list<ApprovableOperation>
+     */
+    protected function approvalOperationDefinitionsForOperation(ApprovalOperation|string $operation): array
+    {
+        return array_values(collect(self::approvalOperationAttributes())
+            ->filter(fn (ApprovableOperation $attribute): bool => $attribute->enabled && $attribute->matchesOperation($operation))
+            ->values()
+            ->all());
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    protected function approvalOperationDefinitionHasChanges(ApprovableOperation $definition, ApprovalOperation|string $operation, array $data): bool
+    {
+        if (ApprovalOperation::fromOperation($operation) === ApprovalOperation::Delete) {
+            return true;
         }
 
-        return null;
+        $payloadData = app(ApprovalOperationPayload::class)->editPayloadData($this, $data, $definition->fields, $definition->relationships);
+
+        return $payloadData['payload'] !== [];
     }
 
     /**

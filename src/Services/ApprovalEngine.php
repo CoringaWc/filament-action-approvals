@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CoringaWc\FilamentActionApprovals\Services;
 
+use BackedEnum;
 use CoringaWc\FilamentActionApprovals\Enums\ActionType;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalOperation;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
@@ -22,6 +23,7 @@ use CoringaWc\FilamentActionApprovals\Notifications\ApprovalApprovedNotification
 use CoringaWc\FilamentActionApprovals\Notifications\ApprovalCancelledNotification;
 use CoringaWc\FilamentActionApprovals\Notifications\ApprovalRejectedNotification;
 use CoringaWc\FilamentActionApprovals\Notifications\ApprovalRequestedNotification;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalActionKey;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalActionRegistry;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
 use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
@@ -37,6 +39,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
 use Throwable;
 
 class ApprovalEngine
@@ -44,8 +47,9 @@ class ApprovalEngine
     /**
      * @param  array<string, mixed>  $metadata
      */
-    public function submit(Model $approvable, ?ApprovalFlow $flow = null, Model|int|string|null $submittedBy = null, ?string $actionKey = null, array $metadata = []): Approval
+    public function submit(Model $approvable, ?ApprovalFlow $flow = null, Model|int|string|null $submittedBy = null, ?string $actionKey = null, array $metadata = [], string|BackedEnum|null $action = null): Approval
     {
+        $actionKey = $this->resolveActionKeyInput($approvable, $actionKey, $action);
         $flowModel = ApprovalModels::flow();
         $flow ??= $flowModel::findSubmissionFlowForModel($approvable, $actionKey);
         $submitter = $this->resolveSubmitter($submittedBy);
@@ -64,10 +68,10 @@ class ApprovalEngine
 
         try {
             return DB::transaction(function () use ($approvable, $flow, $metadata, $resolvedActionKey, $submitter) {
-                $approvalMetadata = array_filter([
+                $approvalMetadata = SensitiveDataRedactor::metadata(array_filter([
                     ...$metadata,
                     'action_key' => $resolvedActionKey,
-                ], static fn (mixed $value): bool => $value !== null && $value !== '');
+                ], static fn (mixed $value): bool => $value !== null && $value !== ''));
 
                 $approvalModel = ApprovalModels::approval();
                 $stepInstanceModel = ApprovalModels::stepInstance();
@@ -134,6 +138,21 @@ class ApprovalEngine
         return is_string($flow->action_key) && filled($flow->action_key)
             ? $flow->action_key
             : null;
+    }
+
+    protected function resolveActionKeyInput(Model $approvable, ?string $actionKey, string|BackedEnum|null $action): ?string
+    {
+        $normalizedAction = ApprovalActionKey::normalize($approvable, $action);
+
+        if ($normalizedAction === null) {
+            return $actionKey;
+        }
+
+        if (filled($actionKey) && ApprovalActionKey::normalize($approvable, $actionKey) !== $normalizedAction) {
+            throw new InvalidArgumentException('The action and actionKey values do not normalize to the same approval action.');
+        }
+
+        return $normalizedAction;
     }
 
     public function approve(ApprovalStepInstance $stepInstance, int|string|null $userId, ?string $comment = null, bool $force = false): void

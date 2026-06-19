@@ -8,7 +8,6 @@ use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalPayloadDiff;
 use CoringaWc\FilamentActionApprovals\Tests\TestCase;
-use Illuminate\Support\Arr;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 use Workbench\App\Filament\Resources\PurchaseOrders\Pages\ListPurchaseOrders;
@@ -43,6 +42,7 @@ it('intercepts native edit actions and submits changed allowlisted fields for ap
             'amount' => 1500,
         ])
         ->assertNotified(__('filament-action-approvals::approval.actions.approval_request_submitted'))
+        ->assertNotNotified(__('filament-actions::edit.single.notifications.saved.title'))
         ->assertActionNotMounted();
 
     $order->refresh();
@@ -283,7 +283,7 @@ it('does not let local before hooks mutate intercepted edit approvals', function
         ->and($order->getAttribute('title'))->toBe('Updated order');
 });
 
-it('halts relationship-backed edit forms before relationships are persisted', function (): void {
+it('captures relationship-backed edit form payloads before relationships are persisted', function (): void {
     /** @var TestCase $test */
     $test = $this;
 
@@ -308,6 +308,10 @@ it('halts relationship-backed edit forms before relationships are persisted', fu
         'sku' => 'SKU-OLD',
         'quantity' => 1,
     ]);
+    $deletedLine = $order->lines()->create([
+        'sku' => 'SKU-DELETE',
+        'quantity' => 9,
+    ]);
 
     Livewire::test(ListPurchaseOrders::class)
         ->callTableAction('edit', $order, [
@@ -315,8 +319,10 @@ it('halts relationship-backed edit forms before relationships are persisted', fu
             'title' => 'Updated order',
             'description' => $order->getAttribute('description'),
             'amount' => 1500,
-            'vendor_name' => 'Changed vendor',
-            'reference' => 'REF-002',
+            'detail' => [
+                'vendor_name' => 'Changed vendor',
+                'reference' => 'password=hidden-token',
+            ],
             'lines' => [
                 "record-{$line->getKey()}" => [
                     'sku' => 'SKU-UPDATED',
@@ -328,26 +334,93 @@ it('halts relationship-backed edit forms before relationships are persisted', fu
                 ],
             ],
         ])
-        ->assertNotified(__('filament-action-approvals::approval.actions.approval_request_submitted'));
+        ->assertNotified(__('filament-action-approvals::approval.actions.approval_request_submitted'))
+        ->assertNotNotified(__('filament-actions::edit.single.notifications.saved.title'));
 
     $approval = $order->approvals()->firstOrFail();
+    $lineOperations = collect(data_get($approval->metadata, 'payload.relationships.lines.operations'));
 
     expect($order->refresh()->getAttribute('title'))->toBe('Original order')
         ->and($detail->refresh()->vendor_name)->toBe('Original vendor')
         ->and($detail->reference)->toBe('REF-001')
         ->and($line->refresh()->sku)->toBe('SKU-OLD')
         ->and($line->quantity)->toBe(1)
-        ->and($order->lines()->count())->toBe(1)
+        ->and($deletedLine->refresh()->sku)->toBe('SKU-DELETE')
+        ->and($order->lines()->count())->toBe(2)
         ->and(data_get($approval->metadata, 'payload.title'))->toBe('Updated order')
-        ->and(data_get($approval->metadata, 'payload.vendor_name'))->toBeNull()
-        ->and(data_get($approval->metadata, 'payload.lines'))->toBeNull();
+        ->and(data_get($approval->metadata, 'operation.relationships.detail.type'))->toBe('has_one')
+        ->and(data_get($approval->metadata, 'operation.relationships.lines.type'))->toBe('has_many')
+        ->and(data_get($approval->metadata, 'payload.relationships.detail.operation'))->toBe('update')
+        ->and(data_get($approval->metadata, 'payload.relationships.detail.record_key'))->toBe($detail->getKey())
+        ->and(data_get($approval->metadata, 'payload.relationships.detail.base_updated_at'))->not->toBeNull()
+        ->and(data_get($approval->metadata, 'payload.relationships.detail.attributes.vendor_name'))->toBe('Changed vendor')
+        ->and(data_get($approval->metadata, 'payload.relationships.detail.attributes.reference'))->toBeNull()
+        ->and($lineOperations->firstWhere('operation', 'update')['record_key'] ?? null)->toBe($line->getKey())
+        ->and(data_get($lineOperations->firstWhere('operation', 'update'), 'attributes.sku'))->toBe('SKU-UPDATED')
+        ->and($lineOperations->firstWhere('operation', 'create')['client_key'] ?? null)->toBe('new-line');
 
     app(ApprovalEngine::class)->approve($approval->currentStepInstance(), $approver->getKey());
 
     expect($order->refresh()->getAttribute('title'))->toBe('Updated order')
         ->and($detail->refresh()->vendor_name)->toBe('Original vendor')
         ->and($line->refresh()->sku)->toBe('SKU-OLD')
-        ->and($order->lines()->count())->toBe(1);
+        ->and($deletedLine->refresh()->sku)->toBe('SKU-DELETE')
+        ->and($order->lines()->count())->toBe(2);
+});
+
+it('falls back to native relationship edit persistence when no approval flow exists', function (): void {
+    /** @var TestCase $test */
+    $test = $this;
+
+    $test->seed(DatabaseSeeder::class);
+
+    $submitter = User::query()->where('email', 'admin@filament-action-approvals.test')->firstOrFail();
+
+    $test->actingAs($submitter);
+
+    $order = PurchaseOrder::factory()->for($submitter, 'user')->create([
+        'title' => 'Original order',
+        'amount' => 1200,
+    ]);
+    $detail = $order->detail()->create([
+        'vendor_name' => 'Original vendor',
+        'reference' => 'REF-001',
+    ]);
+    $line = $order->lines()->create([
+        'sku' => 'SKU-OLD',
+        'quantity' => 1,
+    ]);
+
+    Livewire::test(ListPurchaseOrders::class)
+        ->callTableAction('edit', $order, [
+            'user_id' => $submitter->getKey(),
+            'title' => 'Updated order',
+            'description' => $order->getAttribute('description'),
+            'amount' => 1500,
+            'detail' => [
+                'vendor_name' => 'Changed vendor',
+                'reference' => 'REF-002',
+            ],
+            'lines' => [
+                "record-{$line->getKey()}" => [
+                    'sku' => 'SKU-UPDATED',
+                    'quantity' => 3,
+                ],
+                'new-line' => [
+                    'sku' => 'SKU-NEW',
+                    'quantity' => 2,
+                ],
+            ],
+        ])
+        ->assertNotified(__('filament-actions::edit.single.notifications.saved.title'));
+
+    expect($order->refresh()->title)->toBe('Updated order')
+        ->and($detail->refresh()->vendor_name)->toBe('Changed vendor')
+        ->and($detail->reference)->toBe('REF-002')
+        ->and($line->refresh()->sku)->toBe('SKU-UPDATED')
+        ->and($line->quantity)->toBe(3)
+        ->and($order->lines()->where('sku', 'SKU-NEW')->exists())->toBeTrue()
+        ->and($order->approvals()->count())->toBe(0);
 });
 
 it('falls back to native delete actions when no approval flow exists', function (): void {
@@ -371,7 +444,7 @@ it('falls back to native delete actions when no approval flow exists', function 
         ->and($order->approvals()->count())->toBe(0);
 });
 
-it('safe fails intercepted edit actions when no allowlisted field changed', function (): void {
+it('falls back to native edit actions when no governed field changed', function (): void {
     /** @var TestCase $test */
     $test = $this;
 
@@ -396,8 +469,7 @@ it('safe fails intercepted edit actions when no allowlisted field changed', func
             'title' => $order->getAttribute('title'),
             'description' => $order->getAttribute('description'),
             'amount' => $order->getAttribute('amount'),
-        ])
-        ->assertNotified(__('filament-action-approvals::approval.actions.no_changes_to_approve'));
+        ]);
 
     expect($order->approvals()->count())->toBe(0);
 });
@@ -441,16 +513,17 @@ it('keeps safe sensitive-looking words and denies real sensitive operation paylo
         ->callTableAction('edit', $sensitiveOrder, [
             'user_id' => $submitter->getKey(),
             'title' => 'Sensitive order updated',
-            'description' => 'apiKey=abc123 privateKey=def456 CPF 123.456.789-09',
-            'amount' => $sensitiveOrder->getAttribute('amount'),
+            'description' => 'password=abc123 reset_token=def456 CPF 123.456.789-09',
+            'amount' => 1600,
         ])
         ->assertNotified(__('filament-action-approvals::approval.actions.approval_request_submitted'));
 
     $sensitiveApproval = $sensitiveOrder->approvals()->firstOrFail();
-    $metadataText = collect(Arr::dot($sensitiveApproval->metadata ?? []))->implode(' ');
+    $metadataText = json_encode($sensitiveApproval->metadata ?? [], JSON_THROW_ON_ERROR);
 
     expect(data_get($sensitiveApproval->metadata, 'payload.title'))->toBe('Sensitive order updated')
         ->and(data_get($sensitiveApproval->metadata, 'payload.description'))->toBeNull()
+        ->and(data_get($sensitiveApproval->metadata, 'payload.amount'))->toBe(1600)
         ->and($metadataText)->not->toContain('abc123')
         ->and($metadataText)->not->toContain('def456')
         ->and($metadataText)->not->toContain('123.456.789-09');

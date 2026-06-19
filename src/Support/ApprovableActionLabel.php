@@ -38,7 +38,12 @@ class ApprovableActionLabel
             return __('filament-action-approvals::approval.flow.any_action');
         }
 
-        return static::optionsFor($model)[$actionKey] ?? Str::headline($actionKey);
+        $options = static::optionsFor($model);
+        $localActionKey = ApprovalActionKey::local($model, $actionKey);
+
+        return $options[$actionKey]
+            ?? ($localActionKey === null ? null : ($options[$localActionKey] ?? null))
+            ?? Str::headline($actionKey);
     }
 
     /**
@@ -56,7 +61,8 @@ class ApprovableActionLabel
             return null;
         }
 
-        return $enumClass::tryFrom($actionKey);
+        return $enumClass::tryFrom($actionKey)
+            ?? $enumClass::tryFrom(ApprovalActionKey::local($model, $actionKey) ?? $actionKey);
     }
 
     /**

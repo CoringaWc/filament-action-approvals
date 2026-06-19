@@ -17,7 +17,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-#[ApprovableOperation(operation: ApprovalOperation::Update, actionKey: 'purchase-order.edit', fields: ['user_id', 'title', 'description', 'amount'])]
+#[ApprovableOperation(
+    action: 'edit',
+    fields: ['user_id', 'title', 'description', 'amount'],
+    relationships: [
+        'detail' => ['type' => 'has_one', 'fields' => ['vendor_name', 'reference']],
+        'lines' => ['type' => 'has_many', 'fields' => ['sku', 'quantity']],
+    ],
+)]
 #[ApprovableOperation(operation: ApprovalOperation::Delete, actionKey: 'purchase-order.delete')]
 class PurchaseOrder extends Model
 {

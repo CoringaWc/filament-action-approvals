@@ -304,6 +304,11 @@ class Approval extends Model
             : null;
     }
 
+    public function submittedAction(): ?string
+    {
+        return $this->submittedActionKey();
+    }
+
     /**
      * Get the rejection reason (comment) from the latest rejection action.
      */

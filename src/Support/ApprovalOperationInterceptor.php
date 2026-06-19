@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CoringaWc\FilamentActionApprovals\Support;
 
+use CoringaWc\FilamentActionApprovals\Attributes\ApprovableOperation;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalOperation;
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
@@ -85,7 +86,7 @@ class ApprovalOperationInterceptor
         }
 
         if ($action instanceof EditAction) {
-            $this->processEditAction($action, $record, $action->getData());
+            $this->processEditAction($action, $record, $this->editActionSubmissionData($action));
 
             return null;
         }
@@ -106,12 +107,25 @@ class ApprovalOperationInterceptor
             return;
         }
 
-        if (! method_exists($record, 'approvalActionKeyForOperation') || ! method_exists($record, 'approvalPayloadForOperation') || ! method_exists($record, 'submitApproval')) {
+        if (! method_exists($record, 'approvalOperationDefinitionForData') || ! method_exists($record, 'approvalPayloadForOperationDefinition') || ! method_exists($record, 'submitApprovalForOperationDefinition')) {
             return;
         }
 
         $operation = ApprovalOperation::Update;
-        $actionKey = $record->approvalActionKeyForOperation($operation);
+
+        try {
+            $definition = $record->approvalOperationDefinitionForData($operation, $data);
+        } catch (ValidationException $exception) {
+            $this->haltWithFailure($action, $this->validationMessage($exception));
+
+            return;
+        }
+
+        if (! $definition instanceof ApprovableOperation) {
+            return;
+        }
+
+        $actionKey = $definition->normalizedActionKey($record);
 
         if (! filled($actionKey)) {
             return;
@@ -127,7 +141,7 @@ class ApprovalOperationInterceptor
             return;
         }
 
-        $payload = $record->approvalPayloadForOperation($operation, $data);
+        $payload = $record->approvalPayloadForOperationDefinition($definition, $operation, $data);
 
         if ($payload === []) {
             $this->haltWithWarning($action, __('filament-action-approvals::approval.actions.no_changes_to_approve'));
@@ -136,7 +150,7 @@ class ApprovalOperationInterceptor
         }
 
         try {
-            $record->submitApproval($operation, $payload);
+            $record->submitApprovalForOperationDefinition($operation, $definition, $data);
         } catch (ValidationException $exception) {
             $this->haltWithFailure($action, $this->validationMessage($exception));
 
@@ -204,7 +218,7 @@ class ApprovalOperationInterceptor
             return false;
         }
 
-        if (! $record instanceof Model || ! method_exists($record, 'approvalActionKeyForOperation')) {
+        if (! $record instanceof Model || ! method_exists($record, 'approvalActionKeysForOperation')) {
             return false;
         }
 
@@ -212,13 +226,13 @@ class ApprovalOperationInterceptor
             return false;
         }
 
-        $actionKey = $record->approvalActionKeyForOperation($operation);
-
-        if (! filled($actionKey)) {
-            return false;
+        foreach ($record->approvalActionKeysForOperation($operation) as $actionKey) {
+            if (filled($actionKey) && $this->findOperationApprovalFlow($record, $actionKey) instanceof ApprovalFlow) {
+                return true;
+            }
         }
 
-        return $this->findOperationApprovalFlow($record, $actionKey) instanceof ApprovalFlow;
+        return false;
     }
 
     private function haltWithFailure(EditAction|DeleteAction $action, string $title): void
@@ -252,6 +266,16 @@ class ApprovalOperationInterceptor
         return is_string($message) && filled($message)
             ? $message
             : __('filament-action-approvals::approval.actions.apply_failed');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function editActionSubmissionData(EditAction $action): array
+    {
+        $rawData = $action->getRawData();
+
+        return array_replace_recursive($rawData, $action->getData());
     }
 
     private function findOperationApprovalFlow(Model $record, string $actionKey): ?ApprovalFlow
