@@ -484,7 +484,7 @@ class ApprovalEngine
             return;
         }
 
-        if (! in_array(ApprovalOperation::fromOperation($operation), [ApprovalOperation::Update, ApprovalOperation::Delete], true) || ! is_array($payload)) {
+        if (! in_array(ApprovalOperation::fromOperation($operation), [ApprovalOperation::Update, ApprovalOperation::Delete, ApprovalOperation::Restore, ApprovalOperation::ForceDelete], true) || ! is_array($payload)) {
             throw ValidationException::withMessages([
                 'approval' => __('filament-action-approvals::approval.actions.apply_failed'),
             ]);

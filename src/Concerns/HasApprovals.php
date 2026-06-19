@@ -6,7 +6,6 @@ namespace CoringaWc\FilamentActionApprovals\Concerns;
 
 use BackedEnum;
 use CoringaWc\FilamentActionApprovals\Attributes\ApprovableActions;
-use CoringaWc\FilamentActionApprovals\Attributes\ApprovableCrudAction;
 use CoringaWc\FilamentActionApprovals\Attributes\ApprovableOperation;
 use CoringaWc\FilamentActionApprovals\Enums\ActionType;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalOperation;
@@ -23,7 +22,9 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
 use ReflectionClass;
 
 trait HasApprovals
@@ -113,11 +114,17 @@ trait HasApprovals
         }
 
         // Method override (from HasStateApprovals or custom)
-        if (is_callable([static::class, 'resolveApprovableActions'])) {
-            /** @var array<string, string> $actions */
-            $actions = static::resolveApprovableActions();
+        $resolvedActions = [];
 
-            return $actions;
+        if (method_exists(static::class, 'resolveApprovableActions')) {
+            /** @var array<string, string> $resolvedActions */
+            $resolvedActions = static::resolveApprovableActions();
+        }
+
+        $attributeActions = static::resolveApprovableActionsFromAttributes();
+
+        if ($resolvedActions !== [] || $attributeActions !== []) {
+            return array_replace($resolvedActions, $attributeActions);
         }
 
         return [];
@@ -137,7 +144,7 @@ trait HasApprovals
             return $attribute->actions;
         }
 
-        return null;
+        return static::resolveApprovableActionsEnumClassFromAttributes();
     }
 
     /**
@@ -183,6 +190,96 @@ trait HasApprovals
         }
 
         return $actions;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function resolveApprovableActionsFromAttributes(): array
+    {
+        $actions = [];
+
+        foreach (static::approvalOperationAttributes() as $definition) {
+            if (! $definition->enabled) {
+                continue;
+            }
+
+            try {
+                $key = $definition->localActionKey();
+            } catch (InvalidArgumentException) {
+                continue;
+            }
+
+            if (blank($key)) {
+                continue;
+            }
+
+            $actions[$key] = static::resolveApprovableActionLabelFromDefinition($definition, $key);
+        }
+
+        return $actions;
+    }
+
+    /**
+     * @return class-string<BackedEnum>|null
+     */
+    protected static function resolveApprovableActionsEnumClassFromAttributes(): ?string
+    {
+        $enumClass = null;
+        $hasActionAttribute = false;
+
+        foreach (static::approvalOperationAttributes() as $definition) {
+            if (! $definition->enabled) {
+                continue;
+            }
+
+            try {
+                $definition->localActionKey();
+            } catch (InvalidArgumentException) {
+                continue;
+            }
+
+            $hasActionAttribute = true;
+            $enumBackedAction = static::enumBackedApprovalAction($definition);
+
+            if (! $enumBackedAction instanceof BackedEnum) {
+                return null;
+            }
+
+            $actionEnumClass = $enumBackedAction::class;
+
+            if ($enumClass !== null && $enumClass !== $actionEnumClass) {
+                return null;
+            }
+
+            $enumClass = $actionEnumClass;
+        }
+
+        return $hasActionAttribute ? $enumClass : null;
+    }
+
+    protected static function resolveApprovableActionLabelFromDefinition(ApprovableOperation $definition, string $key): string
+    {
+        $enumBackedAction = static::enumBackedApprovalAction($definition);
+
+        if ($enumBackedAction instanceof BackedEnum && method_exists($enumBackedAction, 'getLabel')) {
+            $label = $enumBackedAction->getLabel();
+
+            if (is_string($label) && filled($label)) {
+                return $label;
+            }
+        }
+
+        return Str::headline($key);
+    }
+
+    protected static function enumBackedApprovalAction(ApprovableOperation $definition): ?BackedEnum
+    {
+        if ($definition->action instanceof BackedEnum) {
+            return $definition->action;
+        }
+
+        return $definition->actionKey instanceof BackedEnum ? $definition->actionKey : null;
     }
 
     public function isPendingApproval(): bool
@@ -291,7 +388,7 @@ trait HasApprovals
      */
     public function approvalPayloadForOperation(ApprovalOperation|string $operation, array $data): array
     {
-        if (ApprovalOperation::fromOperation($operation) === ApprovalOperation::Delete) {
+        if ($this->approvalOperationIsPayloadless($operation)) {
             return app(ApprovalOperationPayload::class)->deletePayload();
         }
 
@@ -311,7 +408,7 @@ trait HasApprovals
      */
     public function approvalPayloadForOperationDefinition(ApprovableOperation $definition, ApprovalOperation|string $operation, array $data): array
     {
-        if (ApprovalOperation::fromOperation($operation) === ApprovalOperation::Delete) {
+        if ($this->approvalOperationIsPayloadless($operation)) {
             return app(ApprovalOperationPayload::class)->deletePayload();
         }
 
@@ -363,6 +460,24 @@ trait HasApprovals
             return;
         }
 
+        if ($approvalOperation === ApprovalOperation::Restore) {
+            if (! is_callable([$this, 'restore'])) {
+                throw ValidationException::withMessages([
+                    'approval' => __('filament-action-approvals::approval.actions.apply_failed'),
+                ]);
+            }
+
+            call_user_func([$this, 'restore']);
+
+            return;
+        }
+
+        if ($approvalOperation === ApprovalOperation::ForceDelete) {
+            $this->forceDelete();
+
+            return;
+        }
+
         if ($approvalOperation === ApprovalOperation::Update) {
             $fields = $this->approvalFieldsForOperation($operation);
             $data = $fields === [] ? $payload : Arr::only($payload, $fields);
@@ -394,24 +509,23 @@ trait HasApprovals
      */
     protected function approvalMetadataForOperationDefinition(ApprovalOperation|string $operation, ApprovableOperation $definition, array $data): array
     {
-        $payloadData = app(ApprovalOperationPayload::class)->editPayloadData($this, $data, $definition->fields, $definition->relationships);
+        $payloadData = $this->approvalOperationIsPayloadless($operation)
+            ? [
+                'payload' => app(ApprovalOperationPayload::class)->deletePayload(),
+                'diff' => [],
+                'fields' => [],
+                'relationships' => [],
+            ]
+            : app(ApprovalOperationPayload::class)->editPayloadData($this, $data, $definition->fields, $definition->relationships);
 
         return [
             'action' => $definition->normalizedActionKey($this),
-            'payload' => ApprovalOperation::fromOperation($operation) === ApprovalOperation::Delete
-                ? app(ApprovalOperationPayload::class)->deletePayload()
-                : $payloadData['payload'],
-            'payload_diff' => ApprovalOperation::fromOperation($operation) === ApprovalOperation::Delete
-                ? []
-                : $payloadData['diff'],
+            'payload' => $payloadData['payload'],
+            'payload_diff' => $payloadData['diff'],
             'operation' => [
                 'name' => ApprovalOperation::normalize($operation),
-                'fields' => ApprovalOperation::fromOperation($operation) === ApprovalOperation::Delete
-                    ? []
-                    : $payloadData['fields'],
-                'relationships' => ApprovalOperation::fromOperation($operation) === ApprovalOperation::Delete
-                    ? []
-                    : $payloadData['relationships'],
+                'fields' => $payloadData['fields'],
+                'relationships' => $payloadData['relationships'],
             ],
         ];
     }
@@ -422,7 +536,7 @@ trait HasApprovals
      */
     protected function approvalChangedFieldsForOperation(ApprovalOperation|string $operation, array $data): array
     {
-        if (ApprovalOperation::fromOperation($operation) === ApprovalOperation::Delete) {
+        if ($this->approvalOperationIsPayloadless($operation)) {
             return [];
         }
 
@@ -442,7 +556,7 @@ trait HasApprovals
      */
     protected function approvalPayloadDiffForOperation(ApprovalOperation|string $operation, array $data): array
     {
-        if (ApprovalOperation::fromOperation($operation) === ApprovalOperation::Delete) {
+        if ($this->approvalOperationIsPayloadless($operation)) {
             return [];
         }
 
@@ -477,13 +591,22 @@ trait HasApprovals
      */
     protected function approvalOperationDefinitionHasChanges(ApprovableOperation $definition, ApprovalOperation|string $operation, array $data): bool
     {
-        if (ApprovalOperation::fromOperation($operation) === ApprovalOperation::Delete) {
+        if ($this->approvalOperationIsPayloadless($operation)) {
             return true;
         }
 
         $payloadData = app(ApprovalOperationPayload::class)->editPayloadData($this, $data, $definition->fields, $definition->relationships);
 
         return $payloadData['payload'] !== [];
+    }
+
+    protected function approvalOperationIsPayloadless(ApprovalOperation|string $operation): bool
+    {
+        return in_array(ApprovalOperation::fromOperation($operation), [
+            ApprovalOperation::Delete,
+            ApprovalOperation::Restore,
+            ApprovalOperation::ForceDelete,
+        ], true);
     }
 
     /**
@@ -498,10 +621,7 @@ trait HasApprovals
         $reflection = new ReflectionClass(static::class);
 
         /** @var list<ApprovableOperation> $attributes */
-        $attributes = collect([
-            ...$reflection->getAttributes(ApprovableOperation::class),
-            ...$reflection->getAttributes(ApprovableCrudAction::class),
-        ])
+        $attributes = collect($reflection->getAttributes(ApprovableOperation::class, \ReflectionAttribute::IS_INSTANCEOF))
             ->map(fn (\ReflectionAttribute $attribute): ApprovableOperation => $attribute->newInstance())
             ->values()
             ->all();
