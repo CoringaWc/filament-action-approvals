@@ -112,8 +112,6 @@ class ApprovalOperationPayload
     private function isDeniedField(Model $record, string $field): bool
     {
         $baseField = Str::before($field, '.');
-        $normalized = Str::of($baseField)->lower()->toString();
-
         if (in_array($baseField, $record->getHidden(), true)) {
             return true;
         }
@@ -124,36 +122,20 @@ class ApprovalOperationPayload
             return true;
         }
 
-        return Str::of($normalized)->contains([
-            'cpf',
-            'password',
-            'senha',
-            'remember_token',
-            'reset_token',
-            'token',
-            'raw_token',
-            'secret',
-            'credential',
-        ]);
+        return SensitiveDataRedactor::isSensitiveField($baseField);
     }
 
     private function isDeniedValue(mixed $value): bool
     {
         if (is_array($value)) {
-            return collect($value)->contains(fn (mixed $item): bool => $this->isDeniedValue($item));
+            return collect($value)->contains(fn (mixed $item, int|string $key): bool => (is_string($key) && SensitiveDataRedactor::isSensitiveField($key)) || $this->isDeniedValue($item));
         }
 
         if (! is_string($value)) {
             return false;
         }
 
-        $normalized = Str::of($value)->lower()->squish()->toString();
-
-        if (Str::of($normalized)->contains(['cpf', 'password', 'senha', 'token', 'secret', 'credential'])) {
-            return true;
-        }
-
-        return Str::isMatch('/(?:^|\D)\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?:\D|$)/', $value);
+        return SensitiveDataRedactor::text($value) !== $value;
     }
 
     private function valuesMatch(mixed $current, mixed $requested): bool
@@ -173,7 +155,7 @@ class ApprovalOperationPayload
 
         if (is_array($value)) {
             return collect($value)
-                ->reject(fn (mixed $item, int|string $key): bool => is_string($key) && Str::of($key)->lower()->contains(['cpf', 'password', 'senha', 'token', 'secret', 'credential']))
+                ->reject(fn (mixed $item, int|string $key): bool => is_string($key) && SensitiveDataRedactor::isSensitiveField($key))
                 ->map(fn (mixed $item): mixed => $this->sanitizeValue($item))
                 ->all();
         }

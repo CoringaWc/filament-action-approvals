@@ -14,8 +14,10 @@ use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
-#[ApprovableOperation(operation: ApprovalOperation::Update, actionKey: 'purchase-order.edit', fields: ['title', 'description', 'amount'])]
+#[ApprovableOperation(operation: ApprovalOperation::Update, actionKey: 'purchase-order.edit', fields: ['user_id', 'title', 'description', 'amount'])]
 #[ApprovableOperation(operation: ApprovalOperation::Delete, actionKey: 'purchase-order.delete')]
 class PurchaseOrder extends Model
 {
@@ -42,6 +44,16 @@ class PurchaseOrder extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function detail(): HasOne
+    {
+        return $this->hasOne(PurchaseOrderDetail::class);
+    }
+
+    public function lines(): HasMany
+    {
+        return $this->hasMany(PurchaseOrderLine::class);
     }
 
     public function canSubmitForApproval(?string $actionKey = null, int|string|null $userId = null): bool

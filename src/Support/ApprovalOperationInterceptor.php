@@ -7,15 +7,13 @@ namespace CoringaWc\FilamentActionApprovals\Support;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalOperation;
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
-use Filament\Actions\Contracts\HasActions;
+use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\Events\ActionCalling;
 use Filament\Notifications\Notification;
-use Filament\Schemas\Contracts\HasSchemas;
-use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Validation\ValidationException;
 
 class ApprovalOperationInterceptor
@@ -33,6 +31,8 @@ class ApprovalOperationInterceptor
         EditAction::configureUsing(fn (EditAction $action): EditAction => app(self::class)->configureEditAction($action));
         DeleteAction::configureUsing(fn (DeleteAction $action): DeleteAction => app(self::class)->configureDeleteAction($action));
 
+        Event::listen(ActionCalling::class, fn (mixed $event): null => app(self::class)->handleActionCalling($event));
+
         self::$registeredApplicationId = $applicationId;
     }
 
@@ -47,10 +47,7 @@ class ApprovalOperationInterceptor
                 : __('filament-actions::edit.single.modal.actions.save.label'))
             ->successNotificationTitle(fn (?Model $record = null): string => $this->shouldSubmitApprovalRequest($record, ApprovalOperation::Update)
                 ? __('filament-action-approvals::approval.actions.approval_request_submitted')
-                : __('filament-actions::edit.single.notifications.saved.title'))
-            ->using(function (EditAction $action, array $data, HasActions&HasSchemas $livewire, Model $record, ?Table $table): void {
-                $this->processEditAction($action, $record, $data, $livewire, $table);
-            });
+                : __('filament-actions::edit.single.notifications.saved.title'));
     }
 
     public function configureDeleteAction(DeleteAction $action): DeleteAction
@@ -70,26 +67,46 @@ class ApprovalOperationInterceptor
                 : __('filament-actions::delete.single.modal.actions.delete.label'))
             ->successNotificationTitle(fn (?Model $record = null): string => $this->shouldSubmitApprovalRequest($record, ApprovalOperation::Delete)
                 ? __('filament-action-approvals::approval.actions.approval_request_submitted')
-                : __('filament-actions::delete.single.notifications.deleted.title'))
-            ->using(function (DeleteAction $action, Model $record): ?bool {
-                return $this->processDeleteAction($action, $record);
-            });
+                : __('filament-actions::delete.single.notifications.deleted.title'));
+    }
+
+    public function handleActionCalling(mixed $event): null
+    {
+        $action = $event instanceof ActionCalling ? $event->getAction() : $event;
+
+        if (! $action instanceof Action) {
+            return null;
+        }
+
+        $record = $action->getRecord();
+
+        if (! $record instanceof Model) {
+            return null;
+        }
+
+        if ($action instanceof EditAction) {
+            $this->processEditAction($action, $record, $action->getData());
+
+            return null;
+        }
+
+        if ($action instanceof DeleteAction) {
+            $this->processDeleteAction($action, $record);
+        }
+
+        return null;
     }
 
     /**
      * @param  array<string, mixed>  $data
      */
-    private function processEditAction(EditAction $action, Model $record, array $data, HasActions&HasSchemas $livewire, ?Table $table): void
+    private function processEditAction(EditAction $action, Model $record, array $data): void
     {
         if (! FilamentActionApprovalsPlugin::shouldInterceptOperationsForCurrentPanel()) {
-            $this->performDefaultEdit($record, $data, $livewire, $table);
-
             return;
         }
 
         if (! method_exists($record, 'approvalActionKeyForOperation') || ! method_exists($record, 'approvalPayloadForOperation') || ! method_exists($record, 'submitApproval')) {
-            $this->performDefaultEdit($record, $data, $livewire, $table);
-
             return;
         }
 
@@ -97,22 +114,16 @@ class ApprovalOperationInterceptor
         $actionKey = $record->approvalActionKeyForOperation($operation);
 
         if (! filled($actionKey)) {
-            $this->performDefaultEdit($record, $data, $livewire, $table);
-
             return;
         }
 
         $flow = $this->findOperationApprovalFlow($record, $actionKey);
 
         if (! $flow instanceof ApprovalFlow) {
-            $this->performDefaultEdit($record, $data, $livewire, $table);
-
             return;
         }
 
         if (FilamentActionApprovalsPlugin::canApplyDirectly(CurrentPanelUser::id())) {
-            $this->performDefaultEdit($record, $data, $livewire, $table);
-
             return;
         }
 
@@ -133,33 +144,35 @@ class ApprovalOperationInterceptor
         }
 
         $this->sendApprovalRequestSubmittedNotification($action);
+
+        $action->halt();
     }
 
-    private function processDeleteAction(DeleteAction $action, Model $record): ?bool
+    private function processDeleteAction(DeleteAction $action, Model $record): void
     {
         if (! FilamentActionApprovalsPlugin::shouldInterceptOperationsForCurrentPanel()) {
-            return $record->delete();
+            return;
         }
 
         if (! method_exists($record, 'approvalActionKeyForOperation') || ! method_exists($record, 'submitApproval')) {
-            return $record->delete();
+            return;
         }
 
         $operation = ApprovalOperation::Delete;
         $actionKey = $record->approvalActionKeyForOperation($operation);
 
         if (! filled($actionKey)) {
-            return $record->delete();
+            return;
         }
 
         $flow = $this->findOperationApprovalFlow($record, $actionKey);
 
         if (! $flow instanceof ApprovalFlow) {
-            return $record->delete();
+            return;
         }
 
         if (FilamentActionApprovalsPlugin::canApplyDirectly(CurrentPanelUser::id())) {
-            return $record->delete();
+            return;
         }
 
         try {
@@ -167,12 +180,12 @@ class ApprovalOperationInterceptor
         } catch (ValidationException $exception) {
             $this->haltWithFailure($action, $this->validationMessage($exception));
 
-            return false;
+            return;
         }
 
         $this->sendApprovalRequestSubmittedNotification($action);
 
-        return true;
+        $action->halt();
     }
 
     private function sendApprovalRequestSubmittedNotification(EditAction|DeleteAction $action): void
@@ -246,38 +259,5 @@ class ApprovalOperationInterceptor
         $flowModel = ApprovalModels::flow();
 
         return $flowModel::forAction($record, $actionKey)->first();
-    }
-
-    /**
-     * @param  array<string, mixed>  $data
-     */
-    private function performDefaultEdit(Model $record, array $data, HasActions&HasSchemas $livewire, ?Table $table): void
-    {
-        $relationship = $table?->getRelationship();
-        $translatableContentDriver = $livewire->makeFilamentTranslatableContentDriver();
-
-        if ($relationship instanceof BelongsToMany) {
-            $pivot = $record->getRelationValue($relationship->getPivotAccessor());
-            $pivotColumns = $relationship->getPivotColumns();
-            $pivotData = Arr::only($data, $pivotColumns);
-
-            if (count($pivotColumns) > 0) {
-                if ($translatableContentDriver) {
-                    $translatableContentDriver->updateRecord($pivot, $pivotData);
-                } else {
-                    $pivot->update($pivotData);
-                }
-            }
-
-            $data = Arr::except($data, $pivotColumns);
-        }
-
-        if ($translatableContentDriver) {
-            $translatableContentDriver->updateRecord($record, $data);
-
-            return;
-        }
-
-        $record->update($data);
     }
 }

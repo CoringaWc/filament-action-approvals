@@ -8,6 +8,7 @@ use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalPayloadDiff;
 use CoringaWc\FilamentActionApprovals\Tests\TestCase;
+use Illuminate\Support\Arr;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 use Workbench\App\Filament\Resources\PurchaseOrders\Pages\ListPurchaseOrders;
@@ -135,6 +136,218 @@ it('falls back to native edit actions when no approval flow exists', function ()
         ->and($order->approvals()->count())->toBe(0);
 });
 
+it('keeps local edit action using callbacks when no approval flow exists', function (): void {
+    /** @var TestCase $test */
+    $test = $this;
+
+    $test->seed(DatabaseSeeder::class);
+
+    $submitter = User::query()->where('email', 'admin@filament-action-approvals.test')->firstOrFail();
+
+    $test->actingAs($submitter);
+
+    $order = PurchaseOrder::factory()->for($submitter, 'user')->create([
+        'title' => 'Original order',
+        'amount' => 1200,
+    ]);
+
+    Livewire::test(ListPurchaseOrders::class)
+        ->callTableAction('editWithLocalUsing', $order, [
+            'user_id' => $submitter->getKey(),
+            'title' => 'Updated order',
+            'description' => $order->getAttribute('description'),
+            'amount' => 1500,
+        ])
+        ->assertNotified(__('filament-actions::edit.single.notifications.saved.title'));
+
+    expect($order->refresh()->getAttribute('title'))->toBe('Local using: Updated order')
+        ->and($order->getAttribute('amount'))->toEqual('1500.00')
+        ->and($order->approvals()->count())->toBe(0);
+});
+
+it('intercepts owner foreign key changes before native edit persistence', function (): void {
+    /** @var TestCase $test */
+    $test = $this;
+
+    $test->seed(DatabaseSeeder::class);
+
+    $submitter = User::query()->where('email', 'admin@filament-action-approvals.test')->firstOrFail();
+    $approver = User::query()->where('email', 'manager@filament-action-approvals.test')->firstOrFail();
+    $newRequester = User::factory()->create();
+
+    $test->actingAs($submitter);
+
+    $test->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()], 'purchase-order.edit');
+
+    $order = PurchaseOrder::factory()->for($submitter, 'user')->create([
+        'title' => 'Original order',
+        'amount' => 1200,
+    ]);
+
+    Livewire::test(ListPurchaseOrders::class)
+        ->callTableAction('edit', $order, [
+            'user_id' => $newRequester->getKey(),
+            'title' => $order->getAttribute('title'),
+            'description' => $order->getAttribute('description'),
+            'amount' => $order->getAttribute('amount'),
+        ])
+        ->assertNotified(__('filament-action-approvals::approval.actions.approval_request_submitted'));
+
+    $approval = $order->approvals()->firstOrFail();
+
+    expect($order->refresh()->user_id)->toBe($submitter->getKey())
+        ->and(data_get($approval->metadata, 'operation.fields'))->toBe(['user_id'])
+        ->and(data_get($approval->metadata, 'payload.user_id'))->toBe($newRequester->getKey());
+
+    app(ApprovalEngine::class)->approve($approval->currentStepInstance(), $approver->getKey());
+
+    expect($order->refresh()->user_id)->toBe($newRequester->getKey());
+});
+
+it('does not let local using callbacks bypass intercepted edit approvals', function (): void {
+    /** @var TestCase $test */
+    $test = $this;
+
+    $test->seed(DatabaseSeeder::class);
+
+    $submitter = User::query()->where('email', 'admin@filament-action-approvals.test')->firstOrFail();
+    $approver = User::query()->where('email', 'manager@filament-action-approvals.test')->firstOrFail();
+
+    $test->actingAs($submitter);
+
+    $test->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()], 'purchase-order.edit');
+
+    $order = PurchaseOrder::factory()->for($submitter, 'user')->create([
+        'title' => 'Original order',
+        'amount' => 1200,
+    ]);
+
+    Livewire::test(ListPurchaseOrders::class)
+        ->callTableAction('editWithLocalUsing', $order, [
+            'user_id' => $submitter->getKey(),
+            'title' => 'Updated order',
+            'description' => $order->getAttribute('description'),
+            'amount' => 1500,
+        ])
+        ->assertNotified(__('filament-action-approvals::approval.actions.approval_request_submitted'));
+
+    $approval = $order->approvals()->firstOrFail();
+
+    expect($order->refresh()->getAttribute('title'))->toBe('Original order')
+        ->and(data_get($approval->metadata, 'payload.title'))->toBe('Updated order');
+
+    app(ApprovalEngine::class)->approve($approval->currentStepInstance(), $approver->getKey());
+
+    expect($order->refresh()->getAttribute('title'))->toBe('Updated order');
+});
+
+it('does not let local before hooks mutate intercepted edit approvals', function (): void {
+    /** @var TestCase $test */
+    $test = $this;
+
+    $test->seed(DatabaseSeeder::class);
+
+    $submitter = User::query()->where('email', 'admin@filament-action-approvals.test')->firstOrFail();
+    $approver = User::query()->where('email', 'manager@filament-action-approvals.test')->firstOrFail();
+
+    $test->actingAs($submitter);
+
+    $test->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()], 'purchase-order.edit');
+
+    $order = PurchaseOrder::factory()->for($submitter, 'user')->create([
+        'title' => 'Original order',
+        'amount' => 1200,
+        'status' => 'draft',
+    ]);
+
+    Livewire::test(ListPurchaseOrders::class)
+        ->callTableAction('editWithLocalBefore', $order, [
+            'user_id' => $submitter->getKey(),
+            'title' => 'Updated order',
+            'description' => $order->getAttribute('description'),
+            'amount' => 1500,
+        ])
+        ->assertNotified(__('filament-action-approvals::approval.actions.approval_request_submitted'));
+
+    $approval = $order->approvals()->firstOrFail();
+
+    expect($order->refresh()->status)->toBe('draft')
+        ->and($order->getAttribute('title'))->toBe('Original order')
+        ->and(data_get($approval->metadata, 'payload.title'))->toBe('Updated order');
+
+    app(ApprovalEngine::class)->approve($approval->currentStepInstance(), $approver->getKey());
+
+    expect($order->refresh()->status)->toBe('approved')
+        ->and($order->getAttribute('title'))->toBe('Updated order');
+});
+
+it('halts relationship-backed edit forms before relationships are persisted', function (): void {
+    /** @var TestCase $test */
+    $test = $this;
+
+    $test->seed(DatabaseSeeder::class);
+
+    $submitter = User::query()->where('email', 'admin@filament-action-approvals.test')->firstOrFail();
+    $approver = User::query()->where('email', 'manager@filament-action-approvals.test')->firstOrFail();
+
+    $test->actingAs($submitter);
+
+    $test->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()], 'purchase-order.edit');
+
+    $order = PurchaseOrder::factory()->for($submitter, 'user')->create([
+        'title' => 'Original order',
+        'amount' => 1200,
+    ]);
+    $detail = $order->detail()->create([
+        'vendor_name' => 'Original vendor',
+        'reference' => 'REF-001',
+    ]);
+    $line = $order->lines()->create([
+        'sku' => 'SKU-OLD',
+        'quantity' => 1,
+    ]);
+
+    Livewire::test(ListPurchaseOrders::class)
+        ->callTableAction('edit', $order, [
+            'user_id' => $submitter->getKey(),
+            'title' => 'Updated order',
+            'description' => $order->getAttribute('description'),
+            'amount' => 1500,
+            'vendor_name' => 'Changed vendor',
+            'reference' => 'REF-002',
+            'lines' => [
+                "record-{$line->getKey()}" => [
+                    'sku' => 'SKU-UPDATED',
+                    'quantity' => 3,
+                ],
+                'new-line' => [
+                    'sku' => 'SKU-NEW',
+                    'quantity' => 2,
+                ],
+            ],
+        ])
+        ->assertNotified(__('filament-action-approvals::approval.actions.approval_request_submitted'));
+
+    $approval = $order->approvals()->firstOrFail();
+
+    expect($order->refresh()->getAttribute('title'))->toBe('Original order')
+        ->and($detail->refresh()->vendor_name)->toBe('Original vendor')
+        ->and($detail->reference)->toBe('REF-001')
+        ->and($line->refresh()->sku)->toBe('SKU-OLD')
+        ->and($line->quantity)->toBe(1)
+        ->and($order->lines()->count())->toBe(1)
+        ->and(data_get($approval->metadata, 'payload.title'))->toBe('Updated order')
+        ->and(data_get($approval->metadata, 'payload.vendor_name'))->toBeNull()
+        ->and(data_get($approval->metadata, 'payload.lines'))->toBeNull();
+
+    app(ApprovalEngine::class)->approve($approval->currentStepInstance(), $approver->getKey());
+
+    expect($order->refresh()->getAttribute('title'))->toBe('Updated order')
+        ->and($detail->refresh()->vendor_name)->toBe('Original vendor')
+        ->and($line->refresh()->sku)->toBe('SKU-OLD')
+        ->and($order->lines()->count())->toBe(1);
+});
+
 it('falls back to native delete actions when no approval flow exists', function (): void {
     /** @var TestCase $test */
     $test = $this;
@@ -185,6 +398,60 @@ it('safe fails intercepted edit actions when no allowlisted field changed', func
         ->assertNotified(__('filament-action-approvals::approval.actions.no_changes_to_approve'));
 
     expect($order->approvals()->count())->toBe(0);
+});
+
+it('keeps safe sensitive-looking words and denies real sensitive operation payload values', function (): void {
+    /** @var TestCase $test */
+    $test = $this;
+
+    $test->seed(DatabaseSeeder::class);
+
+    $submitter = User::query()->where('email', 'admin@filament-action-approvals.test')->firstOrFail();
+    $approver = User::query()->where('email', 'manager@filament-action-approvals.test')->firstOrFail();
+
+    $test->actingAs($submitter);
+
+    $test->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()], 'purchase-order.edit');
+
+    $safeOrder = PurchaseOrder::factory()->for($submitter, 'user')->create([
+        'description' => 'Original description',
+    ]);
+
+    Livewire::test(ListPurchaseOrders::class)
+        ->callTableAction('edit', $safeOrder, [
+            'user_id' => $submitter->getKey(),
+            'title' => $safeOrder->getAttribute('title'),
+            'description' => 'Secretaria Municipal de Saúde',
+            'amount' => $safeOrder->getAttribute('amount'),
+        ])
+        ->assertNotified(__('filament-action-approvals::approval.actions.approval_request_submitted'));
+
+    $safeApproval = $safeOrder->approvals()->firstOrFail();
+
+    expect(data_get($safeApproval->metadata, 'payload.description'))->toBe('Secretaria Municipal de Saúde');
+
+    $sensitiveOrder = PurchaseOrder::factory()->for($submitter, 'user')->create([
+        'title' => 'Sensitive order',
+        'description' => 'Original description',
+    ]);
+
+    Livewire::test(ListPurchaseOrders::class)
+        ->callTableAction('edit', $sensitiveOrder, [
+            'user_id' => $submitter->getKey(),
+            'title' => 'Sensitive order updated',
+            'description' => 'apiKey=abc123 privateKey=def456 CPF 123.456.789-09',
+            'amount' => $sensitiveOrder->getAttribute('amount'),
+        ])
+        ->assertNotified(__('filament-action-approvals::approval.actions.approval_request_submitted'));
+
+    $sensitiveApproval = $sensitiveOrder->approvals()->firstOrFail();
+    $metadataText = collect(Arr::dot($sensitiveApproval->metadata ?? []))->implode(' ');
+
+    expect(data_get($sensitiveApproval->metadata, 'payload.title'))->toBe('Sensitive order updated')
+        ->and(data_get($sensitiveApproval->metadata, 'payload.description'))->toBeNull()
+        ->and($metadataText)->not->toContain('abc123')
+        ->and($metadataText)->not->toContain('def456')
+        ->and($metadataText)->not->toContain('123.456.789-09');
 });
 
 it('safe fails intercepted edit actions when a matching approval is already pending', function (): void {

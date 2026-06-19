@@ -302,6 +302,8 @@ When `approvableActions()` is defined, the `SubmitForApprovalAction` will show a
 
 Enable `interceptOperations()` on the panel and declare model operations with `ApprovableOperation`. When a matching active flow exists, native Filament `EditAction` and `DeleteAction` submit an approval request instead of mutating the record. If no flow exists, the native action continues normally.
 
+The interceptor runs before Filament persists relationship-backed form components, so native `relationship()` layouts and repeaters will not write related records while an approval request is being created. The default operation payload is intentionally simple and dirty-only for owner model fields declared in `fields`; if you need relationship payloads, override the model operation payload/apply methods and keep that metadata explicitly scoped.
+
 ```php
 use CoringaWc\FilamentActionApprovals\Attributes\ApprovableOperation;
 use CoringaWc\FilamentActionApprovals\Concerns\HasApprovals;

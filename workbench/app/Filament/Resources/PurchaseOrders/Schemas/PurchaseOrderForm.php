@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Workbench\App\Filament\Resources\PurchaseOrders\Schemas;
 
 use CoringaWc\FilamentActionApprovals\Support\TranslatableSelect;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Workbench\App\Models\User;
 
@@ -36,6 +38,19 @@ class PurchaseOrderForm
                 ->numeric()
                 ->prefix('R$')
                 ->required(),
+            Section::make('Details')
+                ->relationship('detail')
+                ->schema([
+                    TextInput::make('vendor_name'),
+                    TextInput::make('reference'),
+                ]),
+            Repeater::make('lines')
+                ->relationship()
+                ->schema([
+                    TextInput::make('sku'),
+                    TextInput::make('quantity')
+                        ->numeric(),
+                ]),
         ]);
     }
 }

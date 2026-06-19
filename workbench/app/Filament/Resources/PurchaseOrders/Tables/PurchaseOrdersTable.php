@@ -10,6 +10,7 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Workbench\App\Models\PurchaseOrder;
 
 class PurchaseOrdersTable
 {
@@ -36,6 +37,18 @@ class PurchaseOrdersTable
             ])
             ->recordActions([
                 EditAction::make(),
+                EditAction::make('editWithLocalUsing')
+                    ->using(function (array $data, PurchaseOrder $record): void {
+                        $record->update([
+                            'title' => 'Local using: '.$data['title'],
+                            'description' => $data['description'] ?? null,
+                            'amount' => $data['amount'],
+                        ]);
+                    }),
+                EditAction::make('editWithLocalBefore')
+                    ->before(function (PurchaseOrder $record): void {
+                        $record->update(['status' => 'before-ran']);
+                    }),
                 DeleteAction::make(),
             ]);
     }
