@@ -145,7 +145,7 @@ class ApprovalOperationInterceptor
 
         $this->sendApprovalRequestSubmittedNotification($action);
 
-        $action->halt();
+        $action->cancel();
     }
 
     private function processDeleteAction(DeleteAction $action, Model $record): void
@@ -185,7 +185,7 @@ class ApprovalOperationInterceptor
 
         $this->sendApprovalRequestSubmittedNotification($action);
 
-        $action->halt();
+        $action->cancel();
     }
 
     private function sendApprovalRequestSubmittedNotification(EditAction|DeleteAction $action): void

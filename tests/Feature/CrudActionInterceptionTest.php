@@ -42,7 +42,8 @@ it('intercepts native edit actions and submits changed allowlisted fields for ap
             'description' => 'Reviewer note with CPF 123.456.789-09',
             'amount' => 1500,
         ])
-        ->assertNotified(__('filament-action-approvals::approval.actions.approval_request_submitted'));
+        ->assertNotified(__('filament-action-approvals::approval.actions.approval_request_submitted'))
+        ->assertActionNotMounted();
 
     $order->refresh();
 
@@ -90,7 +91,8 @@ it('intercepts native delete actions and only deletes after approval is complete
 
     Livewire::test(ListPurchaseOrders::class)
         ->callTableAction('delete', $order)
-        ->assertNotified();
+        ->assertNotified()
+        ->assertActionNotMounted();
 
     expect(PurchaseOrder::query()->find($orderKey))->toBeInstanceOf(PurchaseOrder::class)
         ->and($order->approvals()->count())->toBe(1);
