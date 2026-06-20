@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace CoringaWc\FilamentActionApprovals\Concerns;
 
 use BackedEnum;
+use CoringaWc\FilamentActionApprovals\Attributes\Approvable;
 use CoringaWc\FilamentActionApprovals\Attributes\ApprovableActions;
 use CoringaWc\FilamentActionApprovals\Attributes\ApprovableOperation;
+use CoringaWc\FilamentActionApprovals\Contracts\DefinesApprovalAction;
 use CoringaWc\FilamentActionApprovals\Enums\ActionType;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalOperation;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
@@ -15,6 +17,7 @@ use CoringaWc\FilamentActionApprovals\Models\ApprovalAction;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalDefinition;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalOperationPayload;
 use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
@@ -99,6 +102,12 @@ trait HasApprovals
      */
     public static function approvableActions(): array
     {
+        $approvableAttribute = static::resolveApprovableAttribute();
+
+        if ($approvableAttribute instanceof Approvable) {
+            return static::resolveApprovableActionsFromAttributes();
+        }
+
         // #[ApprovableActions] attribute (enum class-string or array)
         $attribute = static::resolveApprovableActionsAttribute();
 
@@ -138,6 +147,12 @@ trait HasApprovals
      */
     public static function approvableActionsEnumClass(): ?string
     {
+        $approvableAttribute = static::resolveApprovableAttribute();
+
+        if ($approvableAttribute instanceof Approvable) {
+            return $approvableAttribute->actions;
+        }
+
         $attribute = static::resolveApprovableActionsAttribute();
 
         if ($attribute !== null && is_string($attribute->actions) && enum_exists($attribute->actions)) {
@@ -153,6 +168,23 @@ trait HasApprovals
      * @var array<class-string, ?ApprovableActions>
      */
     private static array $approvableActionsAttributeCache = [];
+
+    /**
+     * @var array<class-string, ?Approvable>
+     */
+    private static array $approvableAttributeCache = [];
+
+    protected static function resolveApprovableAttribute(): ?Approvable
+    {
+        if (array_key_exists(static::class, self::$approvableAttributeCache)) {
+            return self::$approvableAttributeCache[static::class];
+        }
+
+        $ref = new ReflectionClass(static::class);
+        $attrs = $ref->getAttributes(Approvable::class);
+
+        return self::$approvableAttributeCache[static::class] = $attrs !== [] ? $attrs[0]->newInstance() : null;
+    }
 
     protected static function resolveApprovableActionsAttribute(): ?ApprovableActions
     {
@@ -412,7 +444,12 @@ trait HasApprovals
             return app(ApprovalOperationPayload::class)->deletePayload();
         }
 
-        return app(ApprovalOperationPayload::class)->editPayload($this, $data, $definition->fields, $definition->relationships);
+        return app(ApprovalOperationPayload::class)->editPayload(
+            $this,
+            $data,
+            $this->approvalFieldsForDefinition($definition, $operation, $data),
+            $definition->relationships,
+        );
     }
 
     /**
@@ -516,7 +553,12 @@ trait HasApprovals
                 'fields' => [],
                 'relationships' => [],
             ]
-            : app(ApprovalOperationPayload::class)->editPayloadData($this, $data, $definition->fields, $definition->relationships);
+            : app(ApprovalOperationPayload::class)->editPayloadData(
+                $this,
+                $data,
+                $this->approvalFieldsForDefinition($definition, $operation, $data),
+                $definition->relationships,
+            );
 
         return [
             'action' => $definition->normalizedActionKey($this),
@@ -547,7 +589,12 @@ trait HasApprovals
             return [];
         }
 
-        return app(ApprovalOperationPayload::class)->editFields($this, $data, $definition->fields, $definition->relationships);
+        return app(ApprovalOperationPayload::class)->editFields(
+            $this,
+            $data,
+            $this->approvalFieldsForDefinition($definition, $operation, $data),
+            $definition->relationships,
+        );
     }
 
     /**
@@ -567,7 +614,12 @@ trait HasApprovals
             return [];
         }
 
-        return app(ApprovalOperationPayload::class)->editDiff($this, $data, $definition->fields, $definition->relationships);
+        return app(ApprovalOperationPayload::class)->editDiff(
+            $this,
+            $data,
+            $this->approvalFieldsForDefinition($definition, $operation, $data),
+            $definition->relationships,
+        );
     }
 
     protected function approvalOperationDefinition(ApprovalOperation|string $operation): ?ApprovableOperation
@@ -595,9 +647,70 @@ trait HasApprovals
             return true;
         }
 
-        $payloadData = app(ApprovalOperationPayload::class)->editPayloadData($this, $data, $definition->fields, $definition->relationships);
+        $payloadData = app(ApprovalOperationPayload::class)->editPayloadData(
+            $this,
+            $data,
+            $this->approvalFieldsForDefinition($definition, $operation, $data),
+            $definition->relationships,
+        );
 
         return $payloadData['payload'] !== [];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return list<string>
+     */
+    protected function approvalFieldsForDefinition(ApprovableOperation $definition, ApprovalOperation|string $operation, array $data): array
+    {
+        if ($definition->fields !== [] || ApprovalOperation::fromOperation($operation) !== ApprovalOperation::Update) {
+            return $definition->fields;
+        }
+
+        return $this->defaultApprovalFieldsForData($data);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return list<string>
+     */
+    protected function defaultApprovalFieldsForData(array $data): array
+    {
+        $fillable = $this->getFillable();
+
+        if ($fillable !== []) {
+            return array_values(collect($fillable)
+                ->filter(fn (string $field): bool => Arr::has($data, $field) && $this->isDefaultApprovableField($field, Arr::get($data, $field)))
+                ->values()
+                ->all());
+        }
+
+        if ($this->getGuarded() === ['*']) {
+            return [];
+        }
+
+        return array_values(collect($data)
+            ->filter(fn (mixed $value, string $field): bool => $this->isDefaultApprovableField($field, $value))
+            ->keys()
+            ->values()
+            ->all());
+    }
+
+    private function isDefaultApprovableField(string $field, mixed $value): bool
+    {
+        if (is_array($value) || blank($field)) {
+            return false;
+        }
+
+        $baseField = Str::before($field, '.');
+        $blockedFields = array_filter([
+            $this->getKeyName(),
+            $this->getCreatedAtColumn(),
+            $this->getUpdatedAtColumn(),
+            method_exists($this, 'getDeletedAtColumn') ? $this->getDeletedAtColumn() : null,
+        ]);
+
+        return ! in_array($baseField, $blockedFields, true);
     }
 
     protected function approvalOperationIsPayloadless(ApprovalOperation|string $operation): bool
@@ -626,7 +739,118 @@ trait HasApprovals
             ->values()
             ->all();
 
+        $approvableAttribute = static::resolveApprovableAttribute();
+
+        if ($approvableAttribute instanceof Approvable) {
+            if ($attributes !== [] || static::resolveApprovableActionsAttribute() instanceof ApprovableActions) {
+                throw new InvalidArgumentException('A model cannot mix #[Approvable] with legacy approval declaration attributes.');
+            }
+
+            $attributes = static::approvalOperationDefinitionsFromEnum($approvableAttribute->actions);
+        }
+
+        if ($attributes === []) {
+            $attributes = static::defaultApprovalOperationDefinitions();
+        }
+
+        static::ensureApprovalOperationDefinitionsAreDeterministic($attributes);
+
         return self::$approvalOperationAttributeCache[static::class] = $attributes;
+    }
+
+    /**
+     * @param  class-string<BackedEnum&DefinesApprovalAction>  $enumClass
+     * @return list<ApprovableOperation>
+     */
+    protected static function approvalOperationDefinitionsFromEnum(string $enumClass): array
+    {
+        if (! enum_exists($enumClass)) {
+            throw new InvalidArgumentException('The approvable actions class must be a backed enum.');
+        }
+
+        /** @var list<BackedEnum> $cases */
+        $cases = $enumClass::cases();
+
+        return array_values(collect($cases)
+            ->map(function (BackedEnum $case): ApprovableOperation {
+                if (! $case instanceof DefinesApprovalAction) {
+                    throw new InvalidArgumentException('Every approvable action enum case must implement DefinesApprovalAction.');
+                }
+
+                return $case->approval()->forAction($case);
+            })
+            ->filter(fn (ApprovableOperation $definition): bool => $definition->enabled)
+            ->values()
+            ->all());
+    }
+
+    /**
+     * @return list<ApprovableOperation>
+     */
+    protected static function defaultApprovalOperationDefinitions(): array
+    {
+        return [
+            new ApprovalDefinition(operation: ApprovalOperation::Update, action: 'edit'),
+            new ApprovalDefinition(operation: ApprovalOperation::Delete, action: 'delete'),
+            new ApprovalDefinition(operation: ApprovalOperation::Restore, action: 'restore'),
+            new ApprovalDefinition(operation: ApprovalOperation::ForceDelete, action: 'force-delete'),
+        ];
+    }
+
+    /**
+     * @param  list<ApprovableOperation>  $definitions
+     */
+    protected static function ensureApprovalOperationDefinitionsAreDeterministic(array $definitions): void
+    {
+        $actions = [];
+        $updateFields = [];
+        $updateRelationships = [];
+
+        foreach ($definitions as $definition) {
+            if (! $definition->enabled) {
+                continue;
+            }
+
+            $action = $definition->normalizedActionKey(static::class);
+
+            if (isset($actions[$action])) {
+                throw new InvalidArgumentException("Duplicate approval action key [{$action}] for [".static::class.'].');
+            }
+
+            $actions[$action] = true;
+
+            if (! $definition->matchesOperation(ApprovalOperation::Update)) {
+                continue;
+            }
+
+            foreach ($definition->fields as $field) {
+                if (isset($updateFields[$field])) {
+                    throw new InvalidArgumentException("Ambiguous approval update field [{$field}] for [".static::class.'].');
+                }
+
+                $updateFields[$field] = true;
+            }
+
+            foreach ($definition->relationships as $relationshipName => $relationshipDefinition) {
+                $fields = array_is_list($relationshipDefinition)
+                    ? $relationshipDefinition
+                    : ($relationshipDefinition['fields'] ?? []);
+
+                foreach (is_array($fields) ? $fields : [] as $field) {
+                    if (! is_string($field)) {
+                        continue;
+                    }
+
+                    $path = $relationshipName.'.'.$field;
+
+                    if (isset($updateRelationships[$path])) {
+                        throw new InvalidArgumentException("Ambiguous approval relationship field [{$path}] for [".static::class.'].');
+                    }
+
+                    $updateRelationships[$path] = true;
+                }
+            }
+        }
     }
 
     // ──────────────────────────────────────────────────────────────

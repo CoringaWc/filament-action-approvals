@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use CoringaWc\FilamentActionApprovals\Attributes\Approvable;
 use CoringaWc\FilamentActionApprovals\Attributes\ApprovableAction;
 use CoringaWc\FilamentActionApprovals\Attributes\ApprovableActions;
 use CoringaWc\FilamentActionApprovals\Attributes\ApprovableDelete;
@@ -10,9 +11,11 @@ use CoringaWc\FilamentActionApprovals\Attributes\ApprovableOperation;
 use CoringaWc\FilamentActionApprovals\Attributes\ApprovableRestore;
 use CoringaWc\FilamentActionApprovals\Attributes\ApprovableUpdate;
 use CoringaWc\FilamentActionApprovals\Concerns\HasApprovals;
+use CoringaWc\FilamentActionApprovals\Contracts\DefinesApprovalAction;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalOperation;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use CoringaWc\FilamentActionApprovals\Support\ApprovableActionLabel;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalDefinition;
 use Filament\Support\Contracts\HasLabel;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\ValidationException;
@@ -67,6 +70,64 @@ it('derives approvable action catalog from action attributes when explicit catal
         ->toBe(AgencyActionApprovalEnum::class);
 });
 
+it('supports enum-first approval definitions through a single model attribute', function (): void {
+    $model = (new EnumFirstAgency)->forceFill(['name' => 'Original agency']);
+    $actions = EnumFirstAgency::approvableActions();
+
+    expect($actions)
+        ->toHaveKey('agency.profile.update')
+        ->toHaveKey('agency.fiscal-data.update')
+        ->toHaveKey('agency.delete')
+        ->and($actions['agency.profile.update'])->toBe('Atualizar perfil')
+        ->and(EnumFirstAgency::approvableActionsEnumClass())->toBe(EnumFirstAgencyAction::class)
+        ->and($model->approvalActionKeyForOperation(ApprovalOperation::Update))->toBe('agency.profile.update')
+        ->and($model->approvalActionKeyForOperation(ApprovalOperation::Delete))->toBe('agency.delete')
+        ->and($model->approvalOperationDefinitionForData(ApprovalOperation::Update, ['name' => 'Changed agency'])?->normalizedActionKey($model))
+        ->toBe('agency.profile.update')
+        ->and($model->approvalPayloadForOperation(ApprovalOperation::Update, ['name' => 'Changed agency']))
+        ->toBe(['name' => 'Changed agency']);
+});
+
+it('derives conventional crud definitions when a model only uses HasApprovals', function (): void {
+    $model = (new DefaultCrudOrder)->forceFill([
+        'title' => 'Original order',
+        'amount' => 100,
+        'password' => 'old-secret',
+    ]);
+
+    expect(DefaultCrudOrder::approvableActions())
+        ->toHaveKey('default-crud-order.edit')
+        ->toHaveKey('default-crud-order.delete')
+        ->toHaveKey('default-crud-order.restore')
+        ->toHaveKey('default-crud-order.force-delete')
+        ->and($model->approvalActionKeyForOperation(ApprovalOperation::Update))->toBe('default-crud-order.edit')
+        ->and($model->approvalActionKeyForOperation(ApprovalOperation::Delete))->toBe('default-crud-order.delete')
+        ->and($model->approvalOperationDefinitionForData(ApprovalOperation::Update, [
+            'id' => 99,
+            'title' => 'Updated order',
+            'amount' => 150,
+            'description' => ['ignored' => true],
+            'password' => 'new-secret',
+        ])?->normalizedActionKey($model))->toBe('default-crud-order.edit')
+        ->and($model->approvalPayloadForOperation(ApprovalOperation::Update, [
+            'id' => 99,
+            'title' => 'Updated order',
+            'amount' => 150,
+            'description' => ['ignored' => true],
+            'password' => 'new-secret',
+        ]))->toBe([
+            'title' => 'Updated order',
+            'amount' => 150,
+        ]);
+});
+
+it('fails closed when enum-first declarations are ambiguous or mixed with legacy attributes', function (): void {
+    expect(fn (): array => AmbiguousEnumFirstAgency::approvableActions())
+        ->toThrow(InvalidArgumentException::class)
+        ->and(fn (): array => MixedEnumFirstAgency::approvableActions())
+        ->toThrow(InvalidArgumentException::class);
+});
+
 it('keeps explicit ApprovableActions catalog precedence over derived attributes', function (): void {
     expect(ExplicitActionsAgency::approvableActions())
         ->toBe(['explicit.update' => 'Explicit update'])
@@ -103,7 +164,7 @@ it('selects action declarations by dirty governed fields and fails closed on amb
     $ambiguous = (new ActionCentricAmbiguousAgencyModel)->forceFill(['name' => 'Original']);
 
     expect(fn () => $ambiguous->approvalOperationDefinitionForData(ApprovalOperation::Update, ['name' => 'Changed']))
-        ->toThrow(ValidationException::class);
+        ->toThrow(InvalidArgumentException::class);
 });
 
 it('accepts both new action and legacy actionKey engine submissions', function (): void {
@@ -176,12 +237,88 @@ enum AgencyActionApprovalEnum: string implements HasLabel
     }
 }
 
+enum EnumFirstAgencyAction: string implements DefinesApprovalAction, HasLabel
+{
+    case ProfileUpdate = 'profile.update';
+    case FiscalDataUpdate = 'fiscal-data.update';
+    case Delete = 'delete';
+
+    public function approval(): ApprovalDefinition
+    {
+        return match ($this) {
+            self::ProfileUpdate => ApprovalDefinition::update(fields: ['name']),
+            self::FiscalDataUpdate => ApprovalDefinition::manual(),
+            self::Delete => ApprovalDefinition::delete(),
+        };
+    }
+
+    public function getLabel(): string
+    {
+        return match ($this) {
+            self::ProfileUpdate => 'Atualizar perfil',
+            self::FiscalDataUpdate => 'Atualizar dados fiscais',
+            self::Delete => 'Excluir agência',
+        };
+    }
+}
+
+enum AmbiguousEnumFirstAgencyAction: string implements DefinesApprovalAction
+{
+    case LocalProfileUpdate = 'profile.update';
+    case NormalizedProfileUpdate = 'agency.profile.update';
+
+    public function approval(): ApprovalDefinition
+    {
+        return ApprovalDefinition::update(fields: ['name']);
+    }
+}
+
 #[ApprovableUpdate(action: AgencyActionApprovalEnum::ProfileUpdate, fields: ['name'])]
 #[ApprovableDelete(AgencyActionApprovalEnum::Delete)]
 #[ApprovableAction(AgencyActionApprovalEnum::FiscalDataUpdate)]
 #[ApprovableAction(AgencyActionApprovalEnum::ContactsUpdate)]
 #[ApprovableAction(AgencyActionApprovalEnum::StatusChange)]
 class Agency extends Model
+{
+    use HasApprovals;
+
+    protected $table = 'purchase_orders';
+
+    protected $guarded = [];
+}
+
+#[Approvable(EnumFirstAgencyAction::class, namespace: 'agency')]
+class EnumFirstAgency extends Model
+{
+    use HasApprovals;
+
+    protected $table = 'purchase_orders';
+
+    protected $guarded = [];
+}
+
+#[Approvable(AmbiguousEnumFirstAgencyAction::class, namespace: 'agency')]
+class AmbiguousEnumFirstAgency extends Model
+{
+    use HasApprovals;
+
+    protected $table = 'purchase_orders';
+
+    protected $guarded = [];
+}
+
+#[Approvable(EnumFirstAgencyAction::class, namespace: 'agency')]
+#[ApprovableUpdate(action: AgencyActionApprovalEnum::ProfileUpdate, fields: ['name'])]
+class MixedEnumFirstAgency extends Model
+{
+    use HasApprovals;
+
+    protected $table = 'purchase_orders';
+
+    protected $guarded = [];
+}
+
+class DefaultCrudOrder extends Model
 {
     use HasApprovals;
 

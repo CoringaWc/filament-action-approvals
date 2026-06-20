@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace CoringaWc\FilamentActionApprovals\Support;
 
 use BackedEnum;
+use CoringaWc\FilamentActionApprovals\Attributes\Approvable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Str;
+use ReflectionClass;
 
 final class ApprovalActionKey
 {
@@ -56,6 +58,19 @@ final class ApprovalActionKey
     {
         $modelInstance = self::modelInstance($model);
         $modelClass = $modelInstance instanceof Model ? $modelInstance::class : self::modelClass($model);
+
+        if ($modelClass !== null) {
+            $reflection = new ReflectionClass($modelClass);
+            $attributes = $reflection->getAttributes(Approvable::class);
+
+            if ($attributes !== []) {
+                $namespace = $attributes[0]->newInstance()->namespace;
+
+                if (is_string($namespace) && filled($namespace)) {
+                    return trim($namespace, '.');
+                }
+            }
+        }
 
         if ($modelInstance instanceof Model && method_exists($modelInstance, 'approvalActionNamespace')) {
             $namespace = $modelInstance->approvalActionNamespace();
