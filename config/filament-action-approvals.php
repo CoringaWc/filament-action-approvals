@@ -176,6 +176,7 @@ return [
     */
     'operations' => [
         'intercept' => false,
+        'modal_callout' => true,
     ],
 
     /*

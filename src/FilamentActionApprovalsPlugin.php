@@ -36,6 +36,8 @@ class FilamentActionApprovalsPlugin implements Plugin
 
     protected ?bool $interceptsOperations = null;
 
+    protected ?bool $hasOperationModalCallout = null;
+
     /** @var array<class-string>|null */
     protected ?array $approverResolvers = null;
 
@@ -90,6 +92,13 @@ class FilamentActionApprovalsPlugin implements Plugin
     public function interceptOperations(bool $enabled = true): static
     {
         $this->interceptsOperations = $enabled;
+
+        return $this;
+    }
+
+    public function operationModalCallout(bool $enabled = true): static
+    {
+        $this->hasOperationModalCallout = $enabled;
 
         return $this;
     }
@@ -270,6 +279,12 @@ class FilamentActionApprovalsPlugin implements Plugin
             ?? (bool) config('filament-action-approvals.operations.intercept', false);
     }
 
+    protected function shouldShowOperationModalCallout(): bool
+    {
+        return $this->hasOperationModalCallout
+            ?? (bool) config('filament-action-approvals.operations.modal_callout', true);
+    }
+
     public function interceptsOperations(): bool
     {
         return $this->shouldInterceptOperations();
@@ -278,6 +293,12 @@ class FilamentActionApprovalsPlugin implements Plugin
     public static function shouldInterceptOperationsForCurrentPanel(): bool
     {
         return static::current()?->interceptsOperations() ?? false;
+    }
+
+    public static function shouldShowOperationModalCalloutForCurrentPanel(): bool
+    {
+        return static::current()?->shouldShowOperationModalCallout()
+            ?? (bool) config('filament-action-approvals.operations.modal_callout', true);
     }
 
     /**

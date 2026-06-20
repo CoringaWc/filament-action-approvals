@@ -39,7 +39,20 @@ it('keeps comment and delegate disabled in the package default config', function
 
     expect($config['actions']['comment'])->toBeFalse()
         ->and($config['actions']['delegate'])->toBeFalse()
+        ->and($config['operations']['intercept'])->toBeFalse()
+        ->and($config['operations']['modal_callout'])->toBeTrue()
         ->and($config['widgets']['enabled'])->toBeNull();
+});
+
+it('lets panel plugins override operation modal callouts', function (): void {
+    config()->set('filament-action-approvals.operations.modal_callout', false);
+
+    $plugin = new FilamentActionApprovalsPlugin;
+    $method = new ReflectionMethod($plugin, 'shouldShowOperationModalCallout');
+
+    expect($method->invoke($plugin))->toBeFalse()
+        ->and($method->invoke($plugin->operationModalCallout()))->toBeTrue()
+        ->and($method->invoke($plugin->operationModalCallout(false)))->toBeFalse();
 });
 
 it('keeps global panel widgets disabled by default when the dedicated dashboard is enabled', function (): void {

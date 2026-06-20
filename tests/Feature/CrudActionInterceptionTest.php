@@ -8,6 +8,7 @@ use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalPayloadDiff;
 use CoringaWc\FilamentActionApprovals\Tests\TestCase;
+use Filament\Schemas\Components\Callout;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 use Workbench\App\Filament\Resources\PurchaseOrders\Pages\ListPurchaseOrders;
@@ -73,6 +74,80 @@ it('intercepts native edit actions and submits changed allowlisted fields for ap
         ->and(data_get($approval->metadata, 'applied_at'))->not->toBeNull();
 });
 
+it('renders the approval request callout as a schema component for intercepted edit actions when enabled', function (): void {
+    /** @var TestCase $test */
+    $test = $this;
+
+    $test->seed(DatabaseSeeder::class);
+
+    $submitter = User::query()->where('email', 'admin@filament-action-approvals.test')->firstOrFail();
+    $approver = User::query()->where('email', 'manager@filament-action-approvals.test')->firstOrFail();
+
+    $test->actingAs($submitter);
+
+    $test->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()], 'purchase-order.edit');
+
+    $order = PurchaseOrder::factory()->for($submitter, 'user')->create([
+        'title' => 'Original order',
+        'amount' => 1200,
+    ]);
+
+    Livewire::test(ListPurchaseOrders::class)
+        ->mountTableAction('edit', $order)
+        ->assertSchemaComponentVisible('approval-request-callout', 'mountedActionSchema0')
+        ->assertSchemaComponentExists(
+            'approval-request-callout',
+            'mountedActionSchema0',
+            fn (Callout $component): bool => $component->getStatus() === 'warning'
+                && $component->getHeading() === __('filament-action-approvals::approval.modal.approval_request_callout.heading')
+                && $component->getDescription() === __('filament-action-approvals::approval.modal.approval_request_callout.description'),
+        )
+        ->assertSchemaComponentExists('title', 'mountedActionSchema0')
+        ->assertSchemaComponentExists('amount', 'mountedActionSchema0')
+        ->assertMountedActionModalDontSee('<div class="rounded-xl border border-warning-200', escape: false)
+        ->assertMountedActionModalSee(__('filament-action-approvals::approval.modal.approval_request_callout.heading'));
+});
+
+it('does not inject the operation approval callout when operation modal callouts are disabled', function (): void {
+    /** @var TestCase $test */
+    $test = $this;
+
+    config()->set('filament-action-approvals.operations.modal_callout', false);
+
+    $test->seed(DatabaseSeeder::class);
+
+    $submitter = User::query()->where('email', 'admin@filament-action-approvals.test')->firstOrFail();
+    $approver = User::query()->where('email', 'manager@filament-action-approvals.test')->firstOrFail();
+
+    $test->actingAs($submitter);
+
+    $test->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()], 'purchase-order.edit');
+
+    $order = PurchaseOrder::factory()->for($submitter, 'user')->create([
+        'title' => 'Original order',
+        'amount' => 1200,
+    ]);
+
+    Livewire::test(ListPurchaseOrders::class)
+        ->mountTableAction('edit', $order)
+        ->assertSchemaComponentDoesNotExist('approval-request-callout', 'mountedActionSchema0')
+        ->assertSchemaComponentExists('title', 'mountedActionSchema0')
+        ->assertMountedActionModalDontSee(__('filament-action-approvals::approval.modal.approval_request_callout.heading'));
+
+    Livewire::test(ListPurchaseOrders::class)
+        ->callTableAction('edit', $order, [
+            'user_id' => $submitter->getKey(),
+            'title' => 'Updated order',
+            'description' => $order->getAttribute('description'),
+            'amount' => 1500,
+        ])
+        ->assertNotified(__('filament-action-approvals::approval.actions.approval_request_submitted'))
+        ->assertNotNotified(__('filament-actions::edit.single.notifications.saved.title'));
+
+    expect($order->refresh()->title)->toBe('Original order')
+        ->and($order->approvals()->count())->toBe(1);
+});
+
 it('intercepts native delete actions and only deletes after approval is completed', function (): void {
     /** @var TestCase $test */
     $test = $this;
@@ -107,6 +182,33 @@ it('intercepts native delete actions and only deletes after approval is complete
     expect(PurchaseOrder::query()->find($orderKey))->toBeNull()
         ->and(data_get($approval->refresh()->metadata, 'operation.applied_at'))->not->toBeNull()
         ->and(data_get($approval->metadata, 'applied_at'))->not->toBeNull();
+});
+
+it('uses schema callouts for intercepted delete action modals when enabled', function (): void {
+    /** @var TestCase $test */
+    $test = $this;
+
+    $test->seed(DatabaseSeeder::class);
+
+    $submitter = User::query()->where('email', 'admin@filament-action-approvals.test')->firstOrFail();
+    $approver = User::query()->where('email', 'manager@filament-action-approvals.test')->firstOrFail();
+
+    $test->actingAs($submitter);
+
+    $test->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()], 'purchase-order.delete');
+
+    $order = PurchaseOrder::factory()->for($submitter, 'user')->create();
+
+    Livewire::test(ListPurchaseOrders::class)
+        ->mountTableAction('delete', $order)
+        ->assertSchemaComponentVisible('approval-request-callout', 'mountedActionSchema0')
+        ->assertSchemaComponentExists(
+            'approval-request-callout',
+            'mountedActionSchema0',
+            fn (Callout $component): bool => $component->getStatus() === 'warning',
+        )
+        ->assertMountedActionModalDontSee('<div class="rounded-xl border border-warning-200', escape: false)
+        ->assertMountedActionModalSee(__('filament-action-approvals::approval.modal.approval_request_callout.heading'));
 });
 
 it('falls back to native edit actions when no approval flow exists', function (): void {

@@ -13,8 +13,10 @@ final class ApprovalRequestCallout
     public static function make(?string $heading = null, ?string $description = null): Callout
     {
         return Callout::make($heading ?? __('filament-action-approvals::approval.modal.approval_request_callout.heading'))
+            ->key('approval-request-callout')
             ->description($description ?? __('filament-action-approvals::approval.modal.approval_request_callout.description'))
             ->warning()
+            ->columnSpanFull()
             ->hidden(fn (): bool => FilamentActionApprovalsPlugin::canApplyDirectly(CurrentPanelUser::id()));
     }
 }

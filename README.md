@@ -114,6 +114,7 @@ return [
     // Intercept native Filament operations when models declare approval operations
     'operations' => [
         'intercept' => false,
+        'modal_callout' => true,
     ],
 
     // Broadcasting — opt-in per event (all disabled by default)
@@ -184,6 +185,7 @@ public function panel(Panel $panel): Panel
                 ->dashboard()         // Enable the ApprovalsDashboard page (default: false / opt-in)
                 ->widgets()           // Enable global panel widgets explicitly when also using the dedicated dashboard
                 ->interceptOperations() // Intercept EditAction/DeleteAction when an approval flow exists
+                ->operationModalCallout(false) // Disable the automatic approval callout in intercepted action modals
                 ->navigationGroup('Workflow'),  // Override navigation group
         ]);
 }
@@ -198,6 +200,7 @@ public function panel(Panel $panel): Panel
 | `dashboard(bool $enabled = true)`        | Enable/disable the opt-in ApprovalsDashboard page     |
 | `widgets(bool $enabled = true)`          | Enable/disable PendingApprovals and Analytics widgets |
 | `interceptOperations(bool $enabled = true)` | Intercept native Edit/Delete operations when a flow exists |
+| `operationModalCallout(bool $enabled = true)` | Enable/disable the automatic approval request callout in intercepted operation modals |
 | `resolvers(array $resolvers)`            | Override approver resolvers for this panel            |
 | `userModel(string $model)`               | Override the user model for this panel                |
 | `navigationGroup(string $group)`         | Override the navigation group label                   |
@@ -301,6 +304,8 @@ When `approvableActions()` is defined, the `SubmitForApprovalAction` will show a
 ### Native Operation Interception
 
 Enable `interceptOperations()` on the panel and declare model operations with `ApprovableOperation`. When a matching active flow exists, native Filament `EditAction` and `DeleteAction` submit an approval request instead of mutating the record. If no flow exists, the native action continues normally.
+
+By default, intercepted operation modals show a Filament schema `Callout` explaining that the change will be submitted for approval. Disable it for a panel with `->operationModalCallout(false)` or globally with `operations.modal_callout => false` when your action schema already contains contextual approval copy.
 
 The interceptor runs before Filament persists relationship-backed form components, so native `relationship()` layouts and repeaters will not write related records while an approval request is being created. The default operation payload is intentionally simple and dirty-only for owner model fields declared in `fields`; if you need relationship payloads, override the model operation payload/apply methods and keep that metadata explicitly scoped.
 

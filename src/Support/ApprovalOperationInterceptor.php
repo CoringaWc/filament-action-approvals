@@ -13,6 +13,8 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\Events\ActionCalling;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Component;
+use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Validation\ValidationException;
@@ -40,9 +42,7 @@ class ApprovalOperationInterceptor
     public function configureEditAction(EditAction $action): EditAction
     {
         return $action
-            ->modalContent(fn (?Model $record = null) => $this->shouldSubmitApprovalRequest($record, ApprovalOperation::Update)
-                ? FilamentActionApprovalsPlugin::approvalRequestModalContent()
-                : null)
+            ->schema(fn (Schema $schema) => $this->schemaWithOperationCallout($action, ApprovalOperation::Update, $schema))
             ->modalSubmitActionLabel(fn (?Model $record = null): string => $this->shouldSubmitApprovalRequest($record, ApprovalOperation::Update)
                 ? __('filament-action-approvals::approval.actions.submit_approval_request')
                 : __('filament-actions::edit.single.modal.actions.save.label'))
@@ -60,9 +60,7 @@ class ApprovalOperationInterceptor
             ->modalHeading(fn (?Model $record = null): string => $this->shouldSubmitApprovalRequest($record, ApprovalOperation::Delete)
                 ? __('filament-action-approvals::approval.actions.request_delete_heading')
                 : __('filament-actions::delete.single.modal.heading', ['label' => $action->getRecordTitle()]))
-            ->modalContent(fn (?Model $record = null) => $this->shouldSubmitApprovalRequest($record, ApprovalOperation::Delete)
-                ? FilamentActionApprovalsPlugin::approvalRequestModalContent()
-                : null)
+            ->schema(fn (Schema $schema) => $this->schemaWithOperationCallout($action, ApprovalOperation::Delete, $schema))
             ->modalSubmitActionLabel(fn (?Model $record = null): string => $this->shouldSubmitApprovalRequest($record, ApprovalOperation::Delete)
                 ? __('filament-action-approvals::approval.actions.submit_approval_request')
                 : __('filament-actions::delete.single.modal.actions.delete.label'))
@@ -80,6 +78,7 @@ class ApprovalOperationInterceptor
         }
 
         $record = $action->getRecord();
+        $record = $record instanceof Model ? $record : null;
 
         if (! $record instanceof Model) {
             return null;
@@ -96,6 +95,56 @@ class ApprovalOperationInterceptor
         }
 
         return null;
+    }
+
+    private function schemaWithOperationCallout(EditAction|DeleteAction $action, ApprovalOperation $operation, Schema $schema): ?Schema
+    {
+        $resolvedSchema = $this->defaultActionSchema($action, $schema);
+        $record = $action->getRecord();
+        $record = $record instanceof Model ? $record : null;
+
+        if (! $this->shouldRenderOperationCallout($record, $operation)) {
+            return $resolvedSchema;
+        }
+
+        $callout = FilamentActionApprovalsPlugin::approvalRequestCallout();
+
+        if (! $resolvedSchema instanceof Schema) {
+            return $schema->components([$callout]);
+        }
+
+        return $resolvedSchema->components([
+            $callout,
+            ...$resolvedSchema->getComponents(),
+        ]);
+    }
+
+    private function defaultActionSchema(EditAction|DeleteAction $action, Schema $schema): ?Schema
+    {
+        $resolver = $action->getHasActionsLivewire()?->getDefaultActionSchemaResolver($action);
+
+        if ($resolver === null) {
+            return null;
+        }
+
+        $resolvedSchema = $resolver($schema);
+
+        if ($resolvedSchema instanceof Schema) {
+            return $resolvedSchema;
+        }
+
+        if (is_array($resolvedSchema)) {
+            /** @var array<int, Component|Action> $resolvedSchema */
+            return $schema->components($resolvedSchema);
+        }
+
+        return null;
+    }
+
+    private function shouldRenderOperationCallout(?Model $record, ApprovalOperation $operation): bool
+    {
+        return FilamentActionApprovalsPlugin::shouldShowOperationModalCalloutForCurrentPanel()
+            && $this->shouldSubmitApprovalRequest($record, $operation);
     }
 
     /**
