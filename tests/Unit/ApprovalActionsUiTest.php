@@ -89,6 +89,25 @@ it('shows requester approval history action only to the submitter', function ():
     expect($otherUserAction->isHidden())->toBeTrue();
 });
 
+it('infers requester approval history action scope from the filament action record', function (): void {
+    /** @var TestCase $test */
+    $test = $this;
+
+    $submitter = User::factory()->create();
+    $approver = User::factory()->create();
+    $purchaseOrder = PurchaseOrder::factory()->for($submitter)->create();
+    $flow = $test->createSingleStepFlow(PurchaseOrder::class, [(int) $approver->getKey()]);
+
+    app(ApprovalEngine::class)->submit($purchaseOrder, $flow, $submitter);
+
+    $test->actingAs($submitter);
+
+    $action = ListRequesterApprovalsAction::make()
+        ->record($purchaseOrder);
+
+    expect($action->isHidden())->toBeFalse();
+});
+
 it('groups approval resource record actions by default', function (): void {
     $actions = ApprovalTableActionsTestTable::getRecordActionsForTesting();
 

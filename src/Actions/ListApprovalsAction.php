@@ -118,6 +118,24 @@ class ListApprovalsAction extends Action
     {
         $record = $this->evaluate($this->approvableRecord);
 
+        if ($record instanceof Model) {
+            return $record;
+        }
+
+        $record = $this->getRecord();
+
+        if ($record instanceof Model) {
+            return $record;
+        }
+
+        $livewire = $this->getLivewire();
+
+        if (! is_object($livewire) || ! method_exists($livewire, 'getRecord')) {
+            return null;
+        }
+
+        $record = $livewire->getRecord();
+
         return $record instanceof Model ? $record : null;
     }
 
