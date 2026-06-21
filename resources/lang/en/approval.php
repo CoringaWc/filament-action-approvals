@@ -127,6 +127,7 @@ return [
         'delegate' => 'Delegate',
         'view' => 'View approval',
         'list_approvals' => 'View approvals',
+        'list_requester_approvals' => 'Approval history',
         'clear_context' => 'Clear context',
         'approval_flow' => 'Approval Flow',
         'approval_action' => 'Action to approve',

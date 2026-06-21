@@ -7,6 +7,7 @@ use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
 use CoringaWc\FilamentActionApprovals\Tests\TestCase;
 use CoringaWc\FilamentActionApprovals\Widgets\ContextualApprovalsTable;
+use CoringaWc\FilamentActionApprovals\Widgets\RequesterApprovalsTable;
 use Livewire\Livewire;
 use Workbench\App\Models\PurchaseOrder;
 use Workbench\App\Models\User;
@@ -67,4 +68,58 @@ it('overrides shared filters in the contextual approvals table and defaults stat
         ->assertSet('tableFilters.status.value', ApprovalStatus::Pending->value)
         ->assertCanSeeTableRecords([$pendingApproval])
         ->assertCanNotSeeTableRecords([$approvedApproval]);
+});
+
+it('scopes requester approvals table to the current submitter and keeps it read only', function (): void {
+    /** @var TestCase $test */
+    $test = $this;
+
+    $submitter = User::factory()->create();
+    $otherSubmitter = User::factory()->create();
+    $purchaseOrder = PurchaseOrder::factory()->for($submitter)->create();
+
+    $flow = ApprovalFlow::create([
+        'name' => 'Requester Approvals Flow',
+        'approvable_type' => $purchaseOrder->getMorphClass(),
+        'action_key' => 'submit',
+        'is_active' => true,
+    ]);
+
+    $visibleApproval = Approval::create([
+        'approval_flow_id' => $flow->getKey(),
+        'approvable_type' => $purchaseOrder->getMorphClass(),
+        'approvable_id' => $purchaseOrder->getKey(),
+        'status' => ApprovalStatus::Pending,
+        'action_key' => 'submit',
+        'submitted_by' => $submitter->getKey(),
+        'submitted_by_type' => $submitter->getMorphClass(),
+        'submitted_by_id' => $submitter->getKey(),
+        'submitted_at' => now(),
+    ]);
+
+    $hiddenApproval = Approval::create([
+        'approval_flow_id' => $flow->getKey(),
+        'approvable_type' => $purchaseOrder->getMorphClass(),
+        'approvable_id' => $purchaseOrder->getKey(),
+        'status' => ApprovalStatus::Pending,
+        'action_key' => 'cancel',
+        'submitted_by' => $otherSubmitter->getKey(),
+        'submitted_by_type' => $otherSubmitter->getMorphClass(),
+        'submitted_by_id' => $otherSubmitter->getKey(),
+        'submitted_at' => now()->subMinute(),
+    ]);
+
+    $test->actingAs($submitter);
+
+    $component = Livewire::test(RequesterApprovalsTable::class, [
+        'approvableType' => $purchaseOrder->getMorphClass(),
+        'approvableId' => (string) $purchaseOrder->getKey(),
+    ]);
+
+    expect(array_keys($component->instance()->getTable()->getFilters()))->toBe(['status'])
+        ->and($component->instance()->getTable()->getFlatActions())->toBe([]);
+
+    $component
+        ->assertCanSeeTableRecords([$visibleApproval])
+        ->assertCanNotSeeTableRecords([$hiddenApproval]);
 });

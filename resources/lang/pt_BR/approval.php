@@ -127,6 +127,7 @@ return [
         'delegate' => 'Delegar',
         'view' => 'Visualizar aprovação',
         'list_approvals' => 'Ver aprovações',
+        'list_requester_approvals' => 'Histórico de aprovações',
         'clear_context' => 'Limpar contexto',
         'approval_flow' => 'Fluxo de Aprovação',
         'approval_action' => 'Ação a aprovar',

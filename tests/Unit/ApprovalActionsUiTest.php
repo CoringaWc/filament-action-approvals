@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use CoringaWc\FilamentActionApprovals\Actions\ListApprovalsAction;
+use CoringaWc\FilamentActionApprovals\Actions\ListRequesterApprovalsAction;
 use CoringaWc\FilamentActionApprovals\ApproverResolvers\UserResolver;
 use CoringaWc\FilamentActionApprovals\Concerns\HasApprovalsResource;
 use CoringaWc\FilamentActionApprovals\Enums\StepType;
@@ -57,6 +58,35 @@ it('opens contextual approvals in a slide over instead of redirecting', function
 
     expect($action->getUrl())->toBeNull()
         ->and($action->isModalSlideOver())->toBeTrue();
+});
+
+it('shows requester approval history action only to the submitter', function (): void {
+    /** @var TestCase $test */
+    $test = $this;
+
+    $submitter = User::factory()->create();
+    $otherUser = User::factory()->create();
+    $approver = User::factory()->create();
+    $purchaseOrder = PurchaseOrder::factory()->for($submitter)->create();
+    $flow = $test->createSingleStepFlow(PurchaseOrder::class, [(int) $approver->getKey()]);
+
+    app(ApprovalEngine::class)->submit($purchaseOrder, $flow, $submitter);
+
+    $test->actingAs($submitter);
+
+    $submitterAction = ListRequesterApprovalsAction::make()
+        ->forApprovable($purchaseOrder);
+
+    expect($submitterAction->isHidden())->toBeFalse()
+        ->and($submitterAction->isModalSlideOver())->toBeTrue()
+        ->and($submitterAction->getLabel())->toBe(__('filament-action-approvals::approval.actions.list_requester_approvals'));
+
+    $test->actingAs($otherUser);
+
+    $otherUserAction = ListRequesterApprovalsAction::make()
+        ->forApprovable($purchaseOrder);
+
+    expect($otherUserAction->isHidden())->toBeTrue();
 });
 
 it('groups approval resource record actions by default', function (): void {

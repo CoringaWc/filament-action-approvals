@@ -10,6 +10,7 @@ use CoringaWc\FilamentActionApprovals\Widgets\ContextualApprovalsTable;
 use Filament\Actions\Action;
 use Filament\Schemas\Components\Livewire;
 use Filament\Support\Icons\Heroicon;
+use Filament\Widgets\TableWidget;
 use Illuminate\Database\Eloquent\Model;
 
 class ListApprovalsAction extends Action
@@ -17,6 +18,14 @@ class ListApprovalsAction extends Action
     protected string|Closure|null $approvableType = null;
 
     protected Model|Closure|null $approvableRecord = null;
+
+    /**
+     * @return class-string<TableWidget>
+     */
+    protected function tableWidget(): string
+    {
+        return ContextualApprovalsTable::class;
+    }
 
     public static function getDefaultName(): ?string
     {
@@ -47,7 +56,7 @@ class ListApprovalsAction extends Action
             ->color('gray')
             ->slideOver()
             ->schema([
-                Livewire::make(ContextualApprovalsTable::class, fn (): array => $this->getTableParameters())
+                Livewire::make($this->tableWidget(), fn (): array => $this->getTableParameters())
                     ->key(fn (): string => $this->getTableKey()),
             ])
             ->modalSubmitAction(false)
@@ -81,7 +90,7 @@ class ListApprovalsAction extends Action
     {
         $parameters = $this->getTableParameters();
 
-        return 'contextual-approvals-table-'.md5(serialize($parameters));
+        return 'contextual-approvals-table-'.md5($this->tableWidget().serialize($parameters));
     }
 
     protected function resolveModalHeading(): string

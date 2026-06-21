@@ -196,6 +196,31 @@ class Approval extends Model
      * @param  Builder<self>  $query
      * @return Builder<self>
      */
+    public function scopeSubmittedByRequester(Builder $query, ?Model $requester): Builder
+    {
+        if (! $requester instanceof Model) {
+            return $query->whereKey([]);
+        }
+
+        return $query->where(function (Builder $submittedByRequester) use ($requester): void {
+            $submittedByRequester
+                ->where(function (Builder $submittedByMorph) use ($requester): void {
+                    $submittedByMorph
+                        ->where('submitted_by_type', $requester->getMorphClass())
+                        ->where('submitted_by_id', $requester->getKey());
+                })
+                ->orWhere(function (Builder $legacySubmittedBy) use ($requester): void {
+                    $legacySubmittedBy
+                        ->whereNull('submitted_by_type')
+                        ->where('submitted_by', $requester->getKey());
+                });
+        });
+    }
+
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
     public function scopeWithOperationalRelations(Builder $query): Builder
     {
         return $query->with([
