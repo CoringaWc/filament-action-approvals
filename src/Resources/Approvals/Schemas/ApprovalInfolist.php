@@ -25,6 +25,7 @@ use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
+use Illuminate\Database\Eloquent\Model;
 
 class ApprovalInfolist
 {
@@ -169,7 +170,7 @@ class ApprovalInfolist
                     TextEntry::make('approvable_record')
                         ->label(__('filament-action-approvals::approval.infolist.record'))
                         ->state(fn (Approval $record): string => ApprovableModelLabel::resolveWithKey(
-                            $record->approvable_type,
+                            $record->approvable instanceof Model ? $record->approvable : $record->approvable_type,
                             $record->approvable_id,
                         )),
                     TextEntry::make('flow.name')

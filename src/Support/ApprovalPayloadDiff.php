@@ -100,7 +100,7 @@ final class ApprovalPayloadDiff
         /** @var list<array{field: string, current: string|null, requested: string|null}> $rows */
         $rows = collect($changedFields)
             ->map(fn (string $field): array => self::row(
-                self::fieldLabel($field),
+                self::fieldLabel($approval, $field),
                 self::currentValue($approval, $field),
                 self::requestedValue($payload, $field),
             ))
@@ -120,7 +120,7 @@ final class ApprovalPayloadDiff
         $rows = collect($payload)
             ->reject(fn (mixed $value, int|string $field): bool => self::isMetadataOnlyField((string) $field) || self::isSecretField((string) $field))
             ->map(fn (mixed $value, int|string $field): array => self::row(
-                self::fieldLabel((string) $field),
+                self::fieldLabel($approval, (string) $field),
                 self::currentValue($approval, (string) $field),
                 self::requestedValue($payload, (string) $field),
             ))
@@ -136,9 +136,7 @@ final class ApprovalPayloadDiff
             return self::redactedPlaceholder();
         }
 
-        $approvable = $approval->relationLoaded('approvable')
-            ? $approval->approvable
-            : $approval->approvable()->first();
+        $approvable = self::approvable($approval);
 
         if (! $approvable instanceof Model) {
             return null;
@@ -220,7 +218,7 @@ final class ApprovalPayloadDiff
         /** @var list<array{field: string, current: string|null, requested: string|null}> $rows */
         $rows = collect($diff)
             ->filter(fn (mixed $row): bool => is_array($row))
-            ->map(fn (array $row): ?array => self::explicitDiffRow($row))
+            ->map(fn (array $row): ?array => self::explicitDiffRow($approval, $row))
             ->filter()
             ->values()
             ->all();
@@ -232,7 +230,7 @@ final class ApprovalPayloadDiff
      * @param  array<array-key, mixed>  $row
      * @return array{field: string, current: string|null, requested: string|null}|null
      */
-    private static function explicitDiffRow(array $row): ?array
+    private static function explicitDiffRow(Approval $approval, array $row): ?array
     {
         $label = self::firstString($row, ['label', 'field_label']);
         $field = self::firstString($row, ['field', 'name']) ?? $label;
@@ -242,7 +240,7 @@ final class ApprovalPayloadDiff
         }
 
         return self::row(
-            $label ?? self::fieldLabel($field),
+            $label ?? self::fieldLabel($approval, $field),
             self::explicitValue($row, ['current', 'current_value', 'old', 'from']),
             self::explicitValue($row, ['requested', 'requested_value', 'new', 'to']),
         );
@@ -280,23 +278,58 @@ final class ApprovalPayloadDiff
         return null;
     }
 
-    private static function fieldLabel(string $field): string
+    private static function fieldLabel(Approval $approval, string $field): string
     {
-        $normalized = Str::of($field)->lower()->toString();
+        $approvable = self::approvable($approval);
 
-        if ($normalized === 'cpf') {
-            return 'CPF';
+        if ($approvable instanceof Model && method_exists($approvable, 'getApprovalFieldLabel')) {
+            /** @var mixed $customLabel */
+            $customLabel = $approvable->getApprovalFieldLabel($field);
+
+            if ($customLabel instanceof Htmlable) {
+                $customLabel = strip_tags($customLabel->toHtml());
+            }
+
+            if (is_scalar($customLabel) && filled((string) $customLabel)) {
+                return (string) $customLabel;
+            }
         }
 
-        if ($normalized === 'cnpj') {
-            return 'CNPJ';
-        }
+        return self::defaultFieldLabel($field);
+    }
 
-        return Str::of($field)
-            ->replace('_', ' ')
-            ->replace('.', ' ')
-            ->title()
-            ->toString();
+    private static function defaultFieldLabel(string $field): string
+    {
+        $segments = Str::of($field)->explode('.')
+            ->filter(fn (string $segment): bool => filled($segment))
+            ->map(fn (string $segment): string => self::fieldSegmentLabel($segment));
+
+        return $segments->isNotEmpty()
+            ? $segments->implode(' / ')
+            : __('Field');
+    }
+
+    private static function fieldSegmentLabel(string $segment): string
+    {
+        $normalized = Str::of($segment)->replace(['_', '-'], '')->lower()->toString();
+
+        return match ($normalized) {
+            'cpf' => 'CPF',
+            'cnpj' => 'CNPJ',
+            'uasg' => 'UASG',
+            'cep' => 'CEP',
+            'zipcode' => __('Zipcode'),
+            default => __(Str::headline($segment)),
+        };
+    }
+
+    private static function approvable(Approval $approval): ?Model
+    {
+        $approvable = $approval->relationLoaded('approvable')
+            ? $approval->approvable
+            : $approval->approvable()->first();
+
+        return $approvable instanceof Model ? $approvable : null;
     }
 
     /**

@@ -75,7 +75,7 @@ class ApprovalsTable
             TextColumn::make('approvable_record')
                 ->label(__('filament-action-approvals::approval.approval_table.record'))
                 ->state(fn (Approval $record): string => ApprovableModelLabel::resolveWithKey(
-                    $record->approvable_type,
+                    $record->approvable instanceof Model ? $record->approvable : $record->approvable_type,
                     $record->approvable_id,
                 ))
                 ->searchable(query: function (Builder $query, string $search): Builder {

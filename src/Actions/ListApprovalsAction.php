@@ -99,7 +99,7 @@ class ListApprovalsAction extends Action
 
         if ($record instanceof Model) {
             return __('filament-action-approvals::approval.approval_context.record_scope', [
-                'record' => ApprovableModelLabel::resolveWithKey($record->getMorphClass(), $record->getKey()),
+                'record' => ApprovableModelLabel::resolveRecord($record),
             ]);
         }
 

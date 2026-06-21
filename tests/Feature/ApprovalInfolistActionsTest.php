@@ -9,6 +9,7 @@ use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
 use CoringaWc\FilamentActionApprovals\Resources\Approvals\Pages\ListApprovals;
 use CoringaWc\FilamentActionApprovals\Resources\Approvals\Schemas\ApprovalInfolist;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
+use CoringaWc\FilamentActionApprovals\Support\ApprovableModelLabel;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalPayloadDiff;
 use CoringaWc\FilamentActionApprovals\Tests\TestCase;
 use Filament\Actions\ViewAction;
@@ -175,6 +176,63 @@ it('shows submitted payload fields in the approval slide over infolist', functio
         ->assertSchemaComponentVisible('submittedChanges', 'mountedActionSchema0')
         ->assertDontSeeText('raw-token-value', false)
         ->assertDontSeeText('Api Token', false);
+});
+
+it('uses approvable model labels for submitted payload fields and resource record titles', function (): void {
+    /** @var TestCase $test */
+    $test = $this;
+
+    app()->setLocale('pt_BR');
+    $test->seed(DatabaseSeeder::class);
+
+    $admin = User::query()->where('email', 'admin@filament-action-approvals.test')->firstOrFail();
+
+    $test->actingAs($admin);
+
+    $flow = ApprovalFlow::create([
+        'name' => 'Translated Payload Diff Flow',
+        'approvable_type' => (new PurchaseOrder)->getMorphClass(),
+        'is_active' => true,
+    ]);
+    $flow->steps()->create([
+        'name' => 'Step 1',
+        'order' => 1,
+        'type' => StepType::Single,
+        'approver_resolver' => UserResolver::class,
+        'approver_config' => ['user_ids' => [$admin->getKey()]],
+        'required_approvals' => 1,
+    ]);
+
+    $order = PurchaseOrder::factory()->create([
+        'title' => 'Pedido original',
+        'amount' => 1200,
+    ]);
+
+    $approval = app(ApprovalEngine::class)->submit($order, $flow, $admin->getKey());
+    $approval->forceFill([
+        'metadata' => [
+            'payload' => [
+                'changed_fields' => ['title', 'amount'],
+                'title' => 'Pedido atualizado',
+                'amount' => 1500,
+            ],
+        ],
+    ])->save();
+
+    expect(ApprovableModelLabel::resolveWithKey($order->getMorphClass(), $order->getKey()))
+        ->toBe('Pedido de Compra: Pedido original')
+        ->and(ApprovalPayloadDiff::forApproval($approval->refresh()))->toMatchArray([
+            [
+                'field' => 'Título',
+                'current' => 'Pedido original',
+                'requested' => 'Pedido atualizado',
+            ],
+            [
+                'field' => 'Valor',
+                'current' => '1200',
+                'requested' => '1500',
+            ],
+        ]);
 });
 
 it('redacts sensitive values from submitted payload diffs before display', function (): void {

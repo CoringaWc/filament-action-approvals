@@ -27,6 +27,8 @@ class PurchaseOrderResource extends Resource
 
     protected static ?string $model = PurchaseOrder::class;
 
+    protected static ?string $recordTitleAttribute = 'title';
+
     public static function getModelLabel(): string
     {
         return __('workbench::workbench.resources.purchase_orders.model_label');

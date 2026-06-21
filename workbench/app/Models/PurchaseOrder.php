@@ -99,6 +99,17 @@ class PurchaseOrder extends Model
         return sprintf('PO-%s', (string) $this->getKey());
     }
 
+    public function getApprovalFieldLabel(string $field): ?string
+    {
+        return match ($field) {
+            'title' => __('workbench::workbench.resources.purchase_orders.fields.title'),
+            'description' => __('workbench::workbench.resources.purchase_orders.fields.description'),
+            'amount' => __('workbench::workbench.resources.purchase_orders.fields.amount'),
+            'user_id' => __('workbench::workbench.resources.purchase_orders.fields.requester'),
+            default => null,
+        };
+    }
+
     public function getApprovalNotificationAction(Approval $approval, ApprovalNotificationEvent $event): ?ApprovalNotificationAction
     {
         if ($event !== ApprovalNotificationEvent::Rejected) {
