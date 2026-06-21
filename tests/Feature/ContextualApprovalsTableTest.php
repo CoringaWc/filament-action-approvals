@@ -109,6 +109,20 @@ it('scopes requester approvals table to the current submitter and keeps it read 
         'submitted_at' => now()->subMinute(),
     ]);
 
+    $metadataFallbackApproval = Approval::create([
+        'approval_flow_id' => $flow->getKey(),
+        'approvable_type' => $purchaseOrder->getMorphClass(),
+        'approvable_id' => $purchaseOrder->getKey(),
+        'status' => ApprovalStatus::Approved,
+        'action_key' => 'metadata-review',
+        'submitted_by' => null,
+        'submitted_by_type' => null,
+        'submitted_by_id' => null,
+        'submitted_at' => now()->subMinutes(2),
+        'completed_at' => now()->subMinute(),
+        'metadata' => ['requested_by_user_id' => $submitter->getKey()],
+    ]);
+
     $test->actingAs($submitter);
 
     $component = Livewire::test(RequesterApprovalsTable::class, [
@@ -120,6 +134,6 @@ it('scopes requester approvals table to the current submitter and keeps it read 
         ->and($component->instance()->getTable()->getFlatActions())->toBe([]);
 
     $component
-        ->assertCanSeeTableRecords([$visibleApproval])
+        ->assertCanSeeTableRecords([$visibleApproval, $metadataFallbackApproval])
         ->assertCanNotSeeTableRecords([$hiddenApproval]);
 });

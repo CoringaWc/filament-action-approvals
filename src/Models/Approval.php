@@ -213,7 +213,8 @@ class Approval extends Model
                     $legacySubmittedBy
                         ->whereNull('submitted_by_type')
                         ->where('submitted_by', $requester->getKey());
-                });
+                })
+                ->orWhere('metadata->requested_by_user_id', $requester->getKey());
         });
     }
 
