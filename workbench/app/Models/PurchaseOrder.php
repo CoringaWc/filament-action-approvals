@@ -22,7 +22,9 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     fields: ['user_id', 'title', 'description', 'amount'],
     relationships: [
         'detail' => ['type' => 'has_one', 'fields' => ['vendor_name', 'reference']],
-        'lines' => ['type' => 'has_many', 'fields' => ['sku', 'quantity']],
+    ],
+    directPayload: [
+        'lines' => ['type' => 'has_many', 'operations' => ['replace'], 'fields' => ['id', 'sku', 'quantity']],
     ],
 )]
 #[ApprovableOperation(operation: ApprovalOperation::Delete, actionKey: 'purchase-order.delete')]

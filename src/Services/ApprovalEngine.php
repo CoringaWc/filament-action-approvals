@@ -46,8 +46,9 @@ class ApprovalEngine
 {
     /**
      * @param  array<string, mixed>  $metadata
+     * @param  callable(Approval): mixed|null  $afterApprovalCreated
      */
-    public function submit(Model $approvable, ?ApprovalFlow $flow = null, Model|int|string|null $submittedBy = null, ?string $actionKey = null, array $metadata = [], string|BackedEnum|null $action = null): Approval
+    public function submit(Model $approvable, ?ApprovalFlow $flow = null, Model|int|string|null $submittedBy = null, ?string $actionKey = null, array $metadata = [], string|BackedEnum|null $action = null, ?callable $afterApprovalCreated = null): Approval
     {
         $actionKey = $this->resolveActionKeyInput($approvable, $actionKey, $action);
         $flowModel = ApprovalModels::flow();
@@ -67,7 +68,7 @@ class ApprovalEngine
         }
 
         try {
-            return DB::transaction(function () use ($approvable, $flow, $metadata, $resolvedActionKey, $submitter) {
+            return DB::transaction(function () use ($afterApprovalCreated, $approvable, $flow, $metadata, $resolvedActionKey, $submitter) {
                 $approvalMetadata = SensitiveDataRedactor::metadata(array_filter([
                     ...$metadata,
                     'action_key' => $resolvedActionKey,
@@ -114,6 +115,10 @@ class ApprovalEngine
                 ]);
 
                 $this->activateNextStep($approval);
+
+                if ($afterApprovalCreated !== null) {
+                    $afterApprovalCreated($approval->refresh());
+                }
 
                 $this->afterCommit(function () use ($approval, $approvable): void {
                     event(new ApprovalSubmitted($approval));

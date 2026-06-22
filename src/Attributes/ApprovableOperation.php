@@ -17,6 +17,7 @@ class ApprovableOperation
     /**
      * @param  list<string>  $fields
      * @param  array<string, array<string, mixed>|list<string>>  $relationships
+     * @param  array<string, array<string, mixed>|list<string>>  $directPayload
      */
     public function __construct(
         public ApprovalOperation|string|null $operation = null,
@@ -25,6 +26,7 @@ class ApprovableOperation
         public bool $enabled = true,
         public string|BackedEnum|null $action = null,
         public array $relationships = [],
+        public array $directPayload = [],
     ) {}
 
     public function normalizedOperation(ApprovalOperation|string|null $fallback = null): ?string

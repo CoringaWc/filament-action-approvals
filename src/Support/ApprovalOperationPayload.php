@@ -6,9 +6,11 @@ namespace CoringaWc\FilamentActionApprovals\Support;
 
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class ApprovalOperationPayload
 {
@@ -111,6 +113,57 @@ class ApprovalOperationPayload
     }
 
     /**
+     * @param  array<string, mixed>  $data
+     * @param  array<string, array<string, mixed>|list<string>>  $directDefinitions
+     * @return array{payload: array<string, mixed>, ignored: list<string>}
+     */
+    public function directPayloadData(Model $record, array $data, array $directDefinitions): array
+    {
+        $payload = [];
+        $ignored = [];
+
+        foreach ($directDefinitions as $relationshipName => $definition) {
+            if (blank($relationshipName) || ! method_exists($record, $relationshipName) || ! Arr::has($data, $relationshipName)) {
+                continue;
+            }
+
+            $normalizedDefinition = $this->normalizeDirectDefinition($definition);
+
+            if ($normalizedDefinition['fields'] === []) {
+                continue;
+            }
+
+            $state = Arr::get($data, $relationshipName);
+
+            if (! is_array($state)) {
+                continue;
+            }
+
+            $directRelationship = $this->directRelationshipPayload(
+                $record,
+                $relationshipName,
+                $state,
+                $normalizedDefinition,
+            );
+
+            if ($directRelationship['payload'] === []) {
+                continue;
+            }
+
+            $payload[$relationshipName] = $directRelationship['payload'];
+            $ignored = [
+                ...$ignored,
+                ...$directRelationship['ignored'],
+            ];
+        }
+
+        return [
+            'payload' => $payload,
+            'ignored' => array_values(array_unique($ignored)),
+        ];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function deletePayload(): array
@@ -182,6 +235,114 @@ class ApprovalOperationPayload
                 ->filter(fn (mixed $field): bool => is_string($field) && filled($field))
                 ->values()
                 ->all()),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>|list<string>  $definition
+     * @return array{type: string|null, fields: list<string>, operations: list<string>}
+     */
+    private function normalizeDirectDefinition(array $definition): array
+    {
+        $fields = array_is_list($definition)
+            ? $definition
+            : ($definition['fields'] ?? []);
+
+        $operations = array_is_list($definition)
+            ? ['replace']
+            : ($definition['operations'] ?? ['replace']);
+
+        return [
+            'type' => is_string($definition['type'] ?? null) ? $definition['type'] : null,
+            'fields' => array_values(collect(is_array($fields) ? $fields : [])
+                ->filter(fn (mixed $field): bool => is_string($field) && filled($field))
+                ->values()
+                ->all()),
+            'operations' => array_values(collect(is_array($operations) ? $operations : [])
+                ->filter(fn (mixed $operation): bool => is_string($operation) && filled($operation))
+                ->values()
+                ->all()),
+        ];
+    }
+
+    /**
+     * @param  array<mixed>  $state
+     * @param  array{type: string|null, fields: list<string>, operations: list<string>}  $definition
+     * @return array{payload: array<string, mixed>, ignored: list<string>}
+     */
+    private function directRelationshipPayload(Model $record, string $relationshipName, array $state, array $definition): array
+    {
+        $currentRecords = $this->manyRelatedRecords($record, $relationshipName);
+        $rows = [];
+        $ignored = [];
+        $allowedFields = array_flip($definition['fields']);
+
+        foreach ($state as $clientKey => $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $recordKey = $this->relationshipRowRecordKey($clientKey, $row);
+
+            if ($recordKey !== null && ! $currentRecords->has((string) $recordKey)) {
+                throw ValidationException::withMessages([
+                    'approval' => __('filament-action-approvals::approval.actions.apply_failed'),
+                ]);
+            }
+
+            $attributes = [];
+
+            foreach ($row as $field => $value) {
+                if (! is_string($field)) {
+                    continue;
+                }
+
+                if (! array_key_exists($field, $allowedFields)) {
+                    if ($this->isDeniedDirectField($field, $value)) {
+                        throw ValidationException::withMessages([
+                            'approval' => __('filament-action-approvals::approval.actions.apply_failed'),
+                        ]);
+                    }
+
+                    $ignored[] = "{$relationshipName}.{$field}";
+
+                    continue;
+                }
+
+                if ($this->isClientControlledForeignKey($field) || $this->isDeniedDirectField($field, $value)) {
+                    throw ValidationException::withMessages([
+                        'approval' => __('filament-action-approvals::approval.actions.apply_failed'),
+                    ]);
+                }
+
+                if ($field === 'id' || $field === 'record_key') {
+                    continue;
+                }
+
+                $attributes[$field] = $this->sanitizeValue($value);
+            }
+
+            if ($recordKey !== null) {
+                $attributes['record_key'] = $recordKey;
+            }
+
+            if ($attributes === []) {
+                continue;
+            }
+
+            $rows[] = $attributes;
+        }
+
+        if ($rows === []) {
+            return ['payload' => [], 'ignored' => $ignored];
+        }
+
+        return [
+            'payload' => [
+                'operation' => in_array('replace', $definition['operations'], true) ? 'replace' : $definition['operations'][0],
+                'records' => $rows,
+            ],
+            'ignored' => $ignored,
         ];
     }
 
@@ -385,6 +546,14 @@ class ApprovalOperationPayload
                 ->keyBy(fn (Model $item): string => (string) $item->getKey());
         }
 
+        $relationship = $record->{$relationshipName}();
+
+        if ($relationship instanceof Relation) {
+            return $relationship
+                ->get()
+                ->keyBy(fn (Model $item): string => (string) $item->getKey());
+        }
+
         return collect();
     }
 
@@ -476,6 +645,16 @@ class ApprovalOperationPayload
         }
 
         return SensitiveDataRedactor::isSensitiveField($baseField);
+    }
+
+    private function isClientControlledForeignKey(string $field): bool
+    {
+        return Str::endsWith($field, ['_id', '_type']) && ! in_array($field, ['id', 'record_key'], true);
+    }
+
+    private function isDeniedDirectField(string $field, mixed $value): bool
+    {
+        return SensitiveDataRedactor::isSensitiveField($field) || $this->isDeniedValue($value);
     }
 
     private function isDeniedValue(mixed $value): bool

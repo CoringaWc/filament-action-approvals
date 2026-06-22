@@ -6,6 +6,8 @@ use CoringaWc\FilamentActionApprovals\Enums\ActionType;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalOperation;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalActionRegistry;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalOperationSubmissionContext;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalPayloadDiff;
 use CoringaWc\FilamentActionApprovals\Tests\TestCase;
 use Filament\Schemas\Components\Callout;
@@ -397,6 +399,25 @@ it('captures relationship-backed edit form payloads before relationships are per
     $test->actingAs($submitter);
 
     $test->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()], 'purchase-order.edit');
+    $submitHandlerCalls = 0;
+
+    app(ApprovalActionRegistry::class)->submitUsing(
+        PurchaseOrder::class,
+        'purchase-order.edit',
+        ApprovalOperation::Update,
+        function (ApprovalOperationSubmissionContext $context) use (&$submitHandlerCalls): void {
+            $submitHandlerCalls++;
+
+            $context->approvable->lines()->delete();
+
+            foreach (data_get($context->directPayload, 'lines.records', []) as $line) {
+                $context->approvable->lines()->create([
+                    'sku' => $line['sku'],
+                    'quantity' => $line['quantity'],
+                ]);
+            }
+        },
+    );
 
     $order = PurchaseOrder::factory()->for($submitter, 'user')->create([
         'title' => 'Original order',
@@ -440,34 +461,84 @@ it('captures relationship-backed edit form payloads before relationships are per
         ->assertNotNotified(__('filament-actions::edit.single.notifications.saved.title'));
 
     $approval = $order->approvals()->firstOrFail();
-    $lineOperations = collect(data_get($approval->metadata, 'payload.relationships.lines.operations'));
 
     expect($order->refresh()->getAttribute('title'))->toBe('Original order')
         ->and($detail->refresh()->vendor_name)->toBe('Original vendor')
         ->and($detail->reference)->toBe('REF-001')
-        ->and($line->refresh()->sku)->toBe('SKU-OLD')
-        ->and($line->quantity)->toBe(1)
-        ->and($deletedLine->refresh()->sku)->toBe('SKU-DELETE')
-        ->and($order->lines()->count())->toBe(2)
+        ->and($order->lines()->where('sku', 'SKU-UPDATED')->exists())->toBeTrue()
+        ->and($order->lines()->where('sku', 'SKU-NEW')->exists())->toBeTrue()
         ->and(data_get($approval->metadata, 'payload.title'))->toBe('Updated order')
         ->and(data_get($approval->metadata, 'operation.relationships.detail.type'))->toBe('has_one')
-        ->and(data_get($approval->metadata, 'operation.relationships.lines.type'))->toBe('has_many')
+        ->and(data_get($approval->metadata, 'operation.relationships.lines'))->toBeNull()
         ->and(data_get($approval->metadata, 'payload.relationships.detail.operation'))->toBe('update')
         ->and(data_get($approval->metadata, 'payload.relationships.detail.record_key'))->toBe($detail->getKey())
         ->and(data_get($approval->metadata, 'payload.relationships.detail.base_updated_at'))->not->toBeNull()
         ->and(data_get($approval->metadata, 'payload.relationships.detail.attributes.vendor_name'))->toBe('Changed vendor')
         ->and(data_get($approval->metadata, 'payload.relationships.detail.attributes.reference'))->toBeNull()
-        ->and($lineOperations->firstWhere('operation', 'update')['record_key'] ?? null)->toBe($line->getKey())
-        ->and(data_get($lineOperations->firstWhere('operation', 'update'), 'attributes.sku'))->toBe('SKU-UPDATED')
-        ->and($lineOperations->firstWhere('operation', 'create')['client_key'] ?? null)->toBe('new-line');
+        ->and(data_get($approval->metadata, 'payload.relationships.lines'))->toBeNull()
+        ->and($submitHandlerCalls)->toBe(1);
 
     app(ApprovalEngine::class)->approve($approval->currentStepInstance(), $approver->getKey());
 
     expect($order->refresh()->getAttribute('title'))->toBe('Updated order')
         ->and($detail->refresh()->vendor_name)->toBe('Original vendor')
+        ->and($order->lines()->where('sku', 'SKU-UPDATED')->exists())->toBeTrue()
+        ->and($order->lines()->where('sku', 'SKU-NEW')->exists())->toBeTrue();
+});
+
+it('rolls back approval submission and direct payload writes when the submit handler fails', function (): void {
+    /** @var TestCase $test */
+    $test = $this;
+
+    $test->seed(DatabaseSeeder::class);
+
+    $submitter = User::query()->where('email', 'admin@filament-action-approvals.test')->firstOrFail();
+    $approver = User::query()->where('email', 'manager@filament-action-approvals.test')->firstOrFail();
+
+    $test->actingAs($submitter);
+
+    $test->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()], 'purchase-order.edit');
+
+    app(ApprovalActionRegistry::class)->submitUsing(
+        PurchaseOrder::class,
+        'purchase-order.edit',
+        ApprovalOperation::Update,
+        function (ApprovalOperationSubmissionContext $context): never {
+            $context->approvable->lines()->delete();
+
+            throw ValidationException::withMessages(['approval' => 'Direct sync failed.']);
+        },
+    );
+
+    $order = PurchaseOrder::factory()->for($submitter, 'user')->create([
+        'title' => 'Original order',
+        'amount' => 1200,
+    ]);
+    $line = $order->lines()->create([
+        'sku' => 'SKU-OLD',
+        'quantity' => 1,
+    ]);
+
+    Livewire::test(ListPurchaseOrders::class)
+        ->callTableAction('edit', $order, [
+            'user_id' => $submitter->getKey(),
+            'title' => 'Updated order',
+            'description' => $order->getAttribute('description'),
+            'amount' => 1500,
+            'lines' => [
+                "record-{$line->getKey()}" => [
+                    'sku' => 'SKU-UPDATED',
+                    'quantity' => 3,
+                ],
+            ],
+        ])
+        ->assertNotified('Direct sync failed.');
+
+    expect($order->refresh()->title)->toBe('Original order')
+        ->and($order->approvals()->count())->toBe(0)
+        ->and($order->lines()->count())->toBe(1)
         ->and($line->refresh()->sku)->toBe('SKU-OLD')
-        ->and($deletedLine->refresh()->sku)->toBe('SKU-DELETE')
-        ->and($order->lines()->count())->toBe(2);
+        ->and($line->quantity)->toBe(1);
 });
 
 it('falls back to native relationship edit persistence when no approval flow exists', function (): void {
@@ -564,6 +635,10 @@ it('falls back to native edit actions when no governed field changed', function 
         'description' => 'Safe description',
         'amount' => 1200,
     ]);
+    $line = $order->lines()->create([
+        'sku' => 'SKU-OLD',
+        'quantity' => 1,
+    ]);
 
     Livewire::test(ListPurchaseOrders::class)
         ->callTableAction('edit', $order, [
@@ -571,9 +646,17 @@ it('falls back to native edit actions when no governed field changed', function 
             'title' => $order->getAttribute('title'),
             'description' => $order->getAttribute('description'),
             'amount' => $order->getAttribute('amount'),
+            'lines' => [
+                "record-{$line->getKey()}" => [
+                    'sku' => 'SKU-DIRECT',
+                    'quantity' => 5,
+                ],
+            ],
         ]);
 
-    expect($order->approvals()->count())->toBe(0);
+    expect($order->approvals()->count())->toBe(0)
+        ->and($line->refresh()->sku)->toBe('SKU-DIRECT')
+        ->and($line->quantity)->toBe(5);
 });
 
 it('keeps safe sensitive-looking words and denies real sensitive operation payload values', function (): void {

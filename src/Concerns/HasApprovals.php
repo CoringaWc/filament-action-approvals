@@ -473,7 +473,7 @@ trait HasApprovals
     /**
      * @param  array<string, mixed>  $data
      */
-    public function submitApprovalForOperationDefinition(ApprovalOperation|string $operation, ApprovableOperation $definition, array $data = []): Approval
+    public function submitApprovalForOperationDefinition(ApprovalOperation|string $operation, ApprovableOperation $definition, array $data = [], ?callable $afterApprovalCreated = null): Approval
     {
         return app(ApprovalEngine::class)->submit(
             approvable: $this,
@@ -481,6 +481,7 @@ trait HasApprovals
             action: $definition->action,
             actionKey: $definition->action === null ? $definition->normalizedActionKey($this) : null,
             metadata: $this->approvalMetadataForOperationDefinition($operation, $definition, $data),
+            afterApprovalCreated: $afterApprovalCreated,
         );
     }
 

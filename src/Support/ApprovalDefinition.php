@@ -13,6 +13,7 @@ class ApprovalDefinition extends ApprovableOperation
     /**
      * @param  list<string>  $fields
      * @param  array<string, array<string, mixed>|list<string>>  $relationships
+     * @param  array<string, array<string, mixed>|list<string>>  $directPayload
      */
     public function __construct(
         ?ApprovalOperation $operation = null,
@@ -20,6 +21,7 @@ class ApprovalDefinition extends ApprovableOperation
         array $relationships = [],
         bool $enabled = true,
         string|BackedEnum|null $action = null,
+        array $directPayload = [],
     ) {
         parent::__construct(
             operation: $operation,
@@ -27,6 +29,7 @@ class ApprovalDefinition extends ApprovableOperation
             enabled: $enabled,
             action: $action,
             relationships: $relationships,
+            directPayload: $directPayload,
         );
     }
 
@@ -67,6 +70,17 @@ class ApprovalDefinition extends ApprovableOperation
     {
         $definition = clone $this;
         $definition->action = $action;
+
+        return $definition;
+    }
+
+    /**
+     * @param  array<string, array<string, mixed>|list<string>>  $directPayload
+     */
+    public function withDirectPayload(array $directPayload): self
+    {
+        $definition = clone $this;
+        $definition->directPayload = $directPayload;
 
         return $definition;
     }

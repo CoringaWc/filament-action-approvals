@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use CoringaWc\FilamentActionApprovals\ApproverResolvers\UserResolver;
+use CoringaWc\FilamentActionApprovals\Attributes\ApprovableOperation;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalOperation;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\Enums\StepType;
@@ -12,6 +13,7 @@ use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Resources\Approvals\Pages\ListApprovals;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalActionRegistry;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalOperationSubmissionContext;
 use CoringaWc\FilamentActionApprovals\Tests\TestCase;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\ValidationException;
@@ -109,6 +111,86 @@ it('records registered handler failures without rolling back approval completion
         ->and(data_get($approval->metadata, 'apply_failed_at'))->not->toBeNull()
         ->and(data_get($approval->metadata, 'apply_failed_reason'))->toBe(__('filament-action-approvals::approval.actions.approved_apply_failed'))
         ->and(data_get($approval->metadata, 'apply_failed_exception'))->toBe('ValidationException');
+});
+
+it('runs registered submit handlers inside approval submission', function (): void {
+    $submitter = User::factory()->create();
+    $approver = User::factory()->create();
+    $order = PurchaseOrder::factory()->for($submitter, 'user')->create(['title' => 'Original order']);
+    $flow = createRegistrySingleStepFlow(PurchaseOrder::class, $approver, 'purchase-order.submit-hook');
+    $calls = 0;
+
+    app(ApprovalActionRegistry::class)->submitUsing(
+        PurchaseOrder::class,
+        'purchase-order.submit-hook',
+        ApprovalOperation::Update,
+        function (ApprovalOperationSubmissionContext $context) use (&$calls, $order): void {
+            $calls++;
+
+            expect($context->approvable->is($order))->toBeTrue()
+                ->and($context->actionKey)->toBe('purchase-order.submit-hook')
+                ->and($context->operation)->toBe(ApprovalOperation::Update->value)
+                ->and($context->governedPayload)->toBe(['title' => 'Submitted title']);
+        },
+    );
+
+    $approval = app(ApprovalEngine::class)->submit(
+        $order,
+        $flow,
+        $submitter,
+        'purchase-order.submit-hook',
+        [
+            'operation' => ['name' => ApprovalOperation::Update->value],
+            'payload' => ['title' => 'Submitted title'],
+        ],
+        afterApprovalCreated: function (Approval $approval) use ($order): void {
+            $handler = app(ApprovalActionRegistry::class)->resolveSubmitHandler(
+                $approval,
+                $order,
+                'purchase-order.submit-hook',
+                ApprovalOperation::Update->value,
+            );
+
+            expect($handler)->not->toBeNull();
+
+            $handler(new ApprovalOperationSubmissionContext(
+                approval: $approval,
+                approvable: $order,
+                definition: new ApprovableOperation(actionKey: 'purchase-order.submit-hook'),
+                actionKey: 'purchase-order.submit-hook',
+                operation: ApprovalOperation::Update->value,
+                governedPayload: ['title' => 'Submitted title'],
+                directPayload: [],
+                ignoredPayloadKeys: [],
+                submittedBy: null,
+            ));
+        },
+    );
+
+    expect($approval->exists)->toBeTrue()
+        ->and($calls)->toBe(1);
+});
+
+it('flushes submit handlers with apply handlers', function (): void {
+    $submitter = User::factory()->create();
+    $order = PurchaseOrder::factory()->for($submitter, 'user')->create();
+    $approval = new Approval([
+        'approvable_type' => $order->getMorphClass(),
+        'approvable_id' => $order->getKey(),
+        'action_key' => 'purchase-order.submit-hook',
+    ]);
+
+    app(ApprovalActionRegistry::class)
+        ->applyUsing(PurchaseOrder::class, 'purchase-order.submit-hook', ApprovalOperation::Update->value, fn (): null => null)
+        ->submitUsing(PurchaseOrder::class, 'purchase-order.submit-hook', ApprovalOperation::Update, fn (): null => null);
+
+    expect(app(ApprovalActionRegistry::class)->resolveApplyHandler($approval, $order, 'purchase-order.submit-hook', ApprovalOperation::Update->value))->not->toBeNull()
+        ->and(app(ApprovalActionRegistry::class)->resolveSubmitHandler($approval, $order, 'purchase-order.submit-hook', ApprovalOperation::Update->value))->not->toBeNull();
+
+    app(ApprovalActionRegistry::class)->flush();
+
+    expect(app(ApprovalActionRegistry::class)->resolveApplyHandler($approval, $order, 'purchase-order.submit-hook', ApprovalOperation::Update->value))->toBeNull()
+        ->and(app(ApprovalActionRegistry::class)->resolveSubmitHandler($approval, $order, 'purchase-order.submit-hook', ApprovalOperation::Update->value))->toBeNull();
 });
 
 it('uses registered handlers before the crud fallback', function (): void {

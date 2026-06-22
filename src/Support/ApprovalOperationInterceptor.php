@@ -18,6 +18,7 @@ use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class ApprovalOperationInterceptor
 {
@@ -198,10 +199,50 @@ class ApprovalOperationInterceptor
             return;
         }
 
+        $operationName = ApprovalOperation::normalize($operation);
+
         try {
-            $record->submitApprovalForOperationDefinition($operation, $definition, $data);
+            $directPayloadData = app(ApprovalOperationPayload::class)->directPayloadData(
+                $record,
+                $data,
+                $definition->directPayload,
+            );
+
+            $record->submitApprovalForOperationDefinition(
+                $operation,
+                $definition,
+                $data,
+                function ($approval) use ($actionKey, $definition, $directPayloadData, $operationName, $payload, $record): void {
+                    $handler = app(ApprovalActionRegistry::class)->resolveSubmitHandler(
+                        $approval,
+                        $record,
+                        $actionKey,
+                        $operationName,
+                    );
+
+                    if ($handler === null) {
+                        return;
+                    }
+
+                    $handler(new ApprovalOperationSubmissionContext(
+                        approval: $approval,
+                        approvable: $record,
+                        definition: $definition,
+                        actionKey: $actionKey,
+                        operation: $operationName,
+                        governedPayload: $payload,
+                        directPayload: $directPayloadData['payload'],
+                        ignoredPayloadKeys: $directPayloadData['ignored'],
+                        submittedBy: CurrentPanelUser::id(),
+                    ));
+                },
+            );
         } catch (ValidationException $exception) {
             $this->haltWithFailure($action, $this->validationMessage($exception));
+
+            return;
+        } catch (Throwable) {
+            $this->haltWithFailure($action, __('filament-action-approvals::approval.actions.apply_failed'));
 
             return;
         }
