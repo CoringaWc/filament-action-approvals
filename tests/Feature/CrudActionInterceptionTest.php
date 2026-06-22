@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use CoringaWc\FilamentActionApprovals\Attributes\ApprovableOperation;
 use CoringaWc\FilamentActionApprovals\Enums\ActionType;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalOperation;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
@@ -481,9 +482,81 @@ it('captures relationship-backed edit form payloads before relationships are per
     app(ApprovalEngine::class)->approve($approval->currentStepInstance(), $approver->getKey());
 
     expect($order->refresh()->getAttribute('title'))->toBe('Updated order')
-        ->and($detail->refresh()->vendor_name)->toBe('Original vendor')
+        ->and($detail->refresh()->vendor_name)->toBe('Changed vendor')
+        ->and($detail->reference)->toBe('REF-001')
         ->and($order->lines()->where('sku', 'SKU-UPDATED')->exists())->toBeTrue()
         ->and($order->lines()->where('sku', 'SKU-NEW')->exists())->toBeTrue();
+});
+
+it('applies governed has many relationship payloads after approval', function (): void {
+    /** @var TestCase $test */
+    $test = $this;
+
+    $test->seed(DatabaseSeeder::class);
+
+    $submitter = User::query()->where('email', 'admin@filament-action-approvals.test')->firstOrFail();
+    $approver = User::query()->where('email', 'manager@filament-action-approvals.test')->firstOrFail();
+
+    $test->actingAs($submitter);
+
+    $test->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()], 'purchase-order.line-edit');
+
+    $order = PurchaseOrder::factory()->for($submitter, 'user')->create([
+        'title' => 'Original order',
+        'amount' => 1200,
+    ]);
+    $line = $order->lines()->create([
+        'sku' => 'SKU-OLD',
+        'quantity' => 1,
+    ]);
+    $deletedLine = $order->lines()->create([
+        'sku' => 'SKU-DELETE',
+        'quantity' => 9,
+    ]);
+
+    $data = [
+        'user_id' => $submitter->getKey(),
+        'title' => $order->getAttribute('title'),
+        'description' => $order->getAttribute('description'),
+        'amount' => $order->getAttribute('amount'),
+        'lines' => [
+            "record-{$line->getKey()}" => [
+                'sku' => 'SKU-UPDATED',
+                'quantity' => 3,
+            ],
+            'new-line' => [
+                'sku' => 'SKU-NEW',
+                'quantity' => 2,
+            ],
+        ],
+    ];
+
+    $definition = $order->approvalOperationDefinitionForData(ApprovalOperation::Update, $data);
+
+    expect($definition)->toBeInstanceOf(ApprovableOperation::class);
+
+    $approval = $order->submitApprovalForOperationDefinition(ApprovalOperation::Update, $definition, $data);
+
+    $relationshipOperations = data_get($approval->metadata, 'payload.relationships.lines.operations');
+
+    expect($order->refresh()->getAttribute('title'))->toBe('Original order')
+        ->and($line->refresh()->sku)->toBe('SKU-OLD')
+        ->and($order->lines()->where('sku', 'SKU-NEW')->exists())->toBeFalse()
+        ->and($order->lines()->whereKey($deletedLine->getKey())->exists())->toBeTrue()
+        ->and($approval->submittedActionKey())->toBe('purchase-order.line-edit')
+        ->and(data_get($approval->metadata, 'operation.relationships.lines.type'))->toBe('has_many')
+        ->and($relationshipOperations)->toHaveCount(3)
+        ->and(data_get($relationshipOperations, '0.operation'))->toBe('update')
+        ->and(data_get($relationshipOperations, '1.operation'))->toBe('create')
+        ->and(data_get($relationshipOperations, '2.operation'))->toBe('delete');
+
+    app(ApprovalEngine::class)->approve($approval->currentStepInstance(), $approver->getKey());
+
+    expect($line->refresh()->sku)->toBe('SKU-UPDATED')
+        ->and($line->quantity)->toBe(3)
+        ->and($order->lines()->where('sku', 'SKU-NEW')->where('quantity', 2)->exists())->toBeTrue()
+        ->and($order->lines()->whereKey($deletedLine->getKey())->exists())->toBeFalse()
+        ->and(data_get($approval->refresh()->metadata, 'operation.applied_at'))->not->toBeNull();
 });
 
 it('rolls back approval submission and direct payload writes when the submit handler fails', function (): void {

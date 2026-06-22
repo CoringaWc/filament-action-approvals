@@ -145,6 +145,7 @@ return [
             'submit' => 'Enviar pedido de compra',
             'cancel' => 'Cancelar pedido de compra',
             'edit' => 'Editar pedido de compra',
+            'line_edit' => 'Editar itens do pedido de compra',
             'delete' => 'Excluir pedido de compra',
         ],
         'expenses' => [

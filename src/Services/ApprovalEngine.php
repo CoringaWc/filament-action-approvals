@@ -495,9 +495,9 @@ class ApprovalEngine
             ]);
         }
 
-        $approvable = $approval->approvable;
+        $approvable = $this->resolveApprovableForApply($approval, lockForUpdate: true);
 
-        if (! is_object($approvable) || ! method_exists($approvable, 'applyApprovedOperation')) {
+        if (! $approvable instanceof Model || ! method_exists($approvable, 'applyApprovedOperation')) {
             throw ValidationException::withMessages([
                 'approval' => __('filament-action-approvals::approval.actions.apply_failed'),
             ]);
@@ -524,7 +524,7 @@ class ApprovalEngine
     private function applyRegisteredActionHandler(Approval $approval): bool
     {
         $operation = $this->resolveApprovalOperation($approval);
-        $approvable = $this->resolveApprovableForApply($approval);
+        $approvable = $this->resolveApprovableForApply($approval, lockForUpdate: true);
         $handler = app(ApprovalActionRegistry::class)->resolveApplyHandler(
             $approval,
             $approvable,
@@ -595,9 +595,9 @@ class ApprovalEngine
             : ApprovalActionRegistry::OperationAction;
     }
 
-    private function resolveApprovableForApply(Approval $approval): ?Model
+    private function resolveApprovableForApply(Approval $approval, bool $lockForUpdate = false): ?Model
     {
-        $approvable = $approval->approvable;
+        $approvable = $lockForUpdate ? null : $approval->approvable;
 
         if ($approvable instanceof Model) {
             return $approvable;
@@ -614,6 +614,10 @@ class ApprovalEngine
 
         if (in_array(SoftDeletes::class, class_uses_recursive($modelClass), true)) {
             $query->withoutGlobalScope(SoftDeletingScope::class);
+        }
+
+        if ($lockForUpdate) {
+            $query->lockForUpdate();
         }
 
         $approvable = $query->whereKey($approval->approvable_id)->first();

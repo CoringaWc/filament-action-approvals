@@ -528,6 +528,14 @@ class ApprovalOperationPayload
 
     private function singularRelatedRecord(Model $record, string $relationshipName): ?Model
     {
+        $relationship = $record->{$relationshipName}();
+
+        if ($relationship instanceof Relation) {
+            $related = $relationship->first();
+
+            return $related instanceof Model ? $related : null;
+        }
+
         $related = $record->getRelationValue($relationshipName);
 
         return $related instanceof Model ? $related : null;
@@ -538,19 +546,19 @@ class ApprovalOperationPayload
      */
     private function manyRelatedRecords(Model $record, string $relationshipName): Collection
     {
-        $related = $record->getRelationValue($relationshipName);
-
-        if ($related instanceof EloquentCollection || $related instanceof Collection) {
-            return $related
-                ->filter(fn (mixed $item): bool => $item instanceof Model)
-                ->keyBy(fn (Model $item): string => (string) $item->getKey());
-        }
-
         $relationship = $record->{$relationshipName}();
 
         if ($relationship instanceof Relation) {
             return $relationship
                 ->get()
+                ->keyBy(fn (Model $item): string => (string) $item->getKey());
+        }
+
+        $related = $record->getRelationValue($relationshipName);
+
+        if ($related instanceof EloquentCollection || $related instanceof Collection) {
+            return $related
+                ->filter(fn (mixed $item): bool => $item instanceof Model)
                 ->keyBy(fn (Model $item): string => (string) $item->getKey());
         }
 

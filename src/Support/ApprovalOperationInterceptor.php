@@ -164,28 +164,46 @@ class ApprovalOperationInterceptor
         $operation = ApprovalOperation::Update;
 
         try {
-            $definition = $record->approvalOperationDefinitionForData($operation, $data);
+            $definitions = method_exists($record, 'approvalOperationDefinitionsForData')
+                ? $record->approvalOperationDefinitionsForData($operation, $data)
+                : array_filter([$record->approvalOperationDefinitionForData($operation, $data)]);
         } catch (ValidationException $exception) {
             $this->haltWithFailure($action, $this->validationMessage($exception));
 
             return;
         }
 
-        if (! $definition instanceof ApprovableOperation) {
+        $activeDefinitions = [];
+
+        foreach ($definitions as $definition) {
+            if (! $definition instanceof ApprovableOperation) {
+                continue;
+            }
+
+            $actionKey = $definition->normalizedActionKey($record);
+
+            if (! filled($actionKey)) {
+                continue;
+            }
+
+            $flow = $this->findOperationApprovalFlow($record, $actionKey);
+
+            if ($flow instanceof ApprovalFlow) {
+                $activeDefinitions[] = [$definition, $actionKey, $flow];
+            }
+        }
+
+        if (count($activeDefinitions) > 1) {
+            $this->haltWithFailure($action, __('filament-action-approvals::approval.actions.ambiguous_approval_operation'));
+
             return;
         }
 
-        $actionKey = $definition->normalizedActionKey($record);
-
-        if (! filled($actionKey)) {
+        if ($activeDefinitions === []) {
             return;
         }
 
-        $flow = $this->findOperationApprovalFlow($record, $actionKey);
-
-        if (! $flow instanceof ApprovalFlow) {
-            return;
-        }
+        [$definition, $actionKey] = $activeDefinitions[0];
 
         if (FilamentActionApprovalsPlugin::canApplyDirectly(CurrentPanelUser::id())) {
             return;

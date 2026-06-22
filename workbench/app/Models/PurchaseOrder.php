@@ -27,6 +27,12 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
         'lines' => ['type' => 'has_many', 'operations' => ['replace'], 'fields' => ['id', 'sku', 'quantity']],
     ],
 )]
+#[ApprovableOperation(
+    action: 'line-edit',
+    relationships: [
+        'lines' => ['type' => 'has_many', 'fields' => ['sku', 'quantity']],
+    ],
+)]
 #[ApprovableOperation(operation: ApprovalOperation::Delete, actionKey: 'purchase-order.delete')]
 class PurchaseOrder extends Model
 {
@@ -46,6 +52,7 @@ class PurchaseOrder extends Model
             'submit' => __('workbench::workbench.approval_actions.purchase_orders.submit'),
             'cancel' => __('workbench::workbench.approval_actions.purchase_orders.cancel'),
             'purchase-order.edit' => __('workbench::workbench.approval_actions.purchase_orders.edit'),
+            'purchase-order.line-edit' => __('workbench::workbench.approval_actions.purchase_orders.line_edit'),
             'purchase-order.delete' => __('workbench::workbench.approval_actions.purchase_orders.delete'),
         ];
     }

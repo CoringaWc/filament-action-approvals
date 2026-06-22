@@ -20,6 +20,7 @@ use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalDefinition;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalOperationPayload;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalOperationRelationshipApplier;
 use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
@@ -398,9 +399,7 @@ trait HasApprovals
      */
     public function approvalOperationDefinitionForData(ApprovalOperation|string $operation, array $data): ?ApprovableOperation
     {
-        $matches = collect($this->approvalOperationDefinitionsForOperation($operation))
-            ->filter(fn (ApprovableOperation $definition): bool => $this->approvalOperationDefinitionHasChanges($definition, $operation, $data))
-            ->values();
+        $matches = collect($this->approvalOperationDefinitionsForData($operation, $data));
 
         if ($matches->count() > 1) {
             throw ValidationException::withMessages([
@@ -412,6 +411,18 @@ trait HasApprovals
         $definition = $matches->first();
 
         return $definition;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return list<ApprovableOperation>
+     */
+    public function approvalOperationDefinitionsForData(ApprovalOperation|string $operation, array $data): array
+    {
+        return array_values(collect($this->approvalOperationDefinitionsForOperation($operation))
+            ->filter(fn (ApprovableOperation $definition): bool => $this->approvalOperationDefinitionHasChanges($definition, $operation, $data))
+            ->values()
+            ->all());
     }
 
     /**
@@ -517,11 +528,17 @@ trait HasApprovals
         }
 
         if ($approvalOperation === ApprovalOperation::Update) {
-            $fields = $this->approvalFieldsForOperation($operation);
-            $data = $fields === [] ? $payload : Arr::only($payload, $fields);
+            $relationships = Arr::get($payload, 'relationships', []);
+            $data = Arr::except($payload, ['relationships']);
 
-            $this->fill($data);
-            $this->save();
+            if ($data !== []) {
+                $this->fill($data);
+                $this->save();
+            }
+
+            if (is_array($relationships) && $relationships !== []) {
+                app(ApprovalOperationRelationshipApplier::class)->apply($this, $relationships);
+            }
         }
     }
 
@@ -666,6 +683,10 @@ trait HasApprovals
     {
         if ($definition->fields !== [] || ApprovalOperation::fromOperation($operation) !== ApprovalOperation::Update) {
             return $definition->fields;
+        }
+
+        if ($definition->relationships !== []) {
+            return [];
         }
 
         return $this->defaultApprovalFieldsForData($data);
