@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CoringaWc\FilamentActionApprovals\Widgets;
 
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
+use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Resources\Approvals\Tables\ApprovalsTable;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
@@ -37,7 +38,10 @@ class ContextualApprovalsTable extends TableWidget
 
     public function table(Table $table): Table
     {
-        return ApprovalsTable::configure($table)
+        return FilamentActionApprovalsPlugin::configureContextualApprovalsTableForCurrentPanel(
+            ApprovalsTable::configure($table),
+            $this,
+        )
             ->query($this->getTableQuery())
             ->filters([
                 SelectFilter::make('status')
@@ -53,7 +57,7 @@ class ContextualApprovalsTable extends TableWidget
      */
     protected function getTableQuery(): Builder
     {
-        return ApprovalModels::approvalQuery()
+        $query = ApprovalModels::approvalQuery()
             ->withOperationalRelations()
             ->when(
                 filled($this->approvableType),
@@ -63,5 +67,7 @@ class ContextualApprovalsTable extends TableWidget
                 filled($this->approvableId),
                 fn (Builder $query): Builder => $query->where('approvable_id', $this->approvableId),
             );
+
+        return FilamentActionApprovalsPlugin::scopeContextualApprovalsForCurrentPanel($query, $this);
     }
 }

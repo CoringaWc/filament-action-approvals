@@ -6,6 +6,7 @@ namespace CoringaWc\FilamentActionApprovals;
 
 use Closure;
 use CoringaWc\FilamentActionApprovals\Contracts\ApproverResolver;
+use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Pages\ApprovalsDashboard;
 use CoringaWc\FilamentActionApprovals\Resources\ApprovalFlows\ApprovalFlowResource;
 use CoringaWc\FilamentActionApprovals\Resources\Approvals\ApprovalResource;
@@ -16,12 +17,15 @@ use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
 use CoringaWc\FilamentActionApprovals\Support\PrivilegedUserAccess;
 use CoringaWc\FilamentActionApprovals\Support\UserModelKey;
 use CoringaWc\FilamentActionApprovals\Widgets\ApprovalAnalyticsWidget;
+use CoringaWc\FilamentActionApprovals\Widgets\ContextualApprovalsTable;
 use CoringaWc\FilamentActionApprovals\Widgets\PendingApprovalsWidget;
 use Filament\Clusters\Cluster;
 use Filament\Contracts\Plugin;
 use Filament\Panel;
 use Filament\Schemas\Components\Callout;
+use Filament\Tables\Table;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 class FilamentActionApprovalsPlugin implements Plugin
@@ -48,6 +52,12 @@ class FilamentActionApprovalsPlugin implements Plugin
     protected ?array $models = null;
 
     protected ?Closure $approvalActionAuthorization = null;
+
+    /** @var (Closure(Table, ContextualApprovalsTable): Table)|null */
+    protected ?Closure $configureContextualApprovalsTableUsing = null;
+
+    /** @var (Closure(Builder<Approval>, ContextualApprovalsTable): Builder<Approval>)|null */
+    protected ?Closure $scopeContextualApprovalsUsing = null;
 
     protected ?string $navigationGroup = null;
 
@@ -150,6 +160,26 @@ class FilamentActionApprovalsPlugin implements Plugin
     }
 
     /**
+     * @param  Closure(Table, ContextualApprovalsTable): Table  $callback
+     */
+    public function configureContextualApprovalsTableUsing(Closure $callback): static
+    {
+        $this->configureContextualApprovalsTableUsing = $callback;
+
+        return $this;
+    }
+
+    /**
+     * @param  Closure(Builder<Approval>, ContextualApprovalsTable): Builder<Approval>  $callback
+     */
+    public function scopeContextualApprovalsUsing(Closure $callback): static
+    {
+        $this->scopeContextualApprovalsUsing = $callback;
+
+        return $this;
+    }
+
+    /**
      * Override the navigation group for this panel.
      */
     public function navigationGroup(string $group): static
@@ -202,6 +232,28 @@ class FilamentActionApprovalsPlugin implements Plugin
         }
 
         return (bool) ($this->approvalActionAuthorization)($approval);
+    }
+
+    public function configureContextualApprovalsTable(Table $table, ContextualApprovalsTable $widget): Table
+    {
+        if ($this->configureContextualApprovalsTableUsing === null) {
+            return $table;
+        }
+
+        return ($this->configureContextualApprovalsTableUsing)($table, $widget);
+    }
+
+    /**
+     * @param  Builder<Approval>  $query
+     * @return Builder<Approval>
+     */
+    public function scopeContextualApprovals(Builder $query, ContextualApprovalsTable $widget): Builder
+    {
+        if ($this->scopeContextualApprovalsUsing === null) {
+            return $query;
+        }
+
+        return ($this->scopeContextualApprovalsUsing)($query, $widget);
     }
 
     public function register(Panel $panel): void
@@ -335,7 +387,7 @@ class FilamentActionApprovalsPlugin implements Plugin
     }
 
     /**
-     * @return class-string<Models\Approval>
+     * @return class-string<Approval>
      */
     public static function resolveApprovalModel(): string
     {
@@ -634,6 +686,20 @@ class FilamentActionApprovalsPlugin implements Plugin
     public static function canRunOperationalApprovalAction(?Model $approval = null): bool
     {
         return static::current()?->canRunApprovalAction($approval) ?? true;
+    }
+
+    public static function configureContextualApprovalsTableForCurrentPanel(Table $table, ContextualApprovalsTable $widget): Table
+    {
+        return static::current()?->configureContextualApprovalsTable($table, $widget) ?? $table;
+    }
+
+    /**
+     * @param  Builder<Approval>  $query
+     * @return Builder<Approval>
+     */
+    public static function scopeContextualApprovalsForCurrentPanel(Builder $query, ContextualApprovalsTable $widget): Builder
+    {
+        return static::current()?->scopeContextualApprovals($query, $widget) ?? $query;
     }
 
     public static function isOperationalActionEnabled(string $action, bool $default = true): bool

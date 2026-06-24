@@ -204,6 +204,8 @@ public function panel(Panel $panel): Panel
 | `resolvers(array $resolvers)`            | Override approver resolvers for this panel            |
 | `userModel(string $model)`               | Override the user model for this panel                |
 | `navigationGroup(string $group)`         | Override the navigation group label                   |
+| `configureContextualApprovalsTableUsing(Closure $callback)` | Customize the contextual approvals table for the current panel |
+| `scopeContextualApprovalsUsing(Closure $callback)` | Apply a current-panel query scope to contextual approval history |
 
 If the dedicated `ApprovalsDashboard` page is enabled, global panel widgets are suppressed by default so the package dashboard stays independent from the panel's primary dashboard. Call `->widgets()` explicitly if you want both.
 
@@ -238,6 +240,23 @@ By default, `ListApprovalsAction` is hidden until the current panel user can app
 ListApprovalsAction::make()
     ->forApprovable(fn (): Model => $this->getRecord())
     ->hideWhenNoActionableApprovals(false);
+```
+
+The slide-over uses the package `ContextualApprovalsTable` by default. The widget keeps a single status filter defaulted to pending and explicit pagination page sizes, while your panel may still customize the underlying table columns/actions or apply an application-specific visible-history query scope:
+
+```php
+use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
+use CoringaWc\FilamentActionApprovals\Widgets\ContextualApprovalsTable;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+
+FilamentActionApprovalsPlugin::make()
+    ->configureContextualApprovalsTableUsing(
+        fn (Table $table, ContextualApprovalsTable $widget): Table => MyApprovalsTable::configure($table),
+    )
+    ->scopeContextualApprovalsUsing(
+        fn (Builder $query, ContextualApprovalsTable $widget): Builder => MyApprovalResource::scopeVisibleApprovals($query),
+    );
 ```
 
 ### Dashboard opt-in
