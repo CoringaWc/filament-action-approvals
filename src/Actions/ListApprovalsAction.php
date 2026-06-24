@@ -5,12 +5,19 @@ declare(strict_types=1);
 namespace CoringaWc\FilamentActionApprovals\Actions;
 
 use Closure;
+use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
+use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
+use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Support\ApprovableModelLabel;
+use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
+use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
+use CoringaWc\FilamentActionApprovals\Support\OperationalApprovalAuthorizer;
 use CoringaWc\FilamentActionApprovals\Widgets\ContextualApprovalsTable;
 use Filament\Actions\Action;
 use Filament\Schemas\Components\Livewire;
 use Filament\Support\Icons\Heroicon;
 use Filament\Widgets\TableWidget;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 class ListApprovalsAction extends Action
@@ -18,6 +25,10 @@ class ListApprovalsAction extends Action
     protected string|Closure|null $approvableType = null;
 
     protected Model|Closure|null $approvableRecord = null;
+
+    protected bool|Closure $shouldHideWhenNoActionableApprovals = true;
+
+    protected ?bool $actionableApprovalsExist = null;
 
     /**
      * @return class-string<TableWidget>
@@ -46,6 +57,13 @@ class ListApprovalsAction extends Action
         return $this;
     }
 
+    public function hideWhenNoActionableApprovals(bool|Closure $condition = true): static
+    {
+        $this->shouldHideWhenNoActionableApprovals = $condition;
+
+        return $this;
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -62,7 +80,8 @@ class ListApprovalsAction extends Action
             ->modalSubmitAction(false)
             ->modalCancelActionLabel(__('filament-action-approvals::approval.relation_manager.close'))
             ->modalHeading(fn (): string => $this->resolveModalHeading())
-            ->visible(fn (): bool => $this->resolveApprovableRecord() instanceof Model || filled($this->resolveApprovableType()));
+            ->hidden(fn (self $action): bool => ! $action->hasApprovableContext()
+                || ($action->shouldHideWhenNoActionableApprovals() && ! $action->hasActionableApprovals()));
     }
 
     /**
@@ -137,6 +156,70 @@ class ListApprovalsAction extends Action
         $record = $livewire->getRecord();
 
         return $record instanceof Model ? $record : null;
+    }
+
+    protected function hasApprovableContext(): bool
+    {
+        return $this->resolveApprovableRecord() instanceof Model
+            || filled($this->resolveApprovableType());
+    }
+
+    protected function shouldHideWhenNoActionableApprovals(): bool
+    {
+        return (bool) $this->evaluate($this->shouldHideWhenNoActionableApprovals);
+    }
+
+    protected function hasActionableApprovals(): bool
+    {
+        if ($this->actionableApprovalsExist !== null) {
+            return $this->actionableApprovalsExist;
+        }
+
+        $userId = CurrentPanelUser::id();
+
+        if (! is_int($userId) && ! is_string($userId)) {
+            return $this->actionableApprovalsExist = false;
+        }
+
+        $authorizer = app(OperationalApprovalAuthorizer::class);
+
+        return $this->actionableApprovalsExist = $this->actionableApprovalsQuery($userId)
+            ->get()
+            ->contains(fn (Approval $approval): bool => $authorizer->canApprove($approval, $userId)
+                || $authorizer->canReject($approval, $userId));
+    }
+
+    /**
+     * @return Builder<Approval>
+     */
+    protected function actionableApprovalsQuery(int|string $userId): Builder
+    {
+        $query = ApprovalModels::approvalQuery()
+            ->withOperationalRelations()
+            ->with([
+                'stepInstances.actions',
+                'stepInstances.delegations',
+            ]);
+
+        $record = $this->resolveApprovableRecord();
+
+        if ($record instanceof Model) {
+            $query->forApprovable($record);
+        } else {
+            $approvableType = $this->resolveApprovableType();
+
+            if (blank($approvableType)) {
+                return $query->whereRaw('1 = 0');
+            }
+
+            $query->forApprovableType($approvableType);
+        }
+
+        if (FilamentActionApprovalsPlugin::isSuperAdmin($userId)) {
+            return $query->withStatus(ApprovalStatus::Pending);
+        }
+
+        return $query->awaitingUserAction($userId);
     }
 
     protected function resolveApprovableType(): ?string

@@ -7,7 +7,9 @@ use CoringaWc\FilamentActionApprovals\Actions\ListRequesterApprovalsAction;
 use CoringaWc\FilamentActionApprovals\ApproverResolvers\UserResolver;
 use CoringaWc\FilamentActionApprovals\Concerns\HasApprovalsResource;
 use CoringaWc\FilamentActionApprovals\Enums\StepType;
+use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
+use CoringaWc\FilamentActionApprovals\Models\ApprovalStepInstance;
 use CoringaWc\FilamentActionApprovals\Resources\Approvals\Tables\ApprovalsTable;
 use CoringaWc\FilamentActionApprovals\Services\ApprovalEngine;
 use CoringaWc\FilamentActionApprovals\Tests\TestCase;
@@ -58,6 +60,114 @@ it('opens contextual approvals in a slide over instead of redirecting', function
 
     expect($action->getUrl())->toBeNull()
         ->and($action->isModalSlideOver())->toBeTrue();
+});
+
+it('shows contextual approvals action only when the current user can resolve approvals in scope', function (): void {
+    /** @var TestCase $test */
+    $test = $this;
+
+    $submitter = User::factory()->create();
+    $approver = User::factory()->create();
+    $outsider = User::factory()->create();
+    $purchaseOrder = PurchaseOrder::factory()->for($submitter)->create();
+    $otherPurchaseOrder = PurchaseOrder::factory()->for($submitter)->create();
+    $flow = $test->createSingleStepFlow(PurchaseOrder::class, [(int) $approver->getKey()]);
+
+    app(ApprovalEngine::class)->submit($purchaseOrder, $flow, $submitter);
+
+    $test->actingAs($outsider);
+
+    expect(ListApprovalsAction::make()->forApprovable($purchaseOrder)->isHidden())->toBeTrue()
+        ->and(ListApprovalsAction::make()->forApprovableType((new PurchaseOrder)->getMorphClass())->isHidden())->toBeTrue();
+
+    $test->actingAs($approver);
+
+    expect(ListApprovalsAction::make()->forApprovable($purchaseOrder)->isHidden())->toBeFalse()
+        ->and(ListApprovalsAction::make()->forApprovableType((new PurchaseOrder)->getMorphClass())->isHidden())->toBeFalse()
+        ->and(
+            ListApprovalsAction::make()
+                ->forApprovable($otherPurchaseOrder)
+                ->forApprovableType((new PurchaseOrder)->getMorphClass())
+                ->isHidden(),
+        )->toBeTrue();
+});
+
+it('hides contextual approvals action after the scoped approval is resolved', function (): void {
+    /** @var TestCase $test */
+    $test = $this;
+
+    $submitter = User::factory()->create();
+    $approver = User::factory()->create();
+    $purchaseOrder = PurchaseOrder::factory()->for($submitter)->create();
+    $flow = $test->createSingleStepFlow(PurchaseOrder::class, [(int) $approver->getKey()]);
+    $approval = app(ApprovalEngine::class)->submit($purchaseOrder, $flow, $submitter);
+
+    $test->actingAs($approver);
+
+    expect(ListApprovalsAction::make()->forApprovable($purchaseOrder)->isHidden())->toBeFalse();
+
+    $stepInstance = $approval->currentStepInstance();
+
+    if (! $stepInstance instanceof ApprovalStepInstance) {
+        $test->fail('Expected the approval to have a waiting step instance.');
+    }
+
+    app(ApprovalEngine::class)->approve($stepInstance, $approver->getKey(), 'Approved.');
+
+    expect(ListApprovalsAction::make()->forApprovable($purchaseOrder)->isHidden())->toBeTrue();
+});
+
+it('allows contextual approvals action visibility to be opted out per action', function (): void {
+    /** @var TestCase $test */
+    $test = $this;
+
+    $user = User::factory()->create();
+    $purchaseOrder = PurchaseOrder::factory()->for($user)->create();
+
+    $test->actingAs($user);
+
+    expect(
+        ListApprovalsAction::make()
+            ->forApprovable($purchaseOrder)
+            ->hideWhenNoActionableApprovals(false)
+            ->isHidden(),
+    )->toBeFalse()
+        ->and(
+            ListApprovalsAction::make()
+                ->forApprovable($purchaseOrder)
+                ->hideWhenNoActionableApprovals(false)
+                ->visible(fn (): bool => false)
+                ->isHidden(),
+        )->toBeTrue();
+});
+
+it('honors the panel operational authorization callback for contextual approvals action visibility', function (): void {
+    /** @var TestCase $test */
+    $test = $this;
+
+    $submitter = User::factory()->create();
+    $approver = User::factory()->create();
+    $purchaseOrder = PurchaseOrder::factory()->for($submitter)->create();
+    $flow = $test->createSingleStepFlow(PurchaseOrder::class, [(int) $approver->getKey()]);
+    $plugin = FilamentActionApprovalsPlugin::current();
+
+    app(ApprovalEngine::class)->submit($purchaseOrder, $flow, $submitter);
+
+    $test->actingAs($approver);
+
+    expect($plugin)->toBeInstanceOf(FilamentActionApprovalsPlugin::class);
+
+    if (! $plugin instanceof FilamentActionApprovalsPlugin) {
+        return;
+    }
+
+    $plugin->authorizeApprovalActionsUsing(fn (): bool => false);
+
+    expect(ListApprovalsAction::make()->forApprovable($purchaseOrder)->isHidden())->toBeTrue();
+
+    $plugin->authorizeApprovalActionsUsing(fn (): bool => true);
+
+    expect(ListApprovalsAction::make()->forApprovable($purchaseOrder)->isHidden())->toBeFalse();
 });
 
 it('shows requester approval history action only to the submitter', function (): void {

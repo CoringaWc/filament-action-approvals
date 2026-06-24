@@ -232,6 +232,14 @@ ListApprovalsAction::make()
 
 The action opens a slide-over containing the approvals table already filtered to the relevant model or record. Use it on resource list pages or on headers of relation managers/nested resources that belong to an approvable model. Do not add it to `ApprovalsRelationManager` itself.
 
+By default, `ListApprovalsAction` is hidden until the current panel user can approve or reject at least one pending approval in the scoped context. Use `hideWhenNoActionableApprovals(false)` when the trigger should stay visible as a history-only entry point:
+
+```php
+ListApprovalsAction::make()
+    ->forApprovable(fn (): Model => $this->getRecord())
+    ->hideWhenNoActionableApprovals(false);
+```
+
 ### Dashboard opt-in
 
 `ApprovalsDashboard` is disabled by default. Enable it explicitly when your panel needs a global operational view:

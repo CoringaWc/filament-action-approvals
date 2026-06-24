@@ -64,7 +64,7 @@ it('can render purchase order create page with pt_BR labels', function (): void 
 
     $test->get(PurchaseOrderResource::getUrl('index'))
         ->assertOk()
-        ->assertSeeText('Ver aprovações', false);
+        ->assertDontSeeText('Ver aprovações', false);
 });
 
 it('can render expense create page with pt_BR labels', function (): void {
@@ -81,7 +81,7 @@ it('can render expense create page with pt_BR labels', function (): void {
 
     $test->get(ExpenseResource::getUrl('index'))
         ->assertOk()
-        ->assertSeeText('Ver aprovações', false);
+        ->assertDontSeeText('Ver aprovações', false);
 });
 
 it('can render grouped approval response actions on workbench resource pages', function (): void {
@@ -336,11 +336,11 @@ it('can render user, invoice and expense resources in pt_BR', function (): void 
         ->assertOk()
         ->assertSeeText('Faturas', false)
         ->assertSeeText('Em emissão', false)
-        ->assertSeeText('Ver aprovações', false);
+        ->assertDontSeeText('Ver aprovações', false);
 
     $test->get(ExpenseResource::getUrl('index'))
         ->assertOk()
         ->assertSeeText('Despesas', false)
         ->assertSeeText('Rascunho', false)
-        ->assertSeeText('Ver aprovações', false);
+        ->assertDontSeeText('Ver aprovações', false);
 });
