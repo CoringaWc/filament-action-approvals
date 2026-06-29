@@ -104,6 +104,32 @@ it('memoizes privileged role checks within the current request lifecycle', funct
         ->and($secondQueryCount)->toBe(0);
 });
 
+it('reuses the authenticated panel user for privileged role checks', function (): void {
+    Role::findOrCreate('super_admin', 'web');
+    $user = $this->createUser();
+    $user->assignRole('super_admin');
+
+    $this->actingAs($user);
+
+    config()->set('filament-action-approvals.super_admin.enabled', true);
+    config()->set('filament-action-approvals.super_admin.roles', ['super_admin']);
+    config()->set('filament-action-approvals.super_admin.user_ids', []);
+
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+
+    expect(FilamentActionApprovalsPlugin::isSuperAdmin($user->getKey()))->toBeTrue()
+        ->and($user->hasRole('super_admin'))->toBeTrue();
+
+    $roleLookups = collect(DB::getQueryLog())
+        ->filter(fn (array $query): bool => str_contains((string) $query['query'], 'model_has_roles'))
+        ->count();
+
+    DB::disableQueryLog();
+
+    expect($roleLookups)->toBeLessThanOrEqual(1);
+});
+
 it('keeps privileged role check cache isolated per user', function (): void {
     Role::findOrCreate('super_admin', 'web');
     $superAdmin = $this->createUser();

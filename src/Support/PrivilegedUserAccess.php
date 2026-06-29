@@ -43,8 +43,7 @@ final class PrivilegedUserAccess
             return $this->superAdminChecks[$cacheKey];
         }
 
-        /** @var Model|null $user */
-        $user = $userModel::query()->find($normalizedUserId);
+        $user = $this->userForRoleCheck($normalizedUserId, $userModel);
 
         if (! $user || ! method_exists($user, 'hasAnyRole')) {
             return $this->superAdminChecks[$cacheKey] = false;
@@ -72,5 +71,22 @@ final class PrivilegedUserAccess
             (string) $userId,
             hash('xxh128', serialize([$config['roles'], $config['user_ids']])),
         ]);
+    }
+
+    /**
+     * @param  class-string<Model>  $userModel
+     */
+    private function userForRoleCheck(int|string $userId, string $userModel): ?Model
+    {
+        $currentPanelUser = CurrentPanelUser::model();
+
+        if ($currentPanelUser instanceof $userModel && UserModelKey::normalize($currentPanelUser->getKey()) === $userId) {
+            return $currentPanelUser;
+        }
+
+        /** @var Model|null $user */
+        $user = $userModel::query()->find($userId);
+
+        return $user;
     }
 }
