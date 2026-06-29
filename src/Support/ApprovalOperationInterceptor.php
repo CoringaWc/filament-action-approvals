@@ -24,6 +24,11 @@ class ApprovalOperationInterceptor
 {
     private static ?int $registeredApplicationId = null;
 
+    /**
+     * @var array<string, ApprovalFlow|null>
+     */
+    private array $operationApprovalFlows = [];
+
     public function register(): void
     {
         $applicationId = spl_object_id(app());
@@ -388,8 +393,45 @@ class ApprovalOperationInterceptor
 
     private function findOperationApprovalFlow(Model $record, string $actionKey): ?ApprovalFlow
     {
+        $cacheKey = $this->operationApprovalFlowCacheKey($record, $actionKey);
+
+        if (array_key_exists($cacheKey, $this->operationApprovalFlows)) {
+            return $this->operationApprovalFlows[$cacheKey];
+        }
+
         $flowModel = ApprovalModels::flow();
 
-        return $flowModel::forAction($record, $actionKey)->first();
+        return $this->operationApprovalFlows[$cacheKey] = $flowModel::forAction($record, $actionKey)->first();
+    }
+
+    public function flushOperationApprovalFlowCache(): void
+    {
+        $this->operationApprovalFlows = [];
+    }
+
+    private function operationApprovalFlowCacheKey(Model $record, string $actionKey): string
+    {
+        return implode('|', [
+            ApprovalModels::flow(),
+            $record::class,
+            $record->getMorphClass(),
+            $actionKey,
+            $this->tenantCacheSegment($record),
+        ]);
+    }
+
+    private function tenantCacheSegment(Model $record): string
+    {
+        if (! config('filament-action-approvals.multi_tenancy.enabled', false)) {
+            return 'global';
+        }
+
+        $tenantColumn = config('filament-action-approvals.multi_tenancy.column', 'company_id');
+
+        if (! is_string($tenantColumn) || blank($tenantColumn)) {
+            return 'tenant:none';
+        }
+
+        return $tenantColumn.':'.((string) $record->getAttribute($tenantColumn));
     }
 }

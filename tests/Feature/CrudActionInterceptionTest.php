@@ -187,6 +187,39 @@ it('intercepts native delete actions and only deletes after approval is complete
         ->and(data_get($approval->metadata, 'applied_at'))->not->toBeNull();
 });
 
+it('caches operation approval flow lookups while rendering intercepted table actions', function (): void {
+    /** @var TestCase $test */
+    $test = $this;
+
+    $test->seed(DatabaseSeeder::class);
+
+    $submitter = User::query()->where('email', 'admin@filament-action-approvals.test')->firstOrFail();
+    $approver = User::query()->where('email', 'manager@filament-action-approvals.test')->firstOrFail();
+
+    $test->actingAs($submitter);
+
+    $test->createSingleStepFlow(PurchaseOrder::class, [$approver->getKey()], 'purchase-order.delete');
+
+    PurchaseOrder::factory()
+        ->for($submitter, 'user')
+        ->count(5)
+        ->create();
+
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+
+    Livewire::test(ListPurchaseOrders::class)->loadTable();
+
+    $deleteFlowLookups = collect(DB::getQueryLog())
+        ->filter(fn (array $query): bool => preg_match('/from\s+["`]?approval_flows["`]?/i', (string) $query['query']) === 1
+            && collect($query['bindings'])->contains('purchase-order.delete'))
+        ->count();
+
+    DB::disableQueryLog();
+
+    expect($deleteFlowLookups)->toBeLessThanOrEqual(1);
+});
+
 it('uses schema callouts for intercepted delete action modals when enabled', function (): void {
     /** @var TestCase $test */
     $test = $this;
