@@ -62,6 +62,25 @@ it('opens contextual approvals in a slide over instead of redirecting', function
         ->and($action->isModalSlideOver())->toBeTrue();
 });
 
+it('passes contextual parameters to the approvals table widget', function (): void {
+    $action = ListApprovalsAction::make()
+        ->forApprovableType((new PurchaseOrder)->getMorphClass())
+        ->contextParameters(fn (): array => [
+            'agencyId' => '102',
+            'scope' => 'agency-users',
+        ]);
+
+    $tableParameters = (fn (): array => $this->getTableParameters())->call($action);
+
+    expect($tableParameters)->toBe([
+        'approvableType' => (new PurchaseOrder)->getMorphClass(),
+        'context' => [
+            'agencyId' => '102',
+            'scope' => 'agency-users',
+        ],
+    ]);
+});
+
 it('shows contextual approvals action only when the current user can resolve approvals in scope', function (): void {
     /** @var TestCase $test */
     $test = $this;
@@ -90,6 +109,32 @@ it('shows contextual approvals action only when the current user can resolve app
                 ->forApprovableType((new PurchaseOrder)->getMorphClass())
                 ->isHidden(),
         )->toBeTrue();
+});
+
+it('lets explicit approvable type context override an inferred action record', function (): void {
+    /** @var TestCase $test */
+    $test = $this;
+
+    $submitter = User::factory()->create();
+    $approver = User::factory()->create();
+    $purchaseOrder = PurchaseOrder::factory()->for($submitter)->create();
+    $otherPurchaseOrder = PurchaseOrder::factory()->for($submitter)->create();
+    $flow = $test->createSingleStepFlow(PurchaseOrder::class, [(int) $approver->getKey()]);
+
+    app(ApprovalEngine::class)->submit($purchaseOrder, $flow, $submitter);
+
+    $test->actingAs($approver);
+
+    $action = ListApprovalsAction::make()
+        ->record($otherPurchaseOrder)
+        ->forApprovableType((new PurchaseOrder)->getMorphClass());
+
+    $tableParameters = (fn (): array => $this->getTableParameters())->call($action);
+
+    expect($action->isHidden())->toBeFalse()
+        ->and($tableParameters)->toBe([
+            'approvableType' => (new PurchaseOrder)->getMorphClass(),
+        ]);
 });
 
 it('hides contextual approvals action after the scoped approval is resolved', function (): void {

@@ -23,12 +23,21 @@ class ContextualApprovalsTable extends TableWidget
 
     public ?string $approvableId = null;
 
+    /**
+     * @var array<string, mixed>
+     */
+    public array $context = [];
+
     protected int|string|array $columnSpan = 'full';
 
-    public function mount(?string $approvableType = null, ?string $approvableId = null): void
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    public function mount(?string $approvableType = null, ?string $approvableId = null, array $context = []): void
     {
         $this->approvableType = filled($approvableType) ? $approvableType : null;
         $this->approvableId = filled($approvableId) ? $approvableId : null;
+        $this->context = $context;
     }
 
     protected function getTableHeading(): string|Htmlable|null

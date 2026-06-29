@@ -127,7 +127,8 @@ it('allows the current panel to configure the contextual approvals table and que
     $plugin
         ->configureContextualApprovalsTableUsing(function (Table $table, ContextualApprovalsTable $widget) use (&$configuredContext, $purchaseOrder): Table {
             $configuredContext = $widget->approvableType === $purchaseOrder->getMorphClass()
-                && $widget->approvableId === (string) $purchaseOrder->getKey();
+                && $widget->approvableId === (string) $purchaseOrder->getKey()
+                && $widget->context === ['scope' => 'purchase-orders'];
 
             return $table->columns([
                 TextColumn::make('action_key')
@@ -136,7 +137,8 @@ it('allows the current panel to configure the contextual approvals table and que
         })
         ->scopeContextualApprovalsUsing(function (Builder $query, ContextualApprovalsTable $widget) use (&$scopedContext): Builder {
             $scopedContext = filled($widget->approvableType)
-                && filled($widget->approvableId);
+                && filled($widget->approvableId)
+                && $widget->context === ['scope' => 'purchase-orders'];
 
             return $query->where('action_key', 'visible-action');
         });
@@ -144,10 +146,12 @@ it('allows the current panel to configure the contextual approvals table and que
     $component = Livewire::test(ContextualApprovalsTable::class, [
         'approvableType' => $purchaseOrder->getMorphClass(),
         'approvableId' => (string) $purchaseOrder->getKey(),
+        'context' => ['scope' => 'purchase-orders'],
     ]);
 
     expect(array_keys($component->instance()->getTable()->getColumns()))->toBe(['action_key'])
         ->and(array_keys($component->instance()->getTable()->getFilters()))->toBe(['status'])
+        ->and($component->instance()->context)->toBe(['scope' => 'purchase-orders'])
         ->and($configuredContext)->toBeTrue()
         ->and($scopedContext)->toBeTrue();
 

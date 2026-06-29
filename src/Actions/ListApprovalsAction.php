@@ -26,6 +26,9 @@ class ListApprovalsAction extends Action
 
     protected Model|Closure|null $approvableRecord = null;
 
+    /** @var array<string, mixed>|Closure */
+    protected array|Closure $contextParameters = [];
+
     protected bool|Closure $shouldHideWhenNoActionableApprovals = true;
 
     protected ?bool $actionableApprovalsExist = null;
@@ -53,6 +56,16 @@ class ListApprovalsAction extends Action
     public function forApprovable(Model|Closure|null $approvableRecord): static
     {
         $this->approvableRecord = $approvableRecord;
+
+        return $this;
+    }
+
+    /**
+     * @param  array<string, mixed>|Closure  $contextParameters
+     */
+    public function contextParameters(array|Closure $contextParameters): static
+    {
+        $this->contextParameters = $contextParameters;
 
         return $this;
     }
@@ -85,24 +98,52 @@ class ListApprovalsAction extends Action
     }
 
     /**
-     * @return array<string, int|string>
+     * @return array<string, mixed>
      */
     protected function getTableParameters(): array
     {
         $record = $this->resolveApprovableRecord();
 
         if ($record instanceof Model) {
-            return [
+            return $this->withContextParameters([
                 'approvableType' => $record->getMorphClass(),
                 'approvableId' => $record->getKey(),
-            ];
+            ]);
         }
 
         $approvableType = $this->resolveApprovableType();
 
         return filled($approvableType)
-            ? ['approvableType' => $approvableType]
-            : [];
+            ? $this->withContextParameters(['approvableType' => $approvableType])
+            : $this->withContextParameters([]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $parameters
+     * @return array<string, mixed>
+     */
+    protected function withContextParameters(array $parameters): array
+    {
+        $contextParameters = $this->resolveContextParameters();
+
+        if ($contextParameters === []) {
+            return $parameters;
+        }
+
+        return [
+            ...$parameters,
+            'context' => $contextParameters,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function resolveContextParameters(): array
+    {
+        $contextParameters = $this->evaluate($this->contextParameters);
+
+        return is_array($contextParameters) ? $contextParameters : [];
     }
 
     protected function getTableKey(): string
@@ -139,6 +180,10 @@ class ListApprovalsAction extends Action
 
         if ($record instanceof Model) {
             return $record;
+        }
+
+        if (filled($this->resolveApprovableType())) {
+            return null;
         }
 
         $record = $this->getRecord();
