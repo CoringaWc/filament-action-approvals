@@ -59,6 +59,9 @@ class FilamentActionApprovalsPlugin implements Plugin
     /** @var (Closure(Builder<Approval>, ContextualApprovalsTable): Builder<Approval>)|null */
     protected ?Closure $scopeContextualApprovalsUsing = null;
 
+    /** @var (Closure(Builder<Approval>, array<string, mixed>): Builder<Approval>)|null */
+    protected ?Closure $scopeRequesterApprovalsUsing = null;
+
     protected ?string $navigationGroup = null;
 
     public static function make(): static
@@ -180,6 +183,16 @@ class FilamentActionApprovalsPlugin implements Plugin
     }
 
     /**
+     * @param  Closure(Builder<Approval>, array<string, mixed>): Builder<Approval>  $callback
+     */
+    public function scopeRequesterApprovalsUsing(Closure $callback): static
+    {
+        $this->scopeRequesterApprovalsUsing = $callback;
+
+        return $this;
+    }
+
+    /**
      * Override the navigation group for this panel.
      */
     public function navigationGroup(string $group): static
@@ -254,6 +267,20 @@ class FilamentActionApprovalsPlugin implements Plugin
         }
 
         return ($this->scopeContextualApprovalsUsing)($query, $widget);
+    }
+
+    /**
+     * @param  Builder<Approval>  $query
+     * @param  array<string, mixed>  $parameters
+     * @return Builder<Approval>
+     */
+    public function scopeRequesterApprovals(Builder $query, array $parameters): Builder
+    {
+        if ($this->scopeRequesterApprovalsUsing === null) {
+            return $query;
+        }
+
+        return ($this->scopeRequesterApprovalsUsing)($query, $parameters);
     }
 
     public function register(Panel $panel): void
@@ -700,6 +727,16 @@ class FilamentActionApprovalsPlugin implements Plugin
     public static function scopeContextualApprovalsForCurrentPanel(Builder $query, ContextualApprovalsTable $widget): Builder
     {
         return static::current()?->scopeContextualApprovals($query, $widget) ?? $query;
+    }
+
+    /**
+     * @param  Builder<Approval>  $query
+     * @param  array<string, mixed>  $parameters
+     * @return Builder<Approval>
+     */
+    public static function scopeRequesterApprovalsForCurrentPanel(Builder $query, array $parameters): Builder
+    {
+        return static::current()?->scopeRequesterApprovals($query, $parameters) ?? $query;
     }
 
     public static function isOperationalActionEnabled(string $action, bool $default = true): bool

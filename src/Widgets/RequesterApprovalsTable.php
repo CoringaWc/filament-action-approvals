@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CoringaWc\FilamentActionApprovals\Widgets;
 
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
+use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
 use CoringaWc\FilamentActionApprovals\Support\ApprovableActionLabel;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
@@ -92,7 +93,7 @@ class RequesterApprovalsTable extends TableWidget
         $approvableType = $parameters['approvableType'] ?? null;
         $approvableId = $parameters['approvableId'] ?? null;
 
-        return $query
+        $query = $query
             ->when(
                 is_string($approvableType) && filled($approvableType),
                 fn (Builder $builder): Builder => $builder->where('approvable_type', $approvableType),
@@ -101,6 +102,8 @@ class RequesterApprovalsTable extends TableWidget
                 ! is_array($approvableId) && filled($approvableId),
                 fn (Builder $builder): Builder => $builder->where('approvable_id', (string) $approvableId),
             );
+
+        return FilamentActionApprovalsPlugin::scopeRequesterApprovalsForCurrentPanel($query, $parameters);
     }
 
     /**
@@ -115,6 +118,7 @@ class RequesterApprovalsTable extends TableWidget
             [
                 'approvableType' => (string) $this->approvableType,
                 'approvableId' => (string) $this->approvableId,
+                'context' => $this->context,
             ],
         );
     }

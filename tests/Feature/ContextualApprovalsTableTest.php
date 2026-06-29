@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use CoringaWc\FilamentActionApprovals\Actions\ListRequesterApprovalsAction;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
@@ -227,4 +228,100 @@ it('scopes requester approvals table to the current submitter and keeps it read 
     $component
         ->assertCanSeeTableRecords([$visibleApproval, $metadataFallbackApproval])
         ->assertCanNotSeeTableRecords([$hiddenApproval]);
+});
+
+it('allows the current panel to scope requester approvals with contextual parameters', function (): void {
+    /** @var TestCase $test */
+    $test = $this;
+
+    $submitter = User::factory()->create();
+    $purchaseOrder = PurchaseOrder::factory()->for($submitter)->create();
+
+    $flow = ApprovalFlow::create([
+        'name' => 'Scoped Requester Approvals Flow',
+        'approvable_type' => $purchaseOrder->getMorphClass(),
+        'action_key' => 'submit',
+        'is_active' => true,
+    ]);
+
+    $visibleApproval = Approval::create([
+        'approval_flow_id' => $flow->getKey(),
+        'approvable_type' => $purchaseOrder->getMorphClass(),
+        'approvable_id' => $purchaseOrder->getKey(),
+        'status' => ApprovalStatus::Pending,
+        'action_key' => 'visible-action',
+        'submitted_by' => $submitter->getKey(),
+        'submitted_by_type' => $submitter->getMorphClass(),
+        'submitted_by_id' => $submitter->getKey(),
+        'submitted_at' => now(),
+    ]);
+
+    $hiddenApproval = Approval::create([
+        'approval_flow_id' => $flow->getKey(),
+        'approvable_type' => $purchaseOrder->getMorphClass(),
+        'approvable_id' => $purchaseOrder->getKey(),
+        'status' => ApprovalStatus::Pending,
+        'action_key' => 'hidden-action',
+        'submitted_by' => $submitter->getKey(),
+        'submitted_by_type' => $submitter->getMorphClass(),
+        'submitted_by_id' => $submitter->getKey(),
+        'submitted_at' => now()->subMinute(),
+    ]);
+
+    $plugin = FilamentActionApprovalsPlugin::current();
+
+    expect($plugin)->toBeInstanceOf(FilamentActionApprovalsPlugin::class);
+
+    if (! $plugin instanceof FilamentActionApprovalsPlugin) {
+        return;
+    }
+
+    /** @var list<array<string, mixed>> $scopedParameters */
+    $scopedParameters = [];
+
+    $plugin->scopeRequesterApprovalsUsing(function (Builder $query, array $parameters) use (&$scopedParameters): Builder {
+        $scopedParameters[] = $parameters;
+
+        if (($parameters['context']['scope'] ?? null) !== 'purchase-orders') {
+            return $query->where('action_key', '__hidden__');
+        }
+
+        return $query->where('action_key', 'visible-action');
+    });
+
+    $test->actingAs($submitter);
+
+    $unscopedAction = ListRequesterApprovalsAction::make()
+        ->forApprovableType($purchaseOrder->getMorphClass());
+
+    $scopedAction = ListRequesterApprovalsAction::make()
+        ->forApprovableType($purchaseOrder->getMorphClass())
+        ->contextParameters(['scope' => 'purchase-orders']);
+
+    expect($unscopedAction->isHidden())->toBeTrue()
+        ->and($scopedAction->isHidden())->toBeFalse();
+
+    $component = Livewire::test(RequesterApprovalsTable::class, [
+        'approvableType' => $purchaseOrder->getMorphClass(),
+        'context' => ['scope' => 'purchase-orders'],
+    ]);
+
+    $requesterTable = $component->instance();
+
+    if (! $requesterTable instanceof RequesterApprovalsTable) {
+        throw new LogicException('Expected requester approvals table component.');
+    }
+
+    expect($requesterTable->context)->toBe(['scope' => 'purchase-orders'])
+        ->and(collect($scopedParameters)->contains(
+            fn (array $parameters): bool => ($parameters['context']['scope'] ?? null) === 'purchase-orders',
+        ))->toBeTrue();
+
+    $component
+        ->assertCanSeeTableRecords([$visibleApproval])
+        ->assertCanNotSeeTableRecords([$hiddenApproval]);
+
+    $plugin->scopeRequesterApprovalsUsing(
+        fn (Builder $query, array $_parameters): Builder => $query,
+    );
 });
