@@ -10,7 +10,9 @@ use CoringaWc\FilamentActionApprovals\Models\ApprovalFlow;
 use CoringaWc\FilamentActionApprovals\Tests\TestCase;
 use CoringaWc\FilamentActionApprovals\Widgets\ContextualApprovalsTable;
 use CoringaWc\FilamentActionApprovals\Widgets\RequesterApprovalsTable;
+use Filament\Actions\ActionGroup;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Enums\RecordActionsPosition;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Livewire;
@@ -68,9 +70,13 @@ it('overrides shared filters in the contextual approvals table and defaults stat
     ]);
 
     expect(array_keys($component->instance()->getTable()->getFilters()))->toBe(['status']);
+    expect(collect($component->instance()->getTable()->getActions())
+        ->contains(fn (mixed $action): bool => $action instanceof ActionGroup))->toBeFalse()
+        ->and($component->instance()->getTable()->getRecordActionsPosition())->toBe(RecordActionsPosition::BeforeColumns);
 
     $component
         ->assertSet('tableFilters.status.value', ApprovalStatus::Pending->value)
+        ->assertTableActionVisible('view', $pendingApproval)
         ->assertCanSeeTableRecords([$pendingApproval])
         ->assertCanNotSeeTableRecords([$approvedApproval, $otherPendingApproval])
         ->filterTable('status', ApprovalStatus::Approved->value)
@@ -162,7 +168,7 @@ it('allows the current panel to configure the contextual approvals table and que
         ->assertCanNotSeeTableRecords([$hiddenApproval]);
 });
 
-it('scopes requester approvals table to the current submitter and keeps it read only', function (): void {
+it('scopes requester approvals table to the current submitter and shows only details as a row action', function (): void {
     /** @var TestCase $test */
     $test = $this;
 
@@ -223,9 +229,17 @@ it('scopes requester approvals table to the current submitter and keeps it read 
     ]);
 
     expect(array_keys($component->instance()->getTable()->getFilters()))->toBe(['status'])
-        ->and($component->instance()->getTable()->getFlatActions())->toBe([]);
+        ->and(collect($component->instance()->getTable()->getActions())
+            ->contains(fn (mixed $action): bool => $action instanceof ActionGroup))->toBeFalse()
+        ->and($component->instance()->getTable()->getRecordActionsPosition())->toBe(RecordActionsPosition::BeforeColumns)
+        ->and(array_keys($component->instance()->getTable()->getFlatActions()))->toContain('view');
 
     $component
+        ->assertTableActionVisible('view', $visibleApproval)
+        ->assertTableActionHidden('approve', $visibleApproval)
+        ->assertTableActionHidden('reject', $visibleApproval)
+        ->assertTableActionHidden('approvalComment', $visibleApproval)
+        ->assertTableActionHidden('delegate', $visibleApproval)
         ->assertCanSeeTableRecords([$visibleApproval, $metadataFallbackApproval])
         ->assertCanNotSeeTableRecords([$hiddenApproval]);
 });
@@ -313,11 +327,15 @@ it('allows the current panel to scope requester approvals with contextual parame
     }
 
     expect($requesterTable->context)->toBe(['scope' => 'purchase-orders'])
+        ->and(collect($requesterTable->getTable()->getActions())
+            ->contains(fn (mixed $action): bool => $action instanceof ActionGroup))->toBeFalse()
+        ->and($requesterTable->getTable()->getRecordActionsPosition())->toBe(RecordActionsPosition::BeforeColumns)
         ->and(collect($scopedParameters)->contains(
             fn (array $parameters): bool => ($parameters['context']['scope'] ?? null) === 'purchase-orders',
         ))->toBeTrue();
 
     $component
+        ->assertTableActionVisible('view', $visibleApproval)
         ->assertCanSeeTableRecords([$visibleApproval])
         ->assertCanNotSeeTableRecords([$hiddenApproval]);
 

@@ -59,7 +59,9 @@ it('opens contextual approvals in a slide over instead of redirecting', function
         ->forApprovableType((new PurchaseOrder)->getMorphClass());
 
     expect($action->getUrl())->toBeNull()
-        ->and($action->isModalSlideOver())->toBeTrue();
+        ->and($action->isModalSlideOver())->toBeTrue()
+        ->and($action->getModalHeading())->toBe(__('filament-action-approvals::approval.actions.list_approvals'))
+        ->and($action->getModalDescription())->toBeNull();
 });
 
 it('passes contextual parameters to the approvals table widget', function (): void {
@@ -234,7 +236,9 @@ it('shows requester approval history action only to the submitter', function ():
 
     expect($submitterAction->isHidden())->toBeFalse()
         ->and($submitterAction->isModalSlideOver())->toBeTrue()
-        ->and($submitterAction->getLabel())->toBe(__('filament-action-approvals::approval.actions.list_requester_approvals'));
+        ->and($submitterAction->getLabel())->toBe(__('filament-action-approvals::approval.actions.list_requester_approvals'))
+        ->and($submitterAction->getModalHeading())->toBe(__('filament-action-approvals::approval.actions.list_requester_approvals'))
+        ->and($submitterAction->getModalDescription())->toBeNull();
 
     $test->actingAs($otherUser);
 

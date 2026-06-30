@@ -8,7 +8,6 @@ use Closure;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
-use CoringaWc\FilamentActionApprovals\Support\ApprovableModelLabel;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
 use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
 use CoringaWc\FilamentActionApprovals\Support\OperationalApprovalAuthorizer;
@@ -92,7 +91,7 @@ class ListApprovalsAction extends Action
             ])
             ->modalSubmitAction(false)
             ->modalCancelActionLabel(__('filament-action-approvals::approval.relation_manager.close'))
-            ->modalHeading(fn (): string => $this->resolveModalHeading())
+            ->modalHeading(__('filament-action-approvals::approval.actions.list_approvals'))
             ->hidden(fn (self $action): bool => ! $action->hasApprovableContext()
                 || ($action->shouldHideWhenNoActionableApprovals() && ! $action->hasActionableApprovals()));
     }
@@ -151,27 +150,6 @@ class ListApprovalsAction extends Action
         $parameters = $this->getTableParameters();
 
         return 'contextual-approvals-table-'.md5($this->tableWidget().serialize($parameters));
-    }
-
-    protected function resolveModalHeading(): string
-    {
-        $record = $this->resolveApprovableRecord();
-
-        if ($record instanceof Model) {
-            return __('filament-action-approvals::approval.approval_context.record_scope', [
-                'record' => ApprovableModelLabel::resolveRecord($record),
-            ]);
-        }
-
-        $approvableType = $this->resolveApprovableType();
-
-        if (filled($approvableType)) {
-            return __('filament-action-approvals::approval.approval_context.model_scope', [
-                'model' => ApprovableModelLabel::resolve($approvableType),
-            ]);
-        }
-
-        return __('filament-action-approvals::approval.approvals');
     }
 
     protected function resolveApprovableRecord(): ?Model

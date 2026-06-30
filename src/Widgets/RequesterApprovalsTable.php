@@ -7,6 +7,7 @@ namespace CoringaWc\FilamentActionApprovals\Widgets;
 use CoringaWc\FilamentActionApprovals\Enums\ApprovalStatus;
 use CoringaWc\FilamentActionApprovals\FilamentActionApprovalsPlugin;
 use CoringaWc\FilamentActionApprovals\Models\Approval;
+use CoringaWc\FilamentActionApprovals\Resources\Approvals\Tables\ApprovalsTable;
 use CoringaWc\FilamentActionApprovals\Support\ApprovableActionLabel;
 use CoringaWc\FilamentActionApprovals\Support\ApprovalModels;
 use CoringaWc\FilamentActionApprovals\Support\CurrentPanelUser;
@@ -49,7 +50,7 @@ class RequesterApprovalsTable extends TableWidget
 
     public function table(Table $table): Table
     {
-        return $table
+        return ApprovalsTable::configureContextual($table)
             ->query($this->getTableQuery())
             ->columns([
                 TextColumn::make('status')

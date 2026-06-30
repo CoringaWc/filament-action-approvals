@@ -32,7 +32,7 @@ class ListRequesterApprovalsAction extends ListApprovalsAction
         $this
             ->hideWhenNoActionableApprovals(false)
             ->label(__('filament-action-approvals::approval.actions.list_requester_approvals'))
-            ->modalHeading(fn (): string => $this->resolveModalHeading())
+            ->modalHeading(__('filament-action-approvals::approval.actions.list_requester_approvals'))
             ->visible(fn (): bool => $this->hasConfiguredScope() && $this->requesterHasApprovalHistory());
     }
 

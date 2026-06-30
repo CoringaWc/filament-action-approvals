@@ -48,7 +48,7 @@ class ContextualApprovalsTable extends TableWidget
     public function table(Table $table): Table
     {
         return FilamentActionApprovalsPlugin::configureContextualApprovalsTableForCurrentPanel(
-            ApprovalsTable::configure($table),
+            ApprovalsTable::configureContextual($table),
             $this,
         )
             ->query($this->getTableQuery())

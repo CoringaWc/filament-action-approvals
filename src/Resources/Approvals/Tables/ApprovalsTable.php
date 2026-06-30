@@ -30,6 +30,7 @@ use Filament\Notifications\Notification;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
+use Filament\Tables\Enums\RecordActionsPosition;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -291,6 +292,15 @@ class ApprovalsTable
         return $toolbarActions === []
             ? $table
             : $table->groupedBulkActions($toolbarActions);
+    }
+
+    public static function configureContextual(Table $table): Table
+    {
+        return static::configure($table)
+            ->recordActions(
+                static::buildRecordActionItems(false),
+                position: RecordActionsPosition::BeforeColumns,
+            );
     }
 
     protected static function currentUserCanResolveAnyApproval(): bool
